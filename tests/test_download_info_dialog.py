@@ -253,4 +253,35 @@ def test_download_info_dialog_add_category_button(tk_root, monkeypatch):
     dlg.top.destroy()
 
 
+def test_download_info_dialog_no_row5_overlap(tk_root):
+    dlg = DownloadInfoDialog(
+        parent=tk_root,
+        url="https://example.com/movie.mp4",
+        title="movie.mp4",
+        category="Video",
+    )
+    assert hasattr(dlg, "info_frame")
+    assert hasattr(dlg, "btn_frame")
+    # Verify that info_frame and btn_frame do not collide on the same grid row
+    info_row = int(dlg.info_frame.grid_info()["row"])
+    btn_row = int(dlg.btn_frame.grid_info()["row"])
+    assert info_row != btn_row
+    assert btn_row > info_row
+    dlg.top.destroy()
+
+
+def test_download_info_dialog_resizable_for_high_dpi(tk_root):
+    dlg = DownloadInfoDialog(
+        parent=tk_root,
+        url="https://example.com/movie.mp4",
+        title="movie.mp4",
+        category="Video",
+    )
+    # Check that minimum size is defined for High-DPI
+    min_w, min_h = dlg.top.minsize()
+    assert min_w >= 540
+    assert min_h >= 340
+    dlg.top.destroy()
+
+
 

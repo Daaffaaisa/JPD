@@ -14,6 +14,7 @@ from idm_gui.theme import (
     FONT_SMALL,
     create_modern_button,
     apply_theme_to_toplevel,
+    setup_global_ttk_theme,
 )
 
 
@@ -100,11 +101,16 @@ class DownloadInfoDialog:
         self._build_ui()
 
     def _build_ui(self):
+        try:
+            setup_global_ttk_theme()
+        except Exception:
+            pass
         self.top = tk.Toplevel(self.parent)
         self.top.title("Info Unduh Berkas")
-        self.top.geometry("540x340")
-        self.top.resizable(False, False)
-        self.top.configure(bg="#2b2b2b")
+        self.top.geometry("560x370")
+        self.top.minsize(540, 340)
+        self.top.resizable(True, True)
+        self.top.configure(bg=THEME["surface"])
         self.top.protocol("WM_DELETE_WINDOW", self._on_cancel)
         self.top.bind("<Escape>", lambda e: self._on_cancel())
         try:
@@ -117,9 +123,9 @@ class DownloadInfoDialog:
         try:
             screen_w = self.top.winfo_screenwidth()
             screen_h = self.top.winfo_screenheight()
-            x = max(0, (screen_w - 540) // 2)
-            y = max(0, (screen_h - 330) // 2)
-            self.top.geometry(f"540x330+{x}+{y}")
+            x = max(0, (screen_w - 560) // 2)
+            y = max(0, (screen_h - 370) // 2)
+            self.top.geometry(f"560x370+{x}+{y}")
             self.top.deiconify()
             self.top.lift()
             self.top.attributes("-topmost", True)
@@ -129,10 +135,11 @@ class DownloadInfoDialog:
             pass
 
         # Dark theme styling colors
-        BG_COLOR = "#2b2b2b"
-        FG_COLOR = "#ffffff"
-        ENTRY_BG = "#1e1e1e"
-        BORDER_COLOR = "#4a4a4a"
+        BG_COLOR = THEME["surface"]
+        FG_COLOR = THEME["text_primary"]
+        ENTRY_BG = THEME["input_bg"]
+        CARD_BG = THEME["surface_alt"]
+        BORDER_COLOR = THEME["border"]
 
         if self.is_suspicious and self.security_warning:
             self.lbl_security_warning = tk.Label(
@@ -189,17 +196,15 @@ class DownloadInfoDialog:
         self.cat_cb.pack(side=tk.LEFT)
         self.cat_cb.bind("<<ComboboxSelected>>", self._on_cat_change)
 
-        self.btn_add_cat = tk.Button(
+        self.btn_add_cat = create_modern_button(
             cat_frame,
             text="+",
             command=self._on_add_category,
-            bg="#3a3a3a",
-            fg=FG_COLOR,
-            relief=tk.SOLID,
-            bd=1,
-            font=("Segoe UI", 8, "bold"),
-            width=2,
-            padx=2,
+            kind="secondary",
+            padx=8,
+            pady=2,
+            radius=6,
+            tooltip="Tambah Kategori Baru...",
         )
         self.btn_add_cat.pack(side=tk.LEFT, padx=(4, 0))
 
@@ -237,18 +242,17 @@ class DownloadInfoDialog:
         )
         path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        btn_browse = tk.Button(
+        self.btn_browse = create_modern_button(
             save_frame,
             text="...",
             command=self._on_browse,
-            bg="#3a3a3a",
-            fg=FG_COLOR,
-            relief=tk.SOLID,
-            bd=1,
-            font=("Segoe UI", 8, "bold"),
-            width=3,
+            kind="secondary",
+            padx=8,
+            pady=2,
+            radius=6,
+            tooltip="Pilih Folder Penyimpanan...",
         )
-        btn_browse.pack(side=tk.RIGHT, padx=(4, 0))
+        self.btn_browse.pack(side=tk.RIGHT, padx=(4, 0))
 
         # 4. Checkbox Ingat Jalur (Default unchecked so single-file destination changes don't overwrite category default)
         self.remember_var = tk.BooleanVar(master=self.top, value=False)
@@ -258,7 +262,7 @@ class DownloadInfoDialog:
             variable=self.remember_var,
             bg=BG_COLOR,
             fg=FG_COLOR,
-            selectcolor="#1e1e1e",
+            selectcolor=ENTRY_BG,
             activebackground=BG_COLOR,
             activeforeground=FG_COLOR,
             font=("Segoe UI", 8),
@@ -269,8 +273,8 @@ class DownloadInfoDialog:
         self.lbl_sub_folder = tk.Label(
             main_frame,
             text=self.cat_folder,
-            bg="#202020",
-            fg="#cccccc",
+            bg=CARD_BG,
+            fg=THEME["text_secondary"],
             relief=tk.SOLID,
             bd=1,
             anchor=tk.W,
@@ -281,31 +285,31 @@ class DownloadInfoDialog:
         self.lbl_sub_folder.grid(row=4, column=1, columnspan=2, sticky=tk.EW, padx=(6, 0), pady=(0, 4))
 
         # 5. File Info Frame (Icon, Size, Description)
-        info_frame = tk.Frame(main_frame, bg="#232323", relief=tk.SOLID, bd=1, padx=10, pady=8)
-        info_frame.grid(row=5, column=0, columnspan=3, sticky=tk.NSEW, pady=(4, 8))
+        self.info_frame = tk.Frame(main_frame, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=12, pady=10)
+        self.info_frame.grid(row=5, column=0, columnspan=3, sticky=tk.NSEW, pady=(6, 10))
 
         # Left: Icon & Size
-        icon_box = tk.Frame(info_frame, bg="#232323")
+        icon_box = tk.Frame(self.info_frame, bg=CARD_BG)
         icon_box.pack(side=tk.LEFT, padx=(0, 16))
 
         # Native Windows registered default application icon for file extension (VLC, WinRAR, etc.)
-        self.icon_label = tk.Label(icon_box, bg="#232323")
+        self.icon_label = tk.Label(icon_box, bg=CARD_BG)
         self.icon_label.pack()
         self._tk_icon = None
         self._update_app_icon(self.title)
 
         size_text = "Memeriksa ukuran..." if (self.is_probing and self.probed_size <= 0) else format_size_id(self.probed_size)
-        self.lbl_size = tk.Label(icon_box, text=size_text, bg="#232323", fg="#ffffff", font=("Segoe UI", 9, "bold"))
+        self.lbl_size = tk.Label(icon_box, text=size_text, bg=CARD_BG, fg=FG_COLOR, font=("Segoe UI", 9, "bold"))
         self.lbl_size.pack(pady=(2, 0))
 
         # Right: Description box
-        desc_box = tk.Frame(info_frame, bg="#232323")
+        desc_box = tk.Frame(self.info_frame, bg=CARD_BG)
         desc_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        tk.Label(desc_box, text="Deskripsi:", bg="#232323", fg="#aaaaaa", font=("Segoe UI", 8)).pack(anchor=tk.W)
+        tk.Label(desc_box, text="Deskripsi:", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8)).pack(anchor=tk.W)
         self.desc_entry = tk.Entry(
             desc_box,
-            bg="#181818",
+            bg=ENTRY_BG,
             fg=FG_COLOR,
             insertbackground=FG_COLOR,
             relief=tk.SOLID,
@@ -319,30 +323,31 @@ class DownloadInfoDialog:
         self.conn_label = tk.Label(
             desc_box,
             text=f"⚡ Akselerasi: {active_conns} Koneksi Paralel HTTP Range",
-            bg="#232323",
-            fg="#28a745",
+            bg=CARD_BG,
+            fg=THEME["success"],
             font=("Segoe UI", 8, "italic"),
         )
         self.conn_label.pack(anchor=tk.W, pady=(4, 0))
 
         # 6. Action Buttons Row (Unduh Nanti, Mulai Unduh, Batal)
-        btn_frame = tk.Frame(main_frame, bg=BG_COLOR)
-        btn_frame.grid(row=5, column=0, columnspan=3, sticky=tk.E, pady=(8, 0))
+        self.btn_frame = tk.Frame(main_frame, bg=BG_COLOR)
+        self.btn_frame.grid(row=6, column=0, columnspan=3, sticky=tk.E, pady=(6, 0))
 
-        btn_later = create_modern_button(btn_frame, "Unduh Nanti", self._on_later, kind="secondary", padx=12, pady=4)
+        btn_later = create_modern_button(self.btn_frame, "Unduh Nanti", self._on_later, kind="secondary", padx=12, pady=4, radius=7)
         btn_later.pack(side=tk.LEFT, padx=4)
 
-        btn_start = create_modern_button(btn_frame, "Mulai Unduh", self._on_start, kind="primary", padx=16, pady=4)
+        btn_start = create_modern_button(self.btn_frame, "Mulai Unduh", self._on_start, kind="primary", padx=16, pady=4, radius=7)
         btn_start.pack(side=tk.LEFT, padx=4)
         btn_start.focus_set()  # Default button (Enter key triggers Mulai Unduh)
 
-        btn_cancel = create_modern_button(btn_frame, "Batal", self._on_cancel, kind="secondary", padx=12, pady=4)
+        btn_cancel = create_modern_button(self.btn_frame, "Batal", self._on_cancel, kind="secondary", padx=12, pady=4, radius=7)
         btn_cancel.pack(side=tk.LEFT, padx=4)
 
         self.top.bind("<Return>", lambda e: self._on_start())
         self.top.bind("<Escape>", lambda e: self._on_cancel())
 
         main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(5, weight=1)
 
     def _update_app_icon(self, filename: str):
         try:

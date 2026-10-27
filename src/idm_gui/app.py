@@ -589,31 +589,97 @@ class IDMGUIApp:
             pass
 
         if not clipboard_url:
-            # Simple URL input if clipboard is empty
+            # Modern URL input dialog with inline validation
             dlg = tk.Toplevel(self.root)
-            dlg.title("Masukkan URL untuk mengunduh")
-            dlg.geometry("460x140")
-            dlg.resizable(False, False)
-            dlg.configure(bg="#2b2b2b")
+            dlg.title("Masukkan URL untuk Mengunduh")
+            dlg.geometry("480x160")
+            dlg.minsize(440, 150)
+            dlg.resizable(True, False)
+            dlg.configure(bg=THEME["surface"])
             dlg.transient(self.root)
-            dlg.grab_set()
+            try:
+                dlg.grab_set()
+            except Exception:
+                pass
 
-            tk.Label(dlg, text="Alamat (URL):", bg="#2b2b2b", fg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor=tk.W, padx=14, pady=(12, 2))
-            url_entry = tk.Entry(dlg, bg="#1e1e1e", fg="#ffffff", insertbackground="#ffffff", relief=tk.SOLID, bd=1, font=("Segoe UI", 9))
-            url_entry.pack(fill=tk.X, padx=14, pady=4)
+            # Center dialog on screen
+            dlg.update_idletasks()
+            try:
+                sw = dlg.winfo_screenwidth()
+                sh = dlg.winfo_screenheight()
+                x = max(0, (sw - 480) // 2)
+                y = max(0, (sh - 160) // 2)
+                dlg.geometry(f"480x160+{x}+{y}")
+                dlg.deiconify()
+                dlg.lift()
+                dlg.focus_force()
+            except Exception:
+                pass
+
+            main_box = tk.Frame(dlg, bg=THEME["surface"], padx=16, pady=12)
+            main_box.pack(fill=tk.BOTH, expand=True)
+
+            tk.Label(
+                main_box,
+                text="Alamat Tautan (URL):",
+                bg=THEME["surface"],
+                fg=THEME["text_primary"],
+                font=FONT_HEADING,
+            ).pack(anchor=tk.W, pady=(0, 4))
+
+            url_var = tk.StringVar(master=dlg)
+            url_entry = tk.Entry(
+                main_box,
+                textvariable=url_var,
+                bg=THEME["input_bg"],
+                fg=THEME["text_primary"],
+                insertbackground=THEME["text_primary"],
+                relief=tk.SOLID,
+                bd=1,
+                font=FONT_BODY,
+            )
+            url_entry.pack(fill=tk.X, pady=(0, 2))
             url_entry.focus_set()
 
-            btn_box = tk.Frame(dlg, bg="#2b2b2b")
-            btn_box.pack(side=tk.BOTTOM, fill=tk.X, padx=14, pady=10)
+            # Inline validation error label
+            lbl_error = tk.Label(main_box, text="", bg=THEME["surface"], fg=THEME["danger_text"], font=FONT_SMALL)
+            lbl_error.pack(anchor=tk.W, pady=(0, 6))
+
+            def _on_url_change(*args):
+                val = url_var.get().strip()
+                if not val:
+                    lbl_error.config(text="")
+                elif not (val.startswith("http://") or val.startswith("https://")):
+                    lbl_error.config(text="* Format URL harus diawali dengan http:// atau https://")
+                else:
+                    lbl_error.config(text="")
+
+            url_var.trace_add("write", _on_url_change)
+
+            btn_box = tk.Frame(main_box, bg=THEME["surface"])
+            btn_box.pack(side=tk.BOTTOM, fill=tk.X, pady=(4, 0))
 
             def on_ok():
-                u = url_entry.get().strip()
+                u = url_var.get().strip()
+                if not u:
+                    lbl_error.config(text="* Masukkan tautan unduhan terlebih dahulu")
+                    url_entry.focus_set()
+                    return
+                if not (u.startswith("http://") or u.startswith("https://")):
+                    lbl_error.config(text="* Format URL harus diawali dengan http:// atau https://")
+                    url_entry.focus_set()
+                    return
                 dlg.destroy()
-                if u:
-                    self._show_download_info_for_url(u)
+                self._show_download_info_for_url(u)
 
-            tk.Button(btn_box, text="OK", command=on_ok, bg="#0066cc", fg="#ffffff", font=("Segoe UI", 9, "bold"), width=8).pack(side=tk.RIGHT, padx=4)
-            tk.Button(btn_box, text="Batal", command=dlg.destroy, bg="#383838", fg="#ffffff", font=("Segoe UI", 9), width=8).pack(side=tk.RIGHT)
+            btn_ok = create_modern_button(btn_box, text="+ Unduh", command=on_ok, kind="primary", padx=16, pady=4, radius=7)
+            btn_ok.pack(side=tk.RIGHT, padx=(4, 0))
+
+            btn_cancel = create_modern_button(btn_box, text="Batal", command=dlg.destroy, kind="secondary", padx=12, pady=4, radius=7)
+            btn_cancel.pack(side=tk.RIGHT)
+
+            dlg.bind("<Return>", lambda e: on_ok())
+            dlg.bind("<Escape>", lambda e: dlg.destroy())
         else:
             self._show_download_info_for_url(clipboard_url)
 

@@ -62,3 +62,23 @@ def test_main_window_tooltips_exist(tk_root):
     # Check that tooltips have been registered
     for btn, tooltip_text in app.toolbar_buttons:
         assert tooltip_text != ""
+
+
+def test_open_add_url_dialog_structure_and_validation(tk_root, monkeypatch):
+    app = IDMGUIApp(tk_root)
+    # Ensure clipboard is clear so add_url dialog opens
+    monkeypatch.setattr(app.root, "clipboard_get", lambda: "")
+
+    called_urls = []
+    monkeypatch.setattr(app, "_show_download_info_for_url", lambda u: called_urls.append(u))
+
+    app.open_add_url_dialog()
+
+    # Find the dialog toplevel child
+    toplevels = [w for w in app.root.winfo_children() if isinstance(w, tk.Toplevel)]
+    assert len(toplevels) >= 1
+    dlg = toplevels[-1]
+    assert "URL" in dlg.title()
+
+    # Clean up
+    dlg.destroy()

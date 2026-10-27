@@ -298,6 +298,8 @@ class RoundedButton(tk.Canvas):
             return self.text
         if key == "state":
             return self.state
+        if key == "command":
+            return self.command
         return super().cget(key)
 
 
@@ -390,4 +392,14 @@ def setup_global_ttk_theme():
         selectbackground=THEME["tree_select"],
         selectforeground="#ffffff",
         arrowcolor=THEME["text_primary"],
+        borderwidth=0,
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", THEME["input_bg"]), ("!disabled", THEME["input_bg"])],
+        background=[("readonly", THEME["surface_alt"]), ("!disabled", THEME["surface_alt"])],
+        foreground=[("readonly", THEME["text_primary"]), ("!disabled", THEME["text_primary"])],
+        selectbackground=[("readonly", THEME["tree_select"])],
+        selectforeground=[("readonly", "#ffffff")],
+        arrowcolor=[("readonly", THEME["text_primary"]), ("!disabled", THEME["text_primary"])],
     )
