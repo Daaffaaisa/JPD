@@ -6,6 +6,7 @@ High-precision dark utility theme inspired by Windows modern design and classic 
 from typing import Callable, Optional
 import tkinter as tk
 from tkinter import ttk
+import tkinter.font as tkfont
 
 # Cohesive Dark Precision Palette (Apple-inspired Dark Minimalist)
 THEME = {
@@ -141,6 +142,165 @@ class Tooltip:
             self.tip_window = None
 
 
+def draw_round_rectangle(canvas: tk.Canvas, x1: int, y1: int, x2: int, y2: int, r: int = 8, fill: str = "", outline: str = "", width: int = 1):
+    """Draws a smooth anti-aliased rounded rectangle on a Tkinter Canvas."""
+    r = min(r, abs(x2 - x1) // 2, abs(y2 - y1) // 2)
+    points = [
+        x1 + r, y1,
+        x2 - r, y1,
+        x2, y1,
+        x2, y1 + r,
+        x2, y2 - r,
+        x2, y2,
+        x2 - r, y2,
+        x1 + r, y2,
+        x1, y2,
+        x1, y2 - r,
+        x1, y1 + r,
+        x1, y1,
+    ]
+    return canvas.create_polygon(points, fill=fill, outline=outline, width=width, smooth=True)
+
+
+class RoundedButton(tk.Canvas):
+    """Tactile rounded button built on Tkinter Canvas with smooth hover transitions."""
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Optional[Callable] = None,
+        kind: str = "secondary",  # 'primary', 'secondary', 'danger', 'toolbar'
+        width: Optional[int] = None,
+        padx: int = 12,
+        pady: int = 5,
+        radius: int = 7,
+        tooltip: Optional[str] = None,
+    ):
+        self.parent = parent
+        self.text = text
+        self.command = command
+        self.kind = kind
+        self.radius = radius
+        self.padx = padx
+        self.pady = pady
+        self.state = "normal"
+        self.custom_width = width
+
+        # Resolve parent background so canvas blends seamlessly
+        if hasattr(parent, "cget"):
+            try:
+                self.bg_parent = parent.cget("bg")
+            except Exception:
+                self.bg_parent = THEME["surface"]
+        else:
+            self.bg_parent = THEME["surface"]
+
+        if kind == "primary":
+            self.bg_normal = THEME["accent_primary"]
+            self.bg_hover = THEME["accent_hover"]
+            self.bg_active = THEME["accent_active"]
+            self.fg = "#ffffff"
+            self.font = FONT_HEADING
+        elif kind == "danger":
+            self.bg_normal = THEME["danger"]
+            self.bg_hover = THEME["danger_hover"]
+            self.bg_active = "#8b0000"
+            self.fg = "#ffffff"
+            self.font = FONT_BODY
+        elif kind == "toolbar":
+            self.bg_normal = THEME["surface"]
+            self.bg_hover = THEME["secondary_hover"]
+            self.bg_active = THEME["accent_primary"]
+            self.fg = THEME["text_primary"]
+            self.font = FONT_BODY
+        else:  # secondary
+            self.bg_normal = THEME["secondary_bg"]
+            self.bg_hover = THEME["secondary_hover"]
+            self.bg_active = "#2c2c2e"
+            self.fg = THEME["text_primary"]
+            self.font = FONT_BODY
+
+        try:
+            font_obj = tkfont.Font(font=self.font)
+            self.text_w = font_obj.measure(self.text)
+            self.text_h = font_obj.metrics("linespace")
+        except Exception:
+            self.text_w = max(40, len(self.text) * 8)
+            self.text_h = 18
+        self.total_w = self.custom_width if self.custom_width else (self.text_w + (self.padx * 2))
+        self.total_h = self.text_h + (self.pady * 2)
+
+        super().__init__(
+            parent,
+            width=self.total_w,
+            height=self.total_h,
+            bg=self.bg_parent,
+            highlightthickness=0,
+            cursor="hand2",
+        )
+
+        self._draw(self.bg_normal)
+
+        self.bind("<Enter>", self._on_enter, add="+")
+        self.bind("<Leave>", self._on_leave, add="+")
+        self.bind("<Button-1>", self._on_press, add="+")
+        self.bind("<ButtonRelease-1>", self._on_release, add="+")
+
+        if tooltip:
+            Tooltip(self, tooltip)
+
+    def _draw(self, fill_color):
+        self.delete("all")
+        draw_round_rectangle(self, 0, 0, self.total_w, self.total_h, r=self.radius, fill=fill_color)
+        self.create_text(self.total_w // 2, self.total_h // 2, text=self.text, fill=self.fg, font=self.font)
+
+    def _on_enter(self, e):
+        if self.state != "disabled":
+            self._draw(self.bg_hover)
+
+    def _on_leave(self, e):
+        if self.state != "disabled":
+            self._draw(self.bg_normal)
+
+    def _on_press(self, e):
+        if self.state != "disabled":
+            self._draw(self.bg_active)
+
+    def _on_release(self, e):
+        if self.state != "disabled":
+            self._draw(self.bg_hover)
+            if self.command:
+                self.command()
+
+    def config(self, **kwargs):
+        if "text" in kwargs:
+            self.text = kwargs["text"]
+            try:
+                font_obj = tkfont.Font(font=self.font)
+                self.text_w = font_obj.measure(self.text)
+            except Exception:
+                self.text_w = max(40, len(self.text) * 8)
+            self.total_w = self.custom_width if self.custom_width else (self.text_w + (self.padx * 2))
+            super().config(width=self.total_w)
+            self._draw(self.bg_normal)
+        if "state" in kwargs:
+            self.state = kwargs["state"]
+            self.config(cursor="hand2" if self.state != "disabled" else "arrow")
+        if "command" in kwargs:
+            self.command = kwargs["command"]
+        canvas_kwargs = {k: v for k, v in kwargs.items() if k not in ("text", "state", "command")}
+        if canvas_kwargs:
+            super().config(**canvas_kwargs)
+
+    def cget(self, key):
+        if key == "text":
+            return self.text
+        if key == "state":
+            return self.state
+        return super().cget(key)
+
+
 def create_modern_button(
     parent: tk.Widget,
     text: str,
@@ -150,68 +310,20 @@ def create_modern_button(
     padx: int = 12,
     pady: int = 4,
     tooltip: Optional[str] = None,
-) -> tk.Button:
-    """Creates a tactile, beautifully styled button with active hover animations."""
-    if kind == "primary":
-        bg_normal = THEME["accent_primary"]
-        bg_hover = THEME["accent_hover"]
-        bg_active = THEME["accent_active"]
-        fg = "#ffffff"
-        font = FONT_HEADING
-    elif kind == "danger":
-        bg_normal = THEME["danger"]
-        bg_hover = THEME["danger_hover"]
-        bg_active = "#8b0000"
-        fg = "#ffffff"
-        font = FONT_BODY
-    elif kind == "toolbar":
-        bg_normal = THEME["surface"]
-        bg_hover = THEME["secondary_hover"]
-        bg_active = THEME["accent_primary"]
-        fg = THEME["text_primary"]
-        font = FONT_BODY
-    else:  # secondary
-        bg_normal = THEME["secondary_bg"]
-        bg_hover = THEME["secondary_hover"]
-        bg_active = "#2c2c2e"
-        fg = THEME["text_primary"]
-        font = FONT_BODY
-
-    btn = tk.Button(
-        parent,
+    radius: int = 7,
+) -> RoundedButton:
+    """Creates a tactile, beautifully styled rounded button with active hover animations."""
+    return RoundedButton(
+        parent=parent,
         text=text,
-        bg=bg_normal,
-        fg=fg,
-        activebackground=bg_active,
-        activeforeground=fg,
-        font=font,
-        relief=tk.FLAT,
-        bd=0,
+        command=command,
+        kind=kind,
+        width=width,
         padx=padx,
         pady=pady,
-        cursor="hand2",
+        radius=radius,
+        tooltip=tooltip,
     )
-    if command is not None:
-        btn.config(command=command)
-    if width:
-        btn.config(width=width)
-
-    # Hover animations (interactive state transition)
-    def on_enter(e):
-        if btn.cget("state") != "disabled":
-            btn.config(bg=bg_hover)
-
-    def on_leave(e):
-        if btn.cget("state") != "disabled":
-            btn.config(bg=bg_normal)
-
-    btn.bind("<Enter>", on_enter)
-    btn.bind("<Leave>", on_leave)
-
-    if tooltip:
-        Tooltip(btn, tooltip)
-
-    return btn
 
 
 def setup_global_ttk_theme():

@@ -3,7 +3,7 @@ import sys
 import threading
 import time
 import urllib.parse
-from typing import Optional
+from typing import Optional, Any
 
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -19,7 +19,15 @@ from idm_gui.dialogs import (
     OptionsDialog,
 )
 from idm_gui.settings import settings
-from idm_gui.theme import THEME, setup_global_ttk_theme, create_modern_button, FONT_HEADING, FONT_BODY, FONT_SMALL
+from idm_gui.theme import (
+    THEME,
+    setup_global_ttk_theme,
+    create_modern_button,
+    draw_round_rectangle,
+    FONT_HEADING,
+    FONT_BODY,
+    FONT_SMALL,
+)
 
 
 def format_bytes(num_bytes: int) -> str:
@@ -51,10 +59,10 @@ class IDMGUIApp:
         self.last_bytes: dict[str, int] = {}
         self.last_time: dict[str, float] = {}
         self.progress_dialogs: dict[str, DownloadProgressDialog] = {}
-        self.toolbar_buttons: list[tuple[tk.Button, str]] = []
-        self.secondary_buttons: list[tk.Button] = []
-        self.btn_overflow: Optional[tk.Button] = None
-        self.empty_state_frame: Optional[tk.Frame] = None
+        self.toolbar_buttons: list[tuple[Any, str]] = []
+        self.secondary_buttons: list[Any] = []
+        self.btn_overflow: Optional[Any] = None
+        self.empty_state_frame: Optional[Any] = None
 
         # Start loopback server for Browser Extension communication
         self.server = LocalDownloadServer(
@@ -441,57 +449,61 @@ class IDMGUIApp:
 
         self.tree.bind("<Double-1>", self.on_double_click_item)
 
-        # Empty State Card Overlay
-        self.empty_state_frame = tk.Frame(
+        # Empty State Card Overlay (Apple-inspired rounded card)
+        self.empty_state_frame = tk.Canvas(
             table_frame,
-            bg=THEME["surface"],
-            padx=28,
-            pady=22,
-            relief=tk.SOLID,
-            bd=1,
-            highlightbackground=THEME["border"],
-            highlightthickness=1,
+            width=380,
+            height=210,
+            bg=THEME["tree_bg"],
+            highlightthickness=0,
         )
 
+        draw_round_rectangle(self.empty_state_frame, 2, 2, 378, 208, r=14, fill=THEME["surface"], outline=THEME["border"])
+
+        inner_card = tk.Frame(self.empty_state_frame, bg=THEME["surface"])
+
         lbl_empty_icon = tk.Label(
-            self.empty_state_frame,
+            inner_card,
             text="📥",
-            font=("Segoe UI", 26),
+            font=("Segoe UI", 24),
             bg=THEME["surface"],
             fg=THEME["text_primary"],
         )
-        lbl_empty_icon.pack(pady=(0, 6))
+        lbl_empty_icon.pack(pady=(0, 4))
 
         lbl_empty_title = tk.Label(
-            self.empty_state_frame,
+            inner_card,
             text="Belum Ada Unduhan",
             font=("Segoe UI", 11, "bold"),
             bg=THEME["surface"],
             fg=THEME["text_primary"],
         )
-        lbl_empty_title.pack(pady=(0, 4))
+        lbl_empty_title.pack(pady=(0, 2))
 
         lbl_empty_desc = tk.Label(
-            self.empty_state_frame,
+            inner_card,
             text="Salin tautan dari peramban atau klik tombol di bawah untuk memulai unduhan baru.",
             font=("Segoe UI", 9),
             bg=THEME["surface"],
             fg=THEME["text_secondary"],
-            wraplength=340,
+            wraplength=320,
             justify=tk.CENTER,
         )
-        lbl_empty_desc.pack(pady=(0, 14))
+        lbl_empty_desc.pack(pady=(0, 10))
 
         btn_empty_add = create_modern_button(
-            self.empty_state_frame,
+            inner_card,
             text="+ Tambah Unduhan Baru",
             command=self.open_add_url_dialog,
             kind="primary",
             padx=16,
             pady=6,
+            radius=8,
             tooltip="Tambah URL Baru (Ctrl+N)",
         )
         btn_empty_add.pack()
+
+        self.empty_state_frame.create_window(190, 105, window=inner_card)
 
         # Place initially if queue is empty
         if len(self.queue.list_tasks()) == 0:
