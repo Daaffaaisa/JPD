@@ -80,6 +80,7 @@ class DownloadInfoDialog:
         on_action: Optional[Callable[[DialogAction, str, str, int], None]] = None,
         is_suspicious: bool = False,
         security_warning: Optional[str] = None,
+        is_probing: bool = False,
     ):
         self.parent = parent
         self.url = url
@@ -90,6 +91,7 @@ class DownloadInfoDialog:
         self.on_action = on_action
         self.is_suspicious = is_suspicious
         self.security_warning = security_warning
+        self.is_probing = is_probing
 
         downloads_dir = default_folder or os.path.join(os.path.expanduser("~"), "Downloads")
         self.cat_folder = settings.get_category_path(self.category, default_base=downloads_dir)
@@ -291,7 +293,7 @@ class DownloadInfoDialog:
         self._tk_icon = None
         self._update_app_icon(self.title)
 
-        size_text = format_size_id(self.probed_size)
+        size_text = "Memeriksa ukuran..." if (self.is_probing and self.probed_size <= 0) else format_size_id(self.probed_size)
         self.lbl_size = tk.Label(icon_box, text=size_text, bg="#232323", fg="#ffffff", font=("Segoe UI", 9, "bold"))
         self.lbl_size.pack(pady=(2, 0))
 
@@ -348,6 +350,15 @@ class DownloadInfoDialog:
             self._tk_icon = ImageTk.PhotoImage(icon_img)
             if hasattr(self, "icon_label") and self.icon_label:
                 self.icon_label.config(image=self._tk_icon)
+        except Exception:
+            pass
+
+    def update_probed_size(self, size: int):
+        self.probed_size = size
+        self.is_probing = False
+        try:
+            if hasattr(self, "lbl_size") and self.lbl_size and self.lbl_size.winfo_exists():
+                self.lbl_size.config(text=format_size_id(size))
         except Exception:
             pass
 

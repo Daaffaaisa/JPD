@@ -191,4 +191,23 @@ def test_download_info_dialog_displays_native_app_icon(tk_root):
     dlg.top.destroy()
 
 
+def test_download_info_dialog_probing_state_and_update(tk_root):
+    dlg = DownloadInfoDialog(
+        parent=tk_root,
+        url="https://example.com/largefile.iso",
+        title="largefile.iso",
+        probed_size=0,
+        category="Program",
+        is_probing=True,
+    )
+    assert dlg.lbl_size.cget("text") == "Memeriksa ukuran..."
+    assert dlg.is_probing is True
+
+    dlg.update_probed_size(1024 * 1024 * 50)
+    assert dlg.probed_size == 1024 * 1024 * 50
+    assert dlg.lbl_size.cget("text") == "50,00 MB"
+    assert dlg.is_probing is False
+    dlg.top.destroy()
+
+
 

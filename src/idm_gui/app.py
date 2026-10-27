@@ -508,16 +508,19 @@ class IDMGUIApp:
         raw_title = self.engine.get_filename(url)
         category = self._detect_category(url, raw_title)
         title = self._get_clean_title_with_ext(url, raw_title, category)
-        probed_size, _ = self.engine.probe(url) if not any(d in url for d in ["youtube.com", "youtu.be"]) else (0, False)
+        is_yt = any(d in url for d in ["youtube.com", "youtu.be"])
+
+        dlg_ref = {}
 
         def on_action(action: DialogAction, final_url: str, final_path: str, chosen_parts: int):
             if action == DialogAction.CANCEL:
                 return
 
+            current_size = dlg_ref["dlg"].probed_size if "dlg" in dlg_ref else 0
             task_id = self.queue.add_task(url=final_url, output_path=final_path)
             task = self.queue.get_task(task_id)
-            if task and probed_size > 0:
-                task.total_bytes = probed_size
+            if task and current_size > 0:
+                task.total_bytes = current_size
 
             if action == DialogAction.START:
                 prog_dlg = DownloadProgressDialog(
@@ -537,14 +540,32 @@ class IDMGUIApp:
                 if task:
                     task.status = TaskStatus.QUEUED
 
-        DownloadInfoDialog(
+        dlg = DownloadInfoDialog(
             parent=self.root,
             url=url,
             title=title,
-            probed_size=probed_size,
+            probed_size=0,
             category=category,
             on_action=on_action,
+            is_probing=not is_yt,
         )
+        dlg_ref["dlg"] = dlg
+
+        if not is_yt:
+            def probe_worker():
+                size, _ = self.engine.probe(url)
+                def apply_probe():
+                    try:
+                        if dlg and hasattr(dlg, "top") and dlg.top.winfo_exists():
+                            dlg.update_probed_size(size)
+                    except Exception:
+                        pass
+                try:
+                    self.root.after(0, apply_probe)
+                except Exception:
+                    pass
+
+            threading.Thread(target=probe_worker, daemon=True).start()
 
     def start_download(self, url: str, folder: str, parts: Optional[int] = None):
         parsed = urllib.parse.urlparse(url)
