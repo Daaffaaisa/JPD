@@ -1,0 +1,114 @@
+/* IDM Clone Floating Video Download Panel - UI/UX Pro Max Modern Precision Theme */
+.idm-clone-panel {
+  position: fixed !important;
+  top: 18px !important;
+  right: 24px !important;
+  z-index: 2147483647 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif !important;
+  font-size: 12px !important;
+  pointer-events: auto !important;
+  user-select: none !important;
+}
+
+.idm-clone-btn-group {
+  position: relative !important;
+  display: inline-flex !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 8px !important;
+  overflow: visible !important;
+}
+
+.idm-clone-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
+  padding: 8px 14px !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+.idm-clone-btn:hover {
+  background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%) !important;
+  transform: translateY(-1px) scale(1.02) !important;
+  box-shadow: 0 12px 20px -3px rgba(2, 132, 199, 0.4) !important;
+}
+
+.idm-clone-btn:active {
+  transform: translateY(1px) scale(0.99) !important;
+}
+
+.idm-clone-btn.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  border-color: #047857 !important;
+}
+
+.idm-clone-dropdown {
+  position: absolute !important;
+  top: 100% !important;
+  right: 0 !important;
+  margin-top: 6px !important;
+  background: #18181b !important;
+  border: 1px solid #3f3f46 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+  min-width: 280px !important;
+  max-height: 340px !important;
+  overflow-y: auto !important;
+  z-index: 2147483647 !important;
+  display: none;
+  backdrop-filter: blur(8px) !important;
+}
+
+.idm-clone-dropdown.show {
+  display: block !important;
+  animation: idmFadeInDown 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes idmFadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.idm-clone-drop-item {
+  padding: 10px 14px !important;
+  color: #f4f4f5 !important;
+  cursor: pointer !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  border-bottom: 1px solid #27272a !important;
+  font-size: 12px !important;
+  transition: background 0.15s ease !important;
+}
+
+.idm-clone-drop-item:hover {
+  background: #27272a !important;
+  color: #38bdf8 !important;
+}
+
+.idm-clone-drop-item:last-child {
+  border-bottom: none !important;
+}
+
+.idm-badge {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  font-size: 10px !important;
+  padding: 3px 8px !important;
+  border-radius: 9999px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+}

@@ -1,0 +1,10 @@
+{
+    "name": "com.idmclone.host",
+    "description": "IDM Clone Browser Extension Native Messaging Host",
+    "path": "idm-clone.exe",
+    "type": "stdio",
+    "allowed_origins": [
+        "chrome-extension://idmcloneextensionid/",
+        "chrome-extension://ngpampappnmepgilojfohadhhmbhlaek/"
+    ]
+}

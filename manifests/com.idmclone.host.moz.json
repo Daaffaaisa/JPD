@@ -1,0 +1,10 @@
+{
+    "name": "com.idmclone.host",
+    "description": "IDM Clone Firefox Extension Native Messaging Host",
+    "path": "idm-clone.exe",
+    "type": "stdio",
+    "allowed_extensions": [
+        "idmclone@extensions.org",
+        "mozilla_cc3@internetdownloadmanager.com"
+    ]
+}
