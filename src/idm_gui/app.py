@@ -51,6 +51,10 @@ class IDMGUIApp:
         self.last_bytes: dict[str, int] = {}
         self.last_time: dict[str, float] = {}
         self.progress_dialogs: dict[str, DownloadProgressDialog] = {}
+        self.toolbar_buttons: list[tuple[tk.Button, str]] = []
+        self.secondary_buttons: list[tk.Button] = []
+        self.btn_overflow: Optional[tk.Button] = None
+        self.empty_state_frame: Optional[tk.Frame] = None
 
         # Start loopback server for Browser Extension communication
         self.server = LocalDownloadServer(
@@ -297,66 +301,137 @@ class IDMGUIApp:
         self.root.bind("<Delete>", lambda e: self.delete_selected())
 
     def _build_toolbar(self):
-        toolbar = tk.Frame(self.root, bg=THEME["surface"], pady=6, padx=8, relief=tk.FLAT)
-        toolbar.pack(side=tk.TOP, fill=tk.X)
+        self.toolbar_frame = tk.Frame(self.root, bg=THEME["surface"], pady=6, padx=8, relief=tk.FLAT)
+        self.toolbar_frame.pack(side=tk.TOP, fill=tk.X)
 
-        btn_specs = [
-            ("➕ Tambah URL", self.open_add_url_dialog, "primary"),
-            ("▶ Lanjutkan", self.resume_selected, "toolbar"),
-            ("⏸ Jeda", self.pause_selected, "toolbar"),
-            ("⏹ Hentikan Semua", self.stop_all, "toolbar"),
-            ("🗑 Hapus", self.delete_selected, "danger"),
-            ("🧹 Hapus Selesai", self.delete_completed, "toolbar"),
-            ("📁 Buka Folder", self.open_selected_folder, "toolbar"),
-            ("⚙ Opsi", self.open_options_dialog, "toolbar"),
+        # Primary specs (always visible)
+        primary_specs = [
+            ("+ Tambah", self.open_add_url_dialog, "primary", "Tambah URL Baru (Ctrl+N)"),
+            ("▷ Lanjutkan", self.resume_selected, "toolbar", "Lanjutkan Unduhan Terpilih"),
+            ("❚❚ Jeda", self.pause_selected, "toolbar", "Jeda Unduhan Terpilih"),
+            ("✕ Hapus", self.delete_selected, "danger", "Hapus Unduhan Terpilih (Del)"),
         ]
 
-        for text, cmd, kind in btn_specs:
-            btn = create_modern_button(toolbar, text=text, command=cmd, kind=kind, padx=10, pady=4)
+        # Secondary specs (moved to overflow when width < 760px)
+        secondary_specs = [
+            ("■ Hentikan", self.stop_all, "toolbar", "Hentikan Semua Unduhan"),
+            ("✓ Bersihkan", self.delete_completed, "toolbar", "Bersihkan Seluruh Unduhan Selesai"),
+            ("↗ Buka Folder", self.open_selected_folder, "toolbar", "Buka Folder Berkas Terpilih"),
+            ("⋯ Pengaturan", self.open_options_dialog, "toolbar", "Opsi Konfigurasi IDM Clone"),
+        ]
+
+        self.toolbar_buttons = []
+        self.secondary_buttons = []
+
+        for text, cmd, kind, tooltip_text in primary_specs:
+            btn = create_modern_button(self.toolbar_frame, text=text, command=cmd, kind=kind, padx=10, pady=4, tooltip=tooltip_text)
             btn.pack(side=tk.LEFT, padx=3)
+            self.toolbar_buttons.append((btn, tooltip_text))
+
+        for text, cmd, kind, tooltip_text in secondary_specs:
+            btn = create_modern_button(self.toolbar_frame, text=text, command=cmd, kind=kind, padx=10, pady=4, tooltip=tooltip_text)
+            btn.pack(side=tk.LEFT, padx=3)
+            self.toolbar_buttons.append((btn, tooltip_text))
+            self.secondary_buttons.append(btn)
+
+        # Overflow menu & button for responsive compact width (<760px)
+        self.overflow_menu = tk.Menu(
+            self.root,
+            tearoff=0,
+            bg=THEME["surface"],
+            fg=THEME["text_primary"],
+            activebackground=THEME["accent_primary"],
+            activeforeground="#ffffff",
+            bd=1,
+            relief=tk.FLAT,
+        )
+        self.overflow_menu.add_command(label="■ Hentikan Semua Unduhan", command=self.stop_all)
+        self.overflow_menu.add_command(label="✓ Bersihkan Selesai", command=self.delete_completed)
+        self.overflow_menu.add_command(label="↗ Buka Folder Penyimpanan", command=self.open_selected_folder)
+        self.overflow_menu.add_separator()
+        self.overflow_menu.add_command(label="⋯ Pengaturan...", command=self.open_options_dialog)
+
+        self.btn_overflow = create_modern_button(
+            self.toolbar_frame,
+            text="» Lainnya",
+            command=self._show_overflow_menu,
+            kind="toolbar",
+            padx=10,
+            pady=4,
+            tooltip="Aksi Tambahan...",
+        )
+
+        self.root.bind("<Configure>", self._on_window_configure, add="+")
+
+    def _on_window_configure(self, event):
+        if event.widget == self.root:
+            self._update_toolbar_overflow(event.width)
+
+    def _update_toolbar_overflow(self, width: Optional[int] = None):
+        w = width if width is not None else self.root.winfo_width()
+        if w < 760:
+            for btn in self.secondary_buttons:
+                btn.pack_forget()
+            if self.btn_overflow:
+                self.btn_overflow.pack(side=tk.LEFT, padx=3)
+        else:
+            if self.btn_overflow:
+                self.btn_overflow.pack_forget()
+            for btn in self.secondary_buttons:
+                btn.pack(side=tk.LEFT, padx=3)
+
+    def _show_overflow_menu(self):
+        if not self.btn_overflow:
+            return
+        try:
+            x = self.btn_overflow.winfo_rootx()
+            y = self.btn_overflow.winfo_rooty() + self.btn_overflow.winfo_height() + 2
+            self.overflow_menu.post(x, y)
+        except Exception:
+            pass
 
     def _build_main_content(self):
         self.paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, sashrelief=tk.FLAT, sashwidth=4, bg=THEME["bg_dark"])
         self.paned.pack(fill=tk.BOTH, expand=True)
 
         # Left Sidebar: Categories
-        self.sidebar_frame = tk.Frame(self.paned, width=180, bg=THEME["surface_alt"])
+        self.sidebar_frame = tk.Frame(self.paned, width=190, bg=THEME["surface_alt"])
         self.sidebar_visible = True
         self.category_tree = ttk.Treeview(self.sidebar_frame, show="tree", selectmode="browse")
         self.category_tree.pack(fill=tk.BOTH, expand=True, padx=(2, 0), pady=2)
 
-        cat_root = self.category_tree.insert("", "end", text="📁 Kategori (Categories)", open=True)
-        self.category_tree.insert(cat_root, "end", text="📥 Semua Unduhan (All)", values=("all",))
-        self.category_tree.insert(cat_root, "end", text="🎬 Video", values=("video",))
-        self.category_tree.insert(cat_root, "end", text="🎵 Musik (Music)", values=("music",))
-        self.category_tree.insert(cat_root, "end", text="🖼️ Gambar (Pictures)", values=("pictures",))
-        self.category_tree.insert(cat_root, "end", text="📦 Program", values=("programs",))
-        self.category_tree.insert(cat_root, "end", text="📄 Dokumen (Documents)", values=("documents",))
-        self.category_tree.insert(cat_root, "end", text="🗜️ Berkas Terkompresi (Zip)", values=("compressed",))
-        self.category_tree.insert(cat_root, "end", text="✅ Selesai (Finished)", values=("finished",))
-        self.category_tree.insert(cat_root, "end", text="⏳ Belum Selesai (Unfinished)", values=("unfinished",))
+        cat_root = self.category_tree.insert("", "end", text="📁 Kategori", open=True)
+        self.category_tree.insert(cat_root, "end", text="Semua Unduhan", values=("all",))
+        self.category_tree.insert(cat_root, "end", text="Video", values=("video",))
+        self.category_tree.insert(cat_root, "end", text="Musik", values=("music",))
+        self.category_tree.insert(cat_root, "end", text="Gambar", values=("pictures",))
+        self.category_tree.insert(cat_root, "end", text="Program", values=("programs",))
+        self.category_tree.insert(cat_root, "end", text="Dokumen", values=("documents",))
+        self.category_tree.insert(cat_root, "end", text="Berkas Terkompresi", values=("compressed",))
+        self.category_tree.insert(cat_root, "end", text="Selesai", values=("finished",))
+        self.category_tree.insert(cat_root, "end", text="Belum Selesai", values=("unfinished",))
         self.category_tree.bind("<Double-1>", self._on_category_double_click)
 
         self.paned.add(self.sidebar_frame, minsize=150)
 
         # Right Panel: Downloads Table
-        table_frame = tk.Frame(self.paned, bg=THEME["bg_dark"])
+        table_frame = tk.Frame(self.paned, bg=THEME["tree_bg"])
         cols = ("name", "size", "status", "progress", "speed", "url")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", selectmode="extended")
 
-        self.tree.heading("name", text="Nama Berkas (File Name)")
+        self.tree.heading("name", text="Nama Berkas")
         self.tree.heading("size", text="Ukuran")
         self.tree.heading("status", text="Status")
         self.tree.heading("progress", text="Progres")
         self.tree.heading("speed", text="Kecepatan")
         self.tree.heading("url", text="URL Unduhan")
 
-        self.tree.column("name", width=220)
-        self.tree.column("size", width=90, anchor=tk.E)
-        self.tree.column("status", width=105, anchor=tk.CENTER)
-        self.tree.column("progress", width=90, anchor=tk.CENTER)
-        self.tree.column("speed", width=105, anchor=tk.E)
-        self.tree.column("url", width=260)
+        self.tree.column("name", width=240, minwidth=140)
+        self.tree.column("size", width=85, anchor=tk.E, minwidth=70)
+        self.tree.column("status", width=95, anchor=tk.CENTER, minwidth=80)
+        self.tree.column("progress", width=85, anchor=tk.CENTER, minwidth=75)
+        self.tree.column("speed", width=95, anchor=tk.E, minwidth=80)
+        self.tree.column("url", width=280, stretch=True)
 
         scroll_y = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll_y.set)
@@ -365,6 +440,63 @@ class IDMGUIApp:
         scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.tree.bind("<Double-1>", self.on_double_click_item)
+
+        # Empty State Card Overlay
+        self.empty_state_frame = tk.Frame(
+            table_frame,
+            bg=THEME["surface"],
+            padx=28,
+            pady=22,
+            relief=tk.SOLID,
+            bd=1,
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
+        )
+
+        lbl_empty_icon = tk.Label(
+            self.empty_state_frame,
+            text="📥",
+            font=("Segoe UI", 26),
+            bg=THEME["surface"],
+            fg=THEME["text_primary"],
+        )
+        lbl_empty_icon.pack(pady=(0, 6))
+
+        lbl_empty_title = tk.Label(
+            self.empty_state_frame,
+            text="Belum Ada Unduhan",
+            font=("Segoe UI", 11, "bold"),
+            bg=THEME["surface"],
+            fg=THEME["text_primary"],
+        )
+        lbl_empty_title.pack(pady=(0, 4))
+
+        lbl_empty_desc = tk.Label(
+            self.empty_state_frame,
+            text="Salin tautan dari peramban atau klik tombol di bawah untuk memulai unduhan baru.",
+            font=("Segoe UI", 9),
+            bg=THEME["surface"],
+            fg=THEME["text_secondary"],
+            wraplength=340,
+            justify=tk.CENTER,
+        )
+        lbl_empty_desc.pack(pady=(0, 14))
+
+        btn_empty_add = create_modern_button(
+            self.empty_state_frame,
+            text="+ Tambah Unduhan Baru",
+            command=self.open_add_url_dialog,
+            kind="primary",
+            padx=16,
+            pady=6,
+            tooltip="Tambah URL Baru (Ctrl+N)",
+        )
+        btn_empty_add.pack()
+
+        # Place initially if queue is empty
+        if len(self.queue.list_tasks()) == 0:
+            self.empty_state_frame.place(relx=0.5, rely=0.45, anchor=tk.CENTER)
+
         self.paned.add(table_frame, minsize=400)
 
     def _build_statusbar(self):
@@ -377,8 +509,8 @@ class IDMGUIApp:
             bg=THEME["surface"],
             fg=THEME["text_secondary"],
             font=FONT_SMALL,
-            padx=10,
-            pady=4,
+            padx=14,
+            pady=6,
         )
         self.statusbar.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -804,8 +936,23 @@ class IDMGUIApp:
             else:
                 self.tree.insert("", "end", iid=tid, values=values)
 
+        # Remove deleted tasks from treeview
+        current_task_ids = {t.task_id for t in tasks}
+        for item_id in self.tree.get_children(""):
+            if item_id not in current_task_ids:
+                self.tree.delete(item_id)
+
+        # Toggle empty state card
+        if hasattr(self, "empty_state_frame") and self.empty_state_frame:
+            if len(tasks) == 0:
+                if not bool(self.empty_state_frame.place_info()):
+                    self.empty_state_frame.place(relx=0.5, rely=0.45, anchor=tk.CENTER)
+            else:
+                if bool(self.empty_state_frame.place_info()):
+                    self.empty_state_frame.place_forget()
+
         self.statusbar.config(
-            text=f"Tasks: {len(tasks)} | Active: {active_count} | Total Speed: {format_bytes(int(total_speed))}/s"
+            text=f"Total: {len(tasks)} unduhan  |  Aktif: {active_count}  |  Total Kecepatan: {format_bytes(int(total_speed))}/s"
         )
         self.root.after(300, self._tick_ui)
 

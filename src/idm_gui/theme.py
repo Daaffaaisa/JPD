@@ -7,41 +7,44 @@ from typing import Callable, Optional
 import tkinter as tk
 from tkinter import ttk
 
-# Cohesive Dark Precision Palette
+# Cohesive Dark Precision Palette (Apple-inspired Dark Minimalist)
 THEME = {
     # Surfaces
-    "bg_dark": "#18181b",         # Zinc-900: Main window background
-    "surface": "#27272a",         # Zinc-800: Cards, dialogs, toolbars
-    "surface_alt": "#202023",     # Slightly darker surface for containers
-    "input_bg": "#141416",        # Deep background for text entries
+    "bg_dark": "#1c1c1e",          # Apple System Gray 6: Window background
+    "surface": "#2c2c2e",          # Apple System Gray 5: Toolbar, cards, dialogs
+    "surface_alt": "#242426",      # Apple Sidebar surface
+    "surface_canvas": "#121214",   # Deepest canvas for table
+    "input_bg": "#141416",         # Deep background for text entries
     # Borders & Dividers
-    "border": "#3f3f46",          # Zinc-700: Subtle boundary line
-    "border_light": "#52525b",    # Zinc-600
-    "focus_ring": "#38bdf8",      # Sky-400: Focus ring
+    "border": "#3a3a3c",           # Apple System Gray 4: Subtle boundary line
+    "border_light": "#48484a",     # Muted divider
+    "focus_ring": "#0071e3",       # Apple System Azure: Focus ring
     # Typography
-    "text_primary": "#fafafa",    # Zinc-50: High contrast reading text
-    "text_secondary": "#a1a1aa",  # Zinc-400: Muted labels and subtitles
-    "text_disabled": "#71717a",   # Zinc-500: Disabled elements
-    # Semantic Colors
-    "accent_primary": "#0284c7",  # Sky-600: Primary action button
-    "accent_hover": "#0369a1",    # Sky-700: Primary action hover
-    "accent_active": "#075985",   # Sky-800: Primary active press
-    "secondary_bg": "#3f3f46",    # Zinc-700: Secondary buttons
-    "secondary_hover": "#52525b", # Zinc-600
-    "success": "#10b981",         # Emerald-500: Success, complete, active speed
-    "warning": "#f59e0b",         # Amber-500: Security warning
-    "danger": "#ef4444",          # Rose-500: Delete, cancel, divider line
-    "danger_hover": "#dc2626",
+    "text_primary": "#f5f5f7",     # Apple high-contrast text (no halation)
+    "text_secondary": "#c7c7cc",   # High-contrast secondary labels (WCAG AAA)
+    "text_tertiary": "#aeaeb2",    # Captions & status text (WCAG AA)
+    "text_disabled": "#8e8e93",    # Disabled / coming soon text (WCAG AA)
+    # Semantic Colors (Single Accent)
+    "accent_primary": "#0071e3",   # Apple Refined Azure: 4.70:1 with white
+    "accent_hover": "#0062c4",     # 5.93:1 with white
+    "accent_active": "#005bb5",    # 6.64:1 with white
+    "secondary_bg": "#3a3a3c",     # Secondary buttons
+    "secondary_hover": "#48484a",
+    "success": "#10b981",          # Emerald-500: Active speed / complete
+    "warning": "#f59e0b",          # Amber-500: Security warning
+    "danger": "#d32f2f",           # Apple Destructive Red: 4.98:1 with white
+    "danger_hover": "#b91c1c",     # 6.47:1 with white
+    "danger_text": "#ff6358",      # 4.76:1 on #2c2c2e
     # Component specifics
-    "tree_bg": "#18181b",
-    "tree_fg": "#f4f4f5",
-    "tree_select": "#0369a1",
-    "tree_heading_bg": "#27272a",
-    "tree_heading_fg": "#ffffff",
-    "progress_bg": "#141416",
-    "progress_fill": "#0284c7",
+    "tree_bg": "#121214",
+    "tree_fg": "#f5f5f7",
+    "tree_select": "#0071e3",
+    "tree_heading_bg": "#2c2c2e",
+    "tree_heading_fg": "#f5f5f7",
+    "progress_bg": "#1c1c1e",
+    "progress_fill": "#0071e3",
     "progress_stripe": "#38bdf8",
-    "part_divider": "#ef4444",
+    "part_divider": "#d32f2f",
 }
 
 FONT_FAMILY = "Segoe UI"
@@ -73,6 +76,71 @@ def apply_theme_to_toplevel(top: tk.Toplevel, width: int, height: int, title: st
         pass
 
 
+class Tooltip:
+    """Lightweight tooltip appearing on hover after a delay (400ms)."""
+
+    def __init__(self, widget: tk.Widget, text: str, delay: int = 400):
+        self.widget = widget
+        self.text = text
+        self.delay = delay
+        self.tip_window: Optional[tk.Toplevel] = None
+        self.id_after: Optional[str] = None
+
+        self.widget.bind("<Enter>", self._on_enter, add="+")
+        self.widget.bind("<Leave>", self._on_leave, add="+")
+        self.widget.bind("<ButtonPress>", self._on_leave, add="+")
+
+    def _on_enter(self, event=None):
+        self._cancel()
+        self.id_after = self.widget.after(self.delay, self._show)
+
+    def _on_leave(self, event=None):
+        self._cancel()
+        self._hide()
+
+    def _cancel(self):
+        if self.id_after:
+            try:
+                self.widget.after_cancel(self.id_after)
+            except Exception:
+                pass
+            self.id_after = None
+
+    def _show(self):
+        if self.tip_window or not self.text:
+            return
+        try:
+            x = self.widget.winfo_rootx() + (self.widget.winfo_width() // 2)
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        except Exception:
+            return
+
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        tw.configure(bg=THEME["border"])
+
+        lbl = tk.Label(
+            tw,
+            text=self.text,
+            background=THEME["surface"],
+            foreground=THEME["text_primary"],
+            font=FONT_SMALL,
+            padx=8,
+            pady=3,
+            relief=tk.FLAT,
+        )
+        lbl.pack(padx=1, pady=1)
+
+    def _hide(self):
+        if self.tip_window:
+            try:
+                self.tip_window.destroy()
+            except Exception:
+                pass
+            self.tip_window = None
+
+
 def create_modern_button(
     parent: tk.Widget,
     text: str,
@@ -81,19 +149,20 @@ def create_modern_button(
     width: Optional[int] = None,
     padx: int = 12,
     pady: int = 4,
+    tooltip: Optional[str] = None,
 ) -> tk.Button:
     """Creates a tactile, beautifully styled button with active hover animations."""
     if kind == "primary":
         bg_normal = THEME["accent_primary"]
         bg_hover = THEME["accent_hover"]
         bg_active = THEME["accent_active"]
-        fg = THEME["text_primary"]
+        fg = "#ffffff"
         font = FONT_HEADING
     elif kind == "danger":
         bg_normal = THEME["danger"]
         bg_hover = THEME["danger_hover"]
-        bg_active = "#b91c1c"
-        fg = THEME["text_primary"]
+        bg_active = "#8b0000"
+        fg = "#ffffff"
         font = FONT_BODY
     elif kind == "toolbar":
         bg_normal = THEME["surface"]
@@ -104,7 +173,7 @@ def create_modern_button(
     else:  # secondary
         bg_normal = THEME["secondary_bg"]
         bg_hover = THEME["secondary_hover"]
-        bg_active = "#27272a"
+        bg_active = "#2c2c2e"
         fg = THEME["text_primary"]
         font = FONT_BODY
 
@@ -138,6 +207,10 @@ def create_modern_button(
 
     btn.bind("<Enter>", on_enter)
     btn.bind("<Leave>", on_leave)
+
+    if tooltip:
+        Tooltip(btn, tooltip)
+
     return btn
 
 
@@ -152,7 +225,7 @@ def setup_global_ttk_theme():
         background=THEME["tree_bg"],
         foreground=THEME["tree_fg"],
         fieldbackground=THEME["tree_bg"],
-        rowheight=26,
+        rowheight=28,
         font=FONT_BODY,
         borderwidth=0,
     )
