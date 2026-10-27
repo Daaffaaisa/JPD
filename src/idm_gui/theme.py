@@ -8,44 +8,44 @@ import tkinter as tk
 from tkinter import ttk
 import tkinter.font as tkfont
 
-# Cohesive Dark Precision Palette (Apple-inspired Dark Minimalist)
+# Cohesive Midnight Slate & Sapphire Palette (Elegant Modern Dark)
 THEME = {
-    # Surfaces
-    "bg_dark": "#1c1c1e",          # Apple System Gray 6: Window background
-    "surface": "#2c2c2e",          # Apple System Gray 5: Toolbar, cards, dialogs
-    "surface_alt": "#242426",      # Apple Sidebar surface
-    "surface_canvas": "#121214",   # Deepest canvas for table
-    "input_bg": "#141416",         # Deep background for text entries
+    # Surfaces (Layered Midnight Slate Undertones)
+    "bg_dark": "#0f131d",          # Deep midnight slate: Window background
+    "surface": "#1b2230",          # Elevated midnight slate: Toolbar, cards, dialogs
+    "surface_alt": "#151b27",      # Inset midnight slate: Sidebar navigation
+    "surface_canvas": "#0b0e15",   # Deepest abyss canvas for table
+    "input_bg": "#090b10",         # Sunken deep field for text entries
     # Borders & Dividers
-    "border": "#3a3a3c",           # Apple System Gray 4: Subtle boundary line
-    "border_light": "#48484a",     # Muted divider
-    "focus_ring": "#0071e3",       # Apple System Azure: Focus ring
-    # Typography
-    "text_primary": "#f5f5f7",     # Apple high-contrast text (no halation)
-    "text_secondary": "#c7c7cc",   # High-contrast secondary labels (WCAG AAA)
-    "text_tertiary": "#aeaeb2",    # Captions & status text (WCAG AA)
-    "text_disabled": "#8e8e93",    # Disabled / coming soon text (WCAG AA)
-    # Semantic Colors (Single Accent)
-    "accent_primary": "#0071e3",   # Apple Refined Azure: 4.70:1 with white
-    "accent_hover": "#0062c4",     # 5.93:1 with white
-    "accent_active": "#005bb5",    # 6.64:1 with white
-    "secondary_bg": "#3a3a3c",     # Secondary buttons
-    "secondary_hover": "#48484a",
+    "border": "#2d374d",           # Slate-700 hairline border
+    "border_light": "#3e4c68",     # Muted slate divider
+    "focus_ring": "#3b82f6",       # Luminous sapphire focus ring
+    # Typography (Cool Slate Ramp)
+    "text_primary": "#f1f5f9",     # Slate-50: Luminous crisp text (no halation)
+    "text_secondary": "#94a3b8",   # Slate-400: High-contrast cool secondary labels (WCAG AAA)
+    "text_tertiary": "#7d8da1",    # Slate-400/500: Captions & metadata (5.48:1 WCAG AA)
+    "text_disabled": "#526075",    # Slate-600: Disabled / coming soon text
+    # Semantic Colors (Single Brand Accent + Status)
+    "accent_primary": "#2563eb",   # Sapphire Blue: 5.17:1 with white (WCAG AA)
+    "accent_hover": "#1d4ed8",     # Deep Royal: 6.70:1 with white
+    "accent_active": "#1e40af",    # 8.24:1 with white
+    "secondary_bg": "#263145",     # Midnight slate secondary button
+    "secondary_hover": "#33415c",
     "success": "#10b981",          # Emerald-500: Active speed / complete
     "warning": "#f59e0b",          # Amber-500: Security warning
-    "danger": "#d32f2f",           # Apple Destructive Red: 4.98:1 with white
-    "danger_hover": "#b91c1c",     # 6.47:1 with white
-    "danger_text": "#ff6358",      # 4.76:1 on #2c2c2e
+    "danger": "#e11d48",           # Rose-600: Destructive action (4.70:1 with white)
+    "danger_hover": "#be123c",     # 6.29:1 with white
+    "danger_text": "#fb7185",      # Rose-400: High-contrast warning on card (5.92:1)
     # Component specifics
-    "tree_bg": "#121214",
-    "tree_fg": "#f5f5f7",
-    "tree_select": "#0071e3",
-    "tree_heading_bg": "#2c2c2e",
-    "tree_heading_fg": "#f5f5f7",
-    "progress_bg": "#1c1c1e",
-    "progress_fill": "#0071e3",
-    "progress_stripe": "#38bdf8",
-    "part_divider": "#d32f2f",
+    "tree_bg": "#0b0e15",
+    "tree_fg": "#f1f5f9",
+    "tree_select": "#2563eb",
+    "tree_heading_bg": "#1b2230",
+    "tree_heading_fg": "#f1f5f9",
+    "progress_bg": "#0f131d",
+    "progress_fill": "#2563eb",
+    "progress_stripe": "#60a5fa",
+    "part_divider": "#e11d48",
 }
 
 FONT_FAMILY = "Segoe UI"
