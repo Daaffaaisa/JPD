@@ -369,6 +369,48 @@ class IDMGUIApp:
             tooltip="Aksi Tambahan...",
         )
 
+        # Search pill bar on the right side of toolbar for visual balance & quick filtering
+        self.search_canvas = tk.Canvas(self.toolbar_frame, width=190, height=28, bg=THEME["surface"], highlightthickness=0)
+        self.search_canvas.pack(side=tk.RIGHT, padx=6)
+        draw_round_rectangle(self.search_canvas, 1, 1, 189, 27, r=7, fill=THEME["input_bg"], outline=THEME["border"])
+
+        lbl_search = tk.Label(self.search_canvas, text="⌕", font=("Segoe UI", 10, "bold"), bg=THEME["input_bg"], fg=THEME["text_secondary"])
+        self.search_canvas.create_window(14, 14, window=lbl_search)
+
+        try:
+            self.search_var = tk.StringVar(master=self.root)
+        except Exception:
+            self.search_var = None
+
+        entry_kwargs = {
+            "bg": THEME["input_bg"],
+            "fg": THEME["text_secondary"],
+            "insertbackground": THEME["text_primary"],
+            "relief": tk.FLAT,
+            "font": ("Segoe UI", 9),
+            "bd": 0,
+        }
+        if self.search_var:
+            entry_kwargs["textvariable"] = self.search_var
+        self.search_entry = tk.Entry(self.search_canvas, **entry_kwargs)
+        self.search_entry.insert(0, "Cari unduhan...")
+        self.search_canvas.create_window(104, 14, window=self.search_entry, width=155)
+
+        def _on_search_focus_in(e):
+            if self.search_entry.get() == "Cari unduhan...":
+                self.search_entry.delete(0, tk.END)
+                self.search_entry.config(fg=THEME["text_primary"])
+
+        def _on_search_focus_out(e):
+            if not self.search_entry.get().strip():
+                self.search_entry.insert(0, "Cari unduhan...")
+                self.search_entry.config(fg=THEME["text_secondary"])
+
+        self.search_entry.bind("<FocusIn>", _on_search_focus_in)
+        self.search_entry.bind("<FocusOut>", _on_search_focus_out)
+        if self.search_var:
+            self.search_var.trace_add("write", lambda *args: self._tick_ui())
+
         self.root.bind("<Configure>", self._on_window_configure, add="+")
 
     def _on_window_configure(self, event):
@@ -449,7 +491,7 @@ class IDMGUIApp:
 
         self.tree.bind("<Double-1>", self.on_double_click_item)
 
-        # Empty State Card Overlay (Apple-inspired rounded card)
+        # Empty State Card Overlay (Apple-inspired rounded card with bespoke vector badge)
         self.empty_state_frame = tk.Canvas(
             table_frame,
             width=380,
@@ -458,52 +500,41 @@ class IDMGUIApp:
             highlightthickness=0,
         )
 
-        draw_round_rectangle(self.empty_state_frame, 2, 2, 378, 208, r=14, fill=THEME["surface"], outline=THEME["border"])
+        draw_round_rectangle(self.empty_state_frame, 2, 2, 378, 208, r=16, fill=THEME["surface"], outline=THEME["border"])
 
-        inner_card = tk.Frame(self.empty_state_frame, bg=THEME["surface"])
+        # Minimalist glowing vector badge at top (x=190, y=48)
+        self.empty_state_frame.create_oval(165, 20, 215, 70, fill="#151d2a", outline=THEME["accent_primary"], width=2)
+        # Vector arrow & tray
+        self.empty_state_frame.create_line(190, 32, 190, 52, fill="#60a5fa", width=2)
+        self.empty_state_frame.create_line(184, 46, 190, 52, fill="#60a5fa", width=2)
+        self.empty_state_frame.create_line(196, 46, 190, 52, fill="#60a5fa", width=2)
+        self.empty_state_frame.create_line(178, 52, 178, 58, 202, 58, 202, 52, fill="#60a5fa", width=2)
 
-        lbl_empty_icon = tk.Label(
-            inner_card,
-            text="📥",
-            font=("Segoe UI", 24),
-            bg=THEME["surface"],
-            fg=THEME["text_primary"],
-        )
-        lbl_empty_icon.pack(pady=(0, 4))
-
-        lbl_empty_title = tk.Label(
-            inner_card,
+        self.empty_state_frame.create_text(
+            190, 92,
             text="Belum Ada Unduhan",
+            fill=THEME["text_primary"],
             font=("Segoe UI", 11, "bold"),
-            bg=THEME["surface"],
-            fg=THEME["text_primary"],
         )
-        lbl_empty_title.pack(pady=(0, 2))
-
-        lbl_empty_desc = tk.Label(
-            inner_card,
-            text="Salin tautan dari peramban atau klik tombol di bawah untuk memulai unduhan baru.",
+        self.empty_state_frame.create_text(
+            190, 118,
+            text="Salin tautan dari peramban atau klik tombol di bawah\nuntuk memulai unduhan baru.",
+            fill=THEME["text_secondary"],
             font=("Segoe UI", 9),
-            bg=THEME["surface"],
-            fg=THEME["text_secondary"],
-            wraplength=320,
             justify=tk.CENTER,
         )
-        lbl_empty_desc.pack(pady=(0, 10))
 
         btn_empty_add = create_modern_button(
-            inner_card,
+            self.empty_state_frame,
             text="+ Tambah Unduhan Baru",
             command=self.open_add_url_dialog,
             kind="primary",
-            padx=16,
+            padx=18,
             pady=6,
-            radius=8,
+            radius=9,
             tooltip="Tambah URL Baru (Ctrl+N)",
         )
-        btn_empty_add.pack()
-
-        self.empty_state_frame.create_window(190, 105, window=inner_card)
+        self.empty_state_frame.create_window(190, 168, window=btn_empty_add)
 
         # Place initially if queue is empty
         if len(self.queue.list_tasks()) == 0:
@@ -900,6 +931,12 @@ class IDMGUIApp:
     def _tick_ui(self):
         now = time.time()
         tasks = self.queue.list_tasks()
+
+        # Filter by search query if active
+        if hasattr(self, "search_var") and self.search_var:
+            query = self.search_var.get().strip().lower()
+            if query and query != "cari unduhan...":
+                tasks = [t for t in tasks if query in os.path.basename(t.output_path).lower() or query in (t.url or "").lower()]
 
         total_speed = 0.0
         active_count = 0
