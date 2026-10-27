@@ -210,4 +210,47 @@ def test_download_info_dialog_probing_state_and_update(tk_root):
     dlg.top.destroy()
 
 
+def test_download_info_dialog_connection_label_reflects_settings(tk_root):
+    from idm_gui.settings import settings
+    orig = settings.get_max_connections()
+    try:
+        settings.set_max_connections(16)
+        dlg16 = DownloadInfoDialog(
+            parent=tk_root,
+            url="https://example.com/file16.iso",
+            title="file16.iso",
+        )
+        assert "16 Koneksi" in dlg16.conn_label.cget("text")
+        dlg16.top.destroy()
+
+        settings.set_max_connections(32)
+        dlg32 = DownloadInfoDialog(
+            parent=tk_root,
+            url="https://example.com/file32.iso",
+            title="file32.iso",
+        )
+        assert "32 Koneksi" in dlg32.conn_label.cget("text")
+        dlg32.top.destroy()
+    finally:
+        settings.set_max_connections(orig)
+
+
+def test_download_info_dialog_add_category_button(tk_root, monkeypatch):
+    from tkinter import simpledialog
+    dlg = DownloadInfoDialog(
+        parent=tk_root,
+        url="https://example.com/file_cat.iso",
+        title="file_cat.iso",
+    )
+    assert hasattr(dlg, "btn_add_cat")
+    assert dlg.btn_add_cat.cget("command") != ""
+
+    monkeypatch.setattr(simpledialog, "askstring", lambda *args, **kwargs: "Ebook")
+    dlg._on_add_category()
+
+    assert "Ebook" in dlg.cat_cb["values"]
+    assert dlg.cat_var.get() == "Ebook"
+    dlg.top.destroy()
+
+
 

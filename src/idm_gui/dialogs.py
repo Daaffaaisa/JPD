@@ -178,7 +178,7 @@ class DownloadInfoDialog:
         cat_frame.grid(row=1, column=1, columnspan=2, sticky=tk.EW, padx=(6, 0), pady=3)
 
         self.cat_var = tk.StringVar(master=self.top, value=self.category)
-        cat_cb = ttk.Combobox(
+        self.cat_cb = ttk.Combobox(
             cat_frame,
             textvariable=self.cat_var,
             values=list(self.CATEGORIES.keys()),
@@ -186,12 +186,13 @@ class DownloadInfoDialog:
             font=("Segoe UI", 9),
             width=22,
         )
-        cat_cb.pack(side=tk.LEFT)
-        cat_cb.bind("<<ComboboxSelected>>", self._on_cat_change)
+        self.cat_cb.pack(side=tk.LEFT)
+        self.cat_cb.bind("<<ComboboxSelected>>", self._on_cat_change)
 
-        btn_add_cat = tk.Button(
+        self.btn_add_cat = tk.Button(
             cat_frame,
             text="+",
+            command=self._on_add_category,
             bg="#3a3a3a",
             fg=FG_COLOR,
             relief=tk.SOLID,
@@ -200,7 +201,7 @@ class DownloadInfoDialog:
             width=2,
             padx=2,
         )
-        btn_add_cat.pack(side=tk.LEFT, padx=(4, 0))
+        self.btn_add_cat.pack(side=tk.LEFT, padx=(4, 0))
 
         # 3. Simpan Sebagai Row
         tk.Label(main_frame, text="Simpan Sebagai:", bg=BG_COLOR, fg=FG_COLOR, font=("Segoe UI", 9, "bold")).grid(
@@ -314,14 +315,15 @@ class DownloadInfoDialog:
         self.desc_entry.pack(fill=tk.X, expand=True, pady=(2, 0))
 
         # Parallel Connections indicator
-        conn_label = tk.Label(
+        active_conns = settings.get_max_connections()
+        self.conn_label = tk.Label(
             desc_box,
-            text="⚡ Akselerasi: 4 Koneksi Paralel HTTP Range",
+            text=f"⚡ Akselerasi: {active_conns} Koneksi Paralel HTTP Range",
             bg="#232323",
             fg="#28a745",
             font=("Segoe UI", 8, "italic"),
         )
-        conn_label.pack(anchor=tk.W, pady=(4, 0))
+        self.conn_label.pack(anchor=tk.W, pady=(4, 0))
 
         # 6. Action Buttons Row (Unduh Nanti, Mulai Unduh, Batal)
         btn_frame = tk.Frame(main_frame, bg=BG_COLOR)
@@ -359,6 +361,21 @@ class DownloadInfoDialog:
         try:
             if hasattr(self, "lbl_size") and self.lbl_size and self.lbl_size.winfo_exists():
                 self.lbl_size.config(text=format_size_id(size))
+        except Exception:
+            pass
+
+    def _on_add_category(self):
+        try:
+            from tkinter import simpledialog
+            new_cat = simpledialog.askstring("Tambah Kategori Baru", "Masukkan nama kategori baru:", parent=self.top)
+            if new_cat and new_cat.strip():
+                new_cat = new_cat.strip()
+                cur_vals = list(self.cat_cb["values"])
+                if new_cat not in cur_vals:
+                    cur_vals.append(new_cat)
+                    self.cat_cb["values"] = cur_vals
+                self.cat_var.set(new_cat)
+                self._on_cat_change()
         except Exception:
             pass
 
