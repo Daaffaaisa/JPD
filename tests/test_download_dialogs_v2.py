@@ -69,3 +69,19 @@ def test_download_complete_dialog_ui(tk_root):
     assert dlg.title == "We-Were-Here-Tomorrow-AnkerGames.zip"
     assert dlg.top is not None
     dlg.close()
+
+
+def test_download_progress_dialog_disabled_tabs(tk_root):
+    dlg = DownloadProgressDialog(
+        parent=tk_root,
+        task_id="t_tab_test",
+        url="https://example.com/file.bin",
+        output_path="C:\\test\\file.bin",
+    )
+    assert hasattr(dlg, "lbl_tab2")
+    assert hasattr(dlg, "lbl_tab3")
+    assert "Segera Hadir" in dlg.lbl_tab2.cget("text")
+    assert "Segera Hadir" in dlg.lbl_tab3.cget("text")
+    assert dlg.lbl_tab2.cget("cursor") in ("arrow", "")
+    assert dlg.lbl_tab3.cget("cursor") in ("arrow", "")
+    dlg.close()

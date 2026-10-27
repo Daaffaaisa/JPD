@@ -531,12 +531,12 @@ class DownloadProgressDialog:
         tab_frame = tk.Frame(self.top, bg="#1e1e1e", padx=6, pady=4)
         tab_frame.pack(fill=tk.X)
 
-        lbl_tab1 = tk.Label(tab_frame, text="Status unduhan", bg=BG, fg=FG, font=("Segoe UI", 9, "bold"), padx=8, pady=3, relief=tk.SOLID, bd=1)
-        lbl_tab1.pack(side=tk.LEFT, padx=2)
-        lbl_tab2 = tk.Label(tab_frame, text="Pembatas Kecepatan", bg="#1e1e1e", fg="#888888", font=("Segoe UI", 9), padx=8, pady=3)
-        lbl_tab2.pack(side=tk.LEFT, padx=2)
-        lbl_tab3 = tk.Label(tab_frame, text="Opsi saat selesai", bg="#1e1e1e", fg="#888888", font=("Segoe UI", 9), padx=8, pady=3)
-        lbl_tab3.pack(side=tk.LEFT, padx=2)
+        self.lbl_tab1 = tk.Label(tab_frame, text="Status unduhan", bg=BG, fg=FG, font=("Segoe UI", 9, "bold"), padx=8, pady=3, relief=tk.SOLID, bd=1)
+        self.lbl_tab1.pack(side=tk.LEFT, padx=2)
+        self.lbl_tab2 = tk.Label(tab_frame, text="Pembatas Kecepatan (Segera Hadir)", bg="#1e1e1e", fg=THEME["text_disabled"], font=("Segoe UI", 8, "italic"), padx=6, pady=3, cursor="arrow")
+        self.lbl_tab2.pack(side=tk.LEFT, padx=2)
+        self.lbl_tab3 = tk.Label(tab_frame, text="Opsi saat selesai (Segera Hadir)", bg="#1e1e1e", fg=THEME["text_disabled"], font=("Segoe UI", 8, "italic"), padx=6, pady=3, cursor="arrow")
+        self.lbl_tab3.pack(side=tk.LEFT, padx=2)
 
         content_frame = tk.Frame(self.top, bg=BG, padx=12, pady=8)
         content_frame.pack(fill=tk.BOTH, expand=True)
