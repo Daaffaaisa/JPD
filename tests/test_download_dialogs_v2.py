@@ -85,3 +85,36 @@ def test_download_progress_dialog_disabled_tabs(tk_root):
     assert dlg.lbl_tab2.cget("cursor") in ("arrow", "")
     assert dlg.lbl_tab3.cget("cursor") in ("arrow", "")
     dlg.close()
+
+
+def test_download_progress_dialog_uses_coords_without_delete_all(tk_root, monkeypatch):
+    dlg = DownloadProgressDialog(
+        parent=tk_root,
+        task_id="t_coords_test",
+        url="https://example.com/file.iso",
+        output_path="C:\\test\\file.iso",
+        total_bytes=1024 * 1024 * 80,
+        parts=4,
+    )
+
+    # Track calls to delete on seg_canvas
+    delete_called = []
+    original_delete = dlg.seg_canvas.delete
+    monkeypatch.setattr(dlg.seg_canvas, "delete", lambda *a, **kw: delete_called.append(a))
+
+    # Trigger update_progress
+    dlg.update_progress(
+        bytes_downloaded=1024 * 1024 * 40,
+        total_bytes=1024 * 1024 * 80,
+        speed_bps=1024 * 1024 * 8,
+    )
+
+    # Verify that delete("all") was NOT called during update_progress
+    assert "all" not in delete_called
+    assert len(delete_called) == 0
+
+    # Verify persistent segment items exist
+    assert hasattr(dlg, "seg_fill_rects")
+    assert len(dlg.seg_fill_rects) == dlg.parts
+
+    dlg.close()

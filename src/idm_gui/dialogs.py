@@ -505,11 +505,16 @@ class DownloadProgressDialog:
         self._build_ui()
 
     def _build_ui(self):
+        try:
+            setup_global_ttk_theme()
+        except Exception:
+            pass
+
         self.top = tk.Toplevel(self.parent)
         self.top.title(f"0% {self.filename}")
         self.top.geometry("560x440")
         self.top.minsize(500, 360)
-        self.top.configure(bg="#2b2b2b")
+        self.top.configure(bg=THEME["surface"])
         self.top.protocol("WM_DELETE_WINDOW", self._on_cancel_click)
 
         # Center on screen and bring to front
@@ -528,33 +533,62 @@ class DownloadProgressDialog:
         except Exception:
             pass
 
-        BG = "#2b2b2b"
-        FG = "#ffffff"
-        BOX_BG = "#222222"
+        BG = THEME["surface"]
+        FG = THEME["text_primary"]
+        CARD_BG = THEME["surface_alt"]
+        BORDER = THEME["border"]
 
         # Tab Header Row
-        tab_frame = tk.Frame(self.top, bg="#1e1e1e", padx=6, pady=4)
+        tab_frame = tk.Frame(self.top, bg=THEME["surface_alt"], padx=6, pady=4)
         tab_frame.pack(fill=tk.X)
 
-        self.lbl_tab1 = tk.Label(tab_frame, text="Status unduhan", bg=BG, fg=FG, font=("Segoe UI", 9, "bold"), padx=8, pady=3, relief=tk.SOLID, bd=1)
+        self.lbl_tab1 = tk.Label(
+            tab_frame,
+            text="Status unduhan",
+            bg=THEME["surface"],
+            fg=FG,
+            font=("Segoe UI", 9, "bold"),
+            padx=10,
+            pady=4,
+            relief=tk.SOLID,
+            bd=1,
+        )
         self.lbl_tab1.pack(side=tk.LEFT, padx=2)
-        self.lbl_tab2 = tk.Label(tab_frame, text="Pembatas Kecepatan (Segera Hadir)", bg="#1e1e1e", fg=THEME["text_disabled"], font=("Segoe UI", 8, "italic"), padx=6, pady=3, cursor="arrow")
+        self.lbl_tab2 = tk.Label(
+            tab_frame,
+            text="Pembatas Kecepatan (Segera Hadir)",
+            bg=THEME["surface_alt"],
+            fg=THEME["text_disabled"],
+            font=("Segoe UI", 8, "italic"),
+            padx=8,
+            pady=4,
+            cursor="arrow",
+        )
         self.lbl_tab2.pack(side=tk.LEFT, padx=2)
-        self.lbl_tab3 = tk.Label(tab_frame, text="Opsi saat selesai (Segera Hadir)", bg="#1e1e1e", fg=THEME["text_disabled"], font=("Segoe UI", 8, "italic"), padx=6, pady=3, cursor="arrow")
+        self.lbl_tab3 = tk.Label(
+            tab_frame,
+            text="Opsi saat selesai (Segera Hadir)",
+            bg=THEME["surface_alt"],
+            fg=THEME["text_disabled"],
+            font=("Segoe UI", 8, "italic"),
+            padx=8,
+            pady=4,
+            cursor="arrow",
+        )
         self.lbl_tab3.pack(side=tk.LEFT, padx=2)
 
-        content_frame = tk.Frame(self.top, bg=BG, padx=12, pady=8)
+        content_frame = tk.Frame(self.top, bg=BG, padx=14, pady=10)
         content_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Info Box (bordered)
-        info_box = tk.Frame(content_frame, bg=BOX_BG, relief=tk.SOLID, bd=1, padx=10, pady=8)
-        info_box.pack(fill=tk.X, pady=(0, 8))
+        # Info Box (bordered dark card)
+        info_box = tk.Frame(content_frame, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=12, pady=10)
+        info_box.pack(fill=tk.X, pady=(0, 10))
 
         def add_info_row(row, label_text, default_val):
-            tk.Label(info_box, text=label_text, bg=BOX_BG, fg="#aaaaaa", font=("Segoe UI", 8), anchor=tk.W).grid(
+            tk.Label(info_box, text=label_text, bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8), anchor=tk.W).grid(
                 row=row, column=0, sticky=tk.W, pady=1
             )
-            val_lbl = tk.Label(info_box, text=default_val, bg=BOX_BG, fg=FG, font=("Segoe UI", 8, "bold"), anchor=tk.W)
+            val_lbl = tk.Label(info_box, text=default_val, bg=CARD_BG, fg=FG, font=("Segoe UI", 8, "bold"), anchor=tk.W)
             val_lbl.grid(row=row, column=1, sticky=tk.W, padx=(10, 0), pady=1)
             return val_lbl
 
@@ -571,24 +605,30 @@ class DownloadProgressDialog:
 
         # Main Progress Bar
         bar_frame = tk.Frame(content_frame, bg=BG)
-        bar_frame.pack(fill=tk.X, pady=(0, 6))
+        bar_frame.pack(fill=tk.X, pady=(0, 8))
 
-        self.progress_canvas = tk.Canvas(bar_frame, height=20, bg=THEME["progress_bg"], highlightthickness=1, highlightbackground=THEME["border"])
+        self.progress_canvas = tk.Canvas(
+            bar_frame,
+            height=20,
+            bg=THEME["input_bg"],
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
         self.progress_canvas.pack(fill=tk.X)
-        self.progress_rect = self.progress_canvas.create_rectangle(0, 0, 0, 20, fill=THEME["progress_fill"], outline="")
+        self.progress_rect = self.progress_canvas.create_rectangle(0, 0, 0, 20, fill=THEME["accent_primary"], outline="")
         self.progress_text = self.progress_canvas.create_text(260, 10, text="0%", fill="#ffffff", font=("Segoe UI", 9, "bold"))
 
         # Action Buttons
         btn_row = tk.Frame(content_frame, bg=BG)
-        btn_row.pack(fill=tk.X, pady=(0, 8))
+        btn_row.pack(fill=tk.X, pady=(0, 10))
 
-        self.btn_toggle = create_modern_button(btn_row, "<< Sembunyikan detail", self._toggle_details, kind="secondary", padx=10, pady=3)
+        self.btn_toggle = create_modern_button(btn_row, "<< Sembunyikan detail", self._toggle_details, kind="secondary", padx=10, pady=3, radius=7)
         self.btn_toggle.pack(side=tk.LEFT)
 
-        self.btn_cancel = create_modern_button(btn_row, "Batal", self._on_cancel_click, kind="danger", padx=14, pady=3)
-        self.btn_cancel.pack(side=tk.RIGHT, padx=(4, 0))
+        self.btn_cancel = create_modern_button(btn_row, "Batal", self._on_cancel_click, kind="danger", padx=14, pady=3, radius=7)
+        self.btn_cancel.pack(side=tk.RIGHT, padx=(6, 0))
 
-        self.btn_pause = create_modern_button(btn_row, "Jeda", self._on_pause_click, kind="secondary", padx=14, pady=3)
+        self.btn_pause = create_modern_button(btn_row, "Jeda", self._on_pause_click, kind="secondary", padx=14, pady=3, radius=7)
         self.btn_pause.pack(side=tk.RIGHT)
 
         # Detail Frame (Multi-segment visual bar + Connection table)
@@ -597,26 +637,45 @@ class DownloadProgressDialog:
 
         tk.Label(
             self.detail_frame,
-            text="Progres posisi mulai dan unduh berdasarkan koneksi",
+            text="Progres posisi mulai dan unduh berdasarkan koneksi:",
             bg=BG,
-            fg="#aaaaaa",
+            fg=THEME["text_secondary"],
             font=("Segoe UI", 8),
-        ).pack(anchor=tk.W, pady=(0, 2))
+        ).pack(anchor=tk.W, pady=(0, 3))
 
         # Segment Multi-connection Visualizer Canvas
-        self.seg_canvas = tk.Canvas(self.detail_frame, height=22, bg=THEME["progress_bg"], highlightthickness=1, highlightbackground=THEME["border"])
-        self.seg_canvas.pack(fill=tk.X, pady=(0, 6))
+        self.seg_canvas = tk.Canvas(
+            self.detail_frame,
+            height=22,
+            bg=THEME["input_bg"],
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        self.seg_canvas.pack(fill=tk.X, pady=(0, 8))
+
+        # Pre-create persistent canvas objects for zero-allocation rendering (replaces delete("all"))
+        self.seg_bg_rects = []
+        self.seg_fill_rects = []
+        self.seg_dividers = []
+        for i in range(self.parts):
+            bg_id = self.seg_canvas.create_rectangle(0, 2, 0, 20, fill=CARD_BG, outline="")
+            fill_id = self.seg_canvas.create_rectangle(0, 2, 0, 20, fill=THEME["accent_primary"], outline="")
+            self.seg_bg_rects.append(bg_id)
+            self.seg_fill_rects.append(fill_id)
+            if i > 0:
+                div_id = self.seg_canvas.create_line(0, 0, 0, 22, fill=BORDER, width=1)
+                self.seg_dividers.append(div_id)
 
         # Connections Treeview
         tree_frame = tk.Frame(self.detail_frame, bg=BG)
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
         self.conn_tree = ttk.Treeview(tree_frame, columns=("num", "dl", "info"), show="headings", height=4)
-        self.conn_tree.heading("num", text="N.")
+        self.conn_tree.heading("num", text="Koneksi")
         self.conn_tree.heading("dl", text="Diunduh")
-        self.conn_tree.heading("info", text="Info")
+        self.conn_tree.heading("info", text="Status")
 
-        self.conn_tree.column("num", width=45, anchor=tk.CENTER)
+        self.conn_tree.column("num", width=75, anchor=tk.CENTER)
         self.conn_tree.column("dl", width=120, anchor=tk.E)
         self.conn_tree.column("info", width=220, anchor=tk.W)
 
@@ -690,21 +749,37 @@ class DownloadProgressDialog:
             elif pct >= 100.0:
                 self.lbl_eta.config(text="Selesai")
 
-            canvas_w = self.progress_canvas.winfo_width() or 520
+            canvas_w = self.progress_canvas.winfo_width()
+            if canvas_w <= 10:
+                canvas_w = max(self.top.winfo_width() - 36, 520)
             fill_w = int(canvas_w * (pct / 100.0))
             self.progress_canvas.coords(self.progress_rect, 0, 0, fill_w, 20)
             self.progress_canvas.coords(self.progress_text, canvas_w // 2, 10)
             self.progress_canvas.itemconfig(self.progress_text, text=f"{pct:.1f}%")
 
-            seg_w = self.seg_canvas.winfo_width() or 520
-            self.seg_canvas.delete("all")
+            seg_w = self.seg_canvas.winfo_width()
+            if seg_w <= 10:
+                seg_w = max(self.top.winfo_width() - 36, 520)
+
             chunk_width = seg_w / max(1, self.parts)
             for i in range(self.parts):
                 x0 = i * chunk_width
-                part_pct = min(1.0, (pct / 100.0))
-                self.seg_canvas.create_rectangle(x0, 2, x0 + (chunk_width * part_pct), 20, fill="#007acc", outline="")
-                if i > 0:
-                    self.seg_canvas.create_line(x0, 0, x0, 22, fill="#e74c3c", width=2)
+                x1 = (i + 1) * chunk_width
+                if part_progress and i < len(part_progress):
+                    p_data = part_progress[i]
+                    p_dl = p_data.get("downloaded", 0)
+                    p_tot = p_data.get("end_byte", 0) - p_data.get("start_byte", 0)
+                    part_ratio = min(1.0, max(0.0, p_dl / p_tot)) if p_tot > 0 else min(1.0, max(0.0, pct / 100.0))
+                else:
+                    part_ratio = min(1.0, max(0.0, pct / 100.0))
+
+                part_fill_w = chunk_width * part_ratio
+                if i < len(self.seg_bg_rects):
+                    self.seg_canvas.coords(self.seg_bg_rects[i], x0, 2, x1, 20)
+                if i < len(self.seg_fill_rects):
+                    self.seg_canvas.coords(self.seg_fill_rects[i], x0, 2, x0 + part_fill_w, 20)
+                if i > 0 and (i - 1) < len(self.seg_dividers):
+                    self.seg_canvas.coords(self.seg_dividers[i - 1], x0, 0, x0, 22)
 
             if part_progress:
                 for p in part_progress:
@@ -712,10 +787,12 @@ class DownloadProgressDialog:
                     if self.conn_tree.exists(iid):
                         self.conn_tree.item(iid, values=(f"Koneksi {iid}", format_size_id(p.get("downloaded", 0)), p.get("status", "Menerima data...")))
             else:
-                per_part = bytes_downloaded // max(1, self.parts)
+                base_part = bytes_downloaded // max(1, self.parts)
+                rem_part = bytes_downloaded % max(1, self.parts)
                 for i in range(1, self.parts + 1):
                     iid = str(i)
                     if self.conn_tree.exists(iid):
+                        per_part = base_part + (1 if i <= rem_part else 0)
                         self.conn_tree.item(iid, values=(f"Koneksi {i}", format_size_id(per_part), "Menerima data..."))
         except Exception:
             pass
