@@ -71,3 +71,39 @@ def test_options_dialog_has_idm_tabs():
     root.destroy()
 
 
+def test_options_dialog_saves_and_loads_browser_and_autorun_settings():
+    from idm_gui.dialogs import OptionsDialog
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cfg = os.path.join(tmpdir, "test_settings.json")
+        sm = SettingsManager(config_path=cfg)
+
+        root = tk.Tk()
+        root.withdraw()
+
+        dlg = OptionsDialog(parent=root, settings_manager=sm)
+        # Modify settings in Tab 1
+        dlg.cb_chrome_var.set(False)
+        dlg.cb_opera_var.set(True)
+        dlg.cb_startup_var.set(False)
+        dlg.cb_clipboard_var.set(False)
+
+        dlg._on_save()
+
+        # Check saved data in SettingsManager
+        assert sm.data["browser_integration"]["chrome"] is False
+        assert sm.data["browser_integration"]["opera"] is True
+        assert sm.data["autorun_startup"] is False
+        assert sm.data["monitor_clipboard"] is False
+
+        # Open second dialog and verify values are restored
+        dlg2 = OptionsDialog(parent=root, settings_manager=sm)
+        assert dlg2.cb_chrome_var.get() is False
+        assert dlg2.cb_opera_var.get() is True
+        assert dlg2.cb_startup_var.get() is False
+        assert dlg2.cb_clipboard_var.get() is False
+
+        dlg2.top.destroy()
+        root.destroy()
+
+

@@ -872,10 +872,11 @@ class OptionsDialog:
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor=tk.W, pady=(0, 6))
 
-        self.cb_chrome_var = tk.BooleanVar(value=True)
-        self.cb_edge_var = tk.BooleanVar(value=True)
-        self.cb_firefox_var = tk.BooleanVar(value=True)
-        self.cb_opera_var = tk.BooleanVar(value=False)
+        browser_integration = self.sm.data.get("browser_integration", {})
+        self.cb_chrome_var = tk.BooleanVar(value=browser_integration.get("chrome", True))
+        self.cb_edge_var = tk.BooleanVar(value=browser_integration.get("edge", True))
+        self.cb_firefox_var = tk.BooleanVar(value=browser_integration.get("firefox", True))
+        self.cb_opera_var = tk.BooleanVar(value=browser_integration.get("opera", False))
 
         browsers_frame = tk.Frame(tab_general, bg="#202020", relief=tk.SOLID, bd=1, padx=10, pady=8)
         browsers_frame.pack(fill=tk.X, pady=(0, 12))
@@ -885,10 +886,10 @@ class OptionsDialog:
         tk.Checkbutton(browsers_frame, text="Mozilla Firefox", variable=self.cb_firefox_var, bg="#202020", fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=1)
         tk.Checkbutton(browsers_frame, text="Opera Browser", variable=self.cb_opera_var, bg="#202020", fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=1)
 
-        self.cb_startup_var = tk.BooleanVar(value=True)
+        self.cb_startup_var = tk.BooleanVar(value=self.sm.data.get("autorun_startup", True))
         tk.Checkbutton(tab_general, text="Jalankan IDM Clone saat Windows dinyalakan", variable=self.cb_startup_var, bg=BG, fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=2)
 
-        self.cb_clipboard_var = tk.BooleanVar(value=True)
+        self.cb_clipboard_var = tk.BooleanVar(value=self.sm.data.get("monitor_clipboard", True))
         tk.Checkbutton(tab_general, text="Pantau clipboard untuk tautan unduhan otomatis", variable=self.cb_clipboard_var, bg=BG, fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=2)
 
         tk.Label(tab_general, text="⚡ Port IPC Loopback: 127.0.0.1:19900 (Aktif & Siap)", bg=BG, fg="#28a745", font=("Segoe UI", 8, "italic")).pack(anchor=tk.W, pady=(8, 0))
@@ -1064,8 +1065,16 @@ class OptionsDialog:
         except Exception:
             pass
 
-        # Save file types and temp dir
+        # Save browser integration, autorun, file types and temp dir
         try:
+            self.sm.data["browser_integration"] = {
+                "chrome": bool(self.cb_chrome_var.get()),
+                "edge": bool(self.cb_edge_var.get()),
+                "firefox": bool(self.cb_firefox_var.get()),
+                "opera": bool(self.cb_opera_var.get()),
+            }
+            self.sm.data["autorun_startup"] = bool(self.cb_startup_var.get())
+            self.sm.data["monitor_clipboard"] = bool(self.cb_clipboard_var.get())
             self.sm.data["file_types"] = self.exts_entry.get("1.0", tk.END).strip()
             self.sm.data["exceptions"] = self.exceptions_var.get().strip()
             self.sm.data["temp_dir"] = self.temp_var.get().strip()
