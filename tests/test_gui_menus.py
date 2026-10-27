@@ -84,3 +84,57 @@ def test_gui_import_and_export_text_file(tk_root):
         imported_urls = [t.url for t in app2.queue.list_tasks()]
         assert "https://example.com/item1.zip" in imported_urls
         assert "https://example.com/item2.zip" in imported_urls
+
+
+def test_gui_multi_select_pause_and_resume(tk_root):
+    app = IDMGUIApp(tk_root)
+    t1 = app.queue.add_task("https://example.com/multi1.bin", "multi1.bin")
+    t2 = app.queue.add_task("https://example.com/multi2.bin", "multi2.bin")
+    t3 = app.queue.add_task("https://example.com/multi3.bin", "multi3.bin")
+    app.queue.get_task(t1).status = TaskStatus.DOWNLOADING
+    app.queue.get_task(t2).status = TaskStatus.DOWNLOADING
+    app.queue.get_task(t3).status = TaskStatus.DOWNLOADING
+
+    # Insert items to treeview so selection works
+    app.tree.insert("", "end", iid=t1, values=("multi1.bin", "1 MB", "Downloading", "0%", "0 B/s", "http"))
+    app.tree.insert("", "end", iid=t2, values=("multi2.bin", "1 MB", "Downloading", "0%", "0 B/s", "http"))
+    app.tree.insert("", "end", iid=t3, values=("multi3.bin", "1 MB", "Downloading", "0%", "0 B/s", "http"))
+
+    app.tree.selection_set((t1, t2))
+    app.pause_selected()
+
+    # Both t1 and t2 must be paused, but t3 must remain DOWNLOADING
+    assert app.queue.get_task(t1).status == TaskStatus.PAUSED
+    assert app.queue.get_task(t2).status == TaskStatus.PAUSED
+    assert app.queue.get_task(t3).status == TaskStatus.DOWNLOADING
+
+    app.resume_selected()
+    assert app.queue.get_task(t1).status in (TaskStatus.DOWNLOADING, TaskStatus.QUEUED)
+    assert app.queue.get_task(t2).status in (TaskStatus.DOWNLOADING, TaskStatus.QUEUED)
+
+
+def test_gui_delete_selected_confirmation_and_multi(tk_root, monkeypatch):
+    from tkinter import messagebox
+    app = IDMGUIApp(tk_root)
+    t1 = app.queue.add_task("https://example.com/del1.bin", "del1.bin")
+    t2 = app.queue.add_task("https://example.com/del2.bin", "del2.bin")
+    t3 = app.queue.add_task("https://example.com/del3.bin", "del3.bin")
+
+    app.tree.insert("", "end", iid=t1, values=("del1.bin", "1 MB", "Completed", "100%", "0 B/s", "http"))
+    app.tree.insert("", "end", iid=t2, values=("del2.bin", "1 MB", "Completed", "100%", "0 B/s", "http"))
+    app.tree.insert("", "end", iid=t3, values=("del3.bin", "1 MB", "Completed", "100%", "0 B/s", "http"))
+
+    app.tree.selection_set((t1, t2))
+
+    # User cancels confirmation
+    monkeypatch.setattr(messagebox, "askyesno", lambda *args, **kwargs: False)
+    app.delete_selected()
+    assert app.queue.get_task(t1) is not None
+    assert app.queue.get_task(t2) is not None
+
+    # User confirms deletion
+    monkeypatch.setattr(messagebox, "askyesno", lambda *args, **kwargs: True)
+    app.delete_selected()
+    assert app.queue.get_task(t1) is None
+    assert app.queue.get_task(t2) is None
+    assert app.queue.get_task(t3) is not None

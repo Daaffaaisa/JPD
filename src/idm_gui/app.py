@@ -813,19 +813,29 @@ class IDMGUIApp:
         sel = self.tree.selection()
         return sel[0] if sel else None
 
+    def _get_selected_task_ids(self) -> list[str]:
+        return list(self.tree.selection())
+
     def resume_selected(self):
-        tid = self._get_selected_task_id()
-        if tid:
+        tids = self._get_selected_task_ids()
+        for tid in tids:
             self.resume_task_by_id(tid)
 
     def pause_selected(self):
-        tid = self._get_selected_task_id()
-        if tid:
+        tids = self._get_selected_task_ids()
+        for tid in tids:
             self.pause_task_by_id(tid)
 
-    def delete_selected(self):
-        tid = self._get_selected_task_id()
-        if tid:
+    def delete_selected(self, confirm: bool = True):
+        tids = self._get_selected_task_ids()
+        if not tids:
+            return
+        if confirm:
+            count = len(tids)
+            msg = f"Apakah Anda yakin ingin menghapus {count} unduhan yang dipilih?" if count > 1 else "Apakah Anda yakin ingin menghapus unduhan yang dipilih?"
+            if not messagebox.askyesno("Konfirmasi Hapus Unduhan", msg, parent=self.root):
+                return
+        for tid in tids:
             self.delete_task_by_id(tid)
 
     def open_selected_folder(self):
