@@ -45,6 +45,109 @@ def format_bytes(num_bytes: int) -> str:
         return f"{num_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 
+class SidebarNavItem(tk.Frame):
+    """Modern macOS/Apple-inspired sidebar navigation pill item with live count badge."""
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        icon: str,
+        text: str,
+        key: str,
+        on_click: Optional[Any] = None,
+        on_double_click: Optional[Any] = None,
+    ):
+        super().__init__(parent, bg=THEME["surface_alt"], cursor="hand2")
+        self.key = key
+        self.raw_text = text
+        self.on_click = on_click
+        self.on_double_click = on_double_click
+        self.is_active = False
+        self.count = 0
+
+        # Left 3px active indicator bar
+        self.indicator = tk.Frame(self, width=3, bg=THEME["surface_alt"])
+        self.indicator.pack(side=tk.LEFT, fill=tk.Y, pady=2)
+
+        # Content container
+        self.content = tk.Frame(self, bg=THEME["surface_alt"], padx=8, pady=5)
+        self.content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(2, 8), pady=1)
+
+        self.lbl_icon = tk.Label(
+            self.content,
+            text=icon,
+            bg=THEME["surface_alt"],
+            fg=THEME["text_secondary"],
+            font=(FONT_DISPLAY, 10),
+        )
+        self.lbl_icon.pack(side=tk.LEFT, padx=(2, 6))
+
+        self.lbl_text = tk.Label(
+            self.content,
+            text=text,
+            bg=THEME["surface_alt"],
+            fg=THEME["text_secondary"],
+            font=(FONT_FAMILY, 9),
+        )
+        self.lbl_text.pack(side=tk.LEFT)
+
+        self.lbl_badge = tk.Label(
+            self.content,
+            text="0",
+            bg=THEME["input_bg"],
+            fg=THEME["text_tertiary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+            padx=6,
+            pady=1,
+        )
+        self.lbl_badge.pack(side=tk.RIGHT)
+
+        for w in (self, self.content, self.lbl_icon, self.lbl_text, self.lbl_badge):
+            w.bind("<Button-1>", lambda e: self._handle_click())
+            w.bind("<Double-Button-1>", lambda e: self._handle_double_click())
+            w.bind("<Enter>", lambda e: self._on_enter())
+            w.bind("<Leave>", lambda e: self._on_leave())
+
+    def _handle_click(self):
+        if self.on_click:
+            self.on_click(self.key)
+
+    def _handle_double_click(self):
+        if self.on_double_click:
+            self.on_double_click(self.key)
+
+    def set_active(self, active: bool):
+        self.is_active = active
+        bg_col = "#1e293b" if active else THEME["surface_alt"]
+        fg_col = "#ffffff" if active else THEME["text_secondary"]
+        ind_col = THEME["accent_primary"] if active else THEME["surface_alt"]
+        badge_fg = "#60a5fa" if active else THEME["text_tertiary"]
+
+        self.configure(bg=THEME["surface_alt"])
+        self.indicator.configure(bg=ind_col)
+        self.content.configure(bg=bg_col)
+        self.lbl_icon.configure(bg=bg_col, fg="#60a5fa" if active else THEME["text_secondary"])
+        self.lbl_text.configure(bg=bg_col, fg=fg_col, font=(FONT_DISPLAY if active else FONT_FAMILY, 9, "bold" if active else "normal"))
+        self.lbl_badge.configure(bg=THEME["input_bg"], fg=badge_fg)
+
+    def set_count(self, count: int):
+        self.count = count
+        self.lbl_badge.config(text=str(count))
+
+    def _on_enter(self):
+        if not self.is_active:
+            hover_bg = "#192231"
+            self.content.configure(bg=hover_bg)
+            self.lbl_icon.configure(bg=hover_bg)
+            self.lbl_text.configure(bg=hover_bg)
+
+    def _on_leave(self):
+        if not self.is_active:
+            self.content.configure(bg=THEME["surface_alt"])
+            self.lbl_icon.configure(bg=THEME["surface_alt"])
+            self.lbl_text.configure(bg=THEME["surface_alt"])
+
+
 class IDMGUIApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -67,6 +170,8 @@ class IDMGUIApp:
         self.secondary_buttons: list[Any] = []
         self.btn_overflow: Optional[Any] = None
         self.empty_state_frame: Optional[Any] = None
+        self.active_category_filter = "all"
+        self.sidebar_items: dict[str, Any] = {}
 
         # Start loopback server for Browser Extension communication
         self.server = LocalDownloadServer(
@@ -448,38 +553,107 @@ class IDMGUIApp:
         self.paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, sashrelief=tk.FLAT, sashwidth=4, bg=THEME["bg_dark"])
         self.paned.pack(fill=tk.BOTH, expand=True)
 
-        # Left Sidebar: Categories
-        self.sidebar_frame = tk.Frame(self.paned, width=190, bg=THEME["surface_alt"])
+        # Left Sidebar: Modern Apple/Linear Navigation Bar
+        self.sidebar_frame = tk.Frame(self.paned, width=205, bg=THEME["surface_alt"])
         self.sidebar_visible = True
 
-        lbl_side_title = tk.Label(
+        # Quick Storage Card anchored to bottom of sidebar
+        storage_card = tk.Frame(self.sidebar_frame, bg=THEME["surface"], padx=10, pady=8, relief=tk.SOLID, bd=1)
+        storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
+        tk.Label(
+            storage_card,
+            text="PENYIMPANAN",
+            bg=THEME["surface"],
+            fg=THEME["text_tertiary"],
+            font=(FONT_DISPLAY, 7, "bold"),
+            anchor=tk.W,
+        ).pack(anchor=tk.W)
+        tk.Label(
+            storage_card,
+            text=os.path.basename(os.path.expanduser("~")) + "/Downloads",
+            bg=THEME["surface"],
+            fg=THEME["text_secondary"],
+            font=(FONT_FAMILY, 8),
+            anchor=tk.W,
+        ).pack(anchor=tk.W, pady=(2, 6))
+        btn_open_store = create_modern_button(
+            storage_card,
+            text="↗ Buka Folder",
+            command=self.open_selected_folder,
+            kind="secondary",
+            padx=6,
+            pady=2,
+            radius=6,
+            tooltip="Buka Folder Unduhan Utama",
+        )
+        btn_open_store.pack(fill=tk.X)
+
+        # Section 1: PUSTAKA
+        tk.Label(
+            self.sidebar_frame,
+            text="PUSTAKA",
+            bg=THEME["surface_alt"],
+            fg=THEME["text_tertiary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+            anchor=tk.W,
+            padx=14,
+        ).pack(fill=tk.X, pady=(12, 4))
+
+        pustaka_specs = [
+            ("all", "📥", "Semua Unduhan"),
+            ("downloading", "⚡", "Sedang Mengunduh"),
+            ("finished", "✓", "Selesai"),
+        ]
+        for key, icon, label in pustaka_specs:
+            item = SidebarNavItem(
+                self.sidebar_frame,
+                icon=icon,
+                text=label,
+                key=key,
+                on_click=self._on_sidebar_item_click,
+                on_double_click=self._on_sidebar_item_double_click,
+            )
+            item.pack(fill=tk.X)
+            self.sidebar_items[key] = item
+
+        # Section 2: KATEGORI BERKAS
+        tk.Label(
             self.sidebar_frame,
             text="KATEGORI BERKAS",
             bg=THEME["surface_alt"],
             fg=THEME["text_tertiary"],
             font=(FONT_DISPLAY, 8, "bold"),
             anchor=tk.W,
-            padx=12,
-            pady=6,
-        )
-        lbl_side_title.pack(fill=tk.X)
+            padx=14,
+        ).pack(fill=tk.X, pady=(14, 4))
 
-        self.category_tree = ttk.Treeview(self.sidebar_frame, show="tree", selectmode="browse")
-        self.category_tree.pack(fill=tk.BOTH, expand=True, padx=(2, 0), pady=(0, 2))
+        cat_specs = [
+            ("video", "🎬", "Video"),
+            ("music", "🎵", "Musik"),
+            ("pictures", "🖼️", "Gambar"),
+            ("programs", "📦", "Program"),
+            ("documents", "📄", "Dokumen"),
+            ("compressed", "🗜️", "Terkompresi"),
+        ]
+        for key, icon, label in cat_specs:
+            item = SidebarNavItem(
+                self.sidebar_frame,
+                icon=icon,
+                text=label,
+                key=key,
+                on_click=self._on_sidebar_item_click,
+                on_double_click=self._on_sidebar_item_double_click,
+            )
+            item.pack(fill=tk.X)
+            self.sidebar_items[key] = item
 
-        cat_root = self.category_tree.insert("", "end", text="📁 Kategori", open=True)
-        self.category_tree.insert(cat_root, "end", text="Semua Unduhan", values=("all",))
-        self.category_tree.insert(cat_root, "end", text="Video", values=("video",))
-        self.category_tree.insert(cat_root, "end", text="Musik", values=("music",))
-        self.category_tree.insert(cat_root, "end", text="Gambar", values=("pictures",))
-        self.category_tree.insert(cat_root, "end", text="Program", values=("programs",))
-        self.category_tree.insert(cat_root, "end", text="Dokumen", values=("documents",))
-        self.category_tree.insert(cat_root, "end", text="Berkas Terkompresi", values=("compressed",))
-        self.category_tree.insert(cat_root, "end", text="Selesai", values=("finished",))
-        self.category_tree.insert(cat_root, "end", text="Belum Selesai", values=("unfinished",))
-        self.category_tree.bind("<Double-1>", self._on_category_double_click)
+        # Activate 'all' item by default
+        self.sidebar_items["all"].set_active(True)
 
-        self.paned.add(self.sidebar_frame, minsize=150)
+        # Dummy hidden category_tree for total backward compatibility
+        self.category_tree = ttk.Treeview(self.sidebar_frame)
+
+        self.paned.add(self.sidebar_frame, minsize=160)
 
         # Right Container: Dashboard Live Stats + Downloads Table
         right_container = tk.Frame(self.paned, bg=THEME["tree_bg"])
@@ -665,6 +839,26 @@ class IDMGUIApp:
         }
         cat = cat_map.get(item_text, "Video")
         self.open_options_dialog(initial_category=cat)
+
+    def _on_sidebar_item_click(self, key: str):
+        self.active_category_filter = key
+        for k, item in self.sidebar_items.items():
+            item.set_active(k == key)
+        self._tick_ui()
+
+    def _on_sidebar_item_double_click(self, key: str):
+        cat_map = {
+            "video": "Video",
+            "music": "Musik",
+            "pictures": "Gambar",
+            "programs": "Program",
+            "documents": "Dokumen",
+            "compressed": "Berkas Terkompresi",
+        }
+        if key in cat_map:
+            self.open_options_dialog(initial_category=cat_map[key])
+        else:
+            self.open_options_dialog()
 
     def open_add_url_dialog(self):
         # Auto-detect clipboard URL
@@ -1097,7 +1291,54 @@ class IDMGUIApp:
 
     def _tick_ui(self):
         now = time.time()
-        tasks = self.queue.list_tasks()
+        all_tasks = self.queue.list_tasks()
+
+        # Update category counts across all tasks
+        if hasattr(self, "sidebar_items") and self.sidebar_items:
+            cat_counts = {k: 0 for k in self.sidebar_items}
+            cat_counts["all"] = len(all_tasks)
+            for t in all_tasks:
+                if t.status in (TaskStatus.DOWNLOADING, TaskStatus.QUEUED):
+                    cat_counts["downloading"] += 1
+                if t.status == TaskStatus.COMPLETED:
+                    cat_counts["finished"] += 1
+                c = self._detect_category(t.url, t.output_path).lower()
+                if "video" in c:
+                    cat_counts["video"] += 1
+                elif "musik" in c or "audio" in c:
+                    cat_counts["music"] += 1
+                elif "gambar" in c or "image" in c:
+                    cat_counts["pictures"] += 1
+                elif "program" in c or "exe" in c or "msi" in c:
+                    cat_counts["programs"] += 1
+                elif "dokumen" in c or "pdf" in c or "doc" in c:
+                    cat_counts["documents"] += 1
+                elif "kompres" in c or "zip" in c:
+                    cat_counts["compressed"] += 1
+
+            for k, count in cat_counts.items():
+                if k in self.sidebar_items:
+                    self.sidebar_items[k].set_count(count)
+
+        # Filter by active category
+        tasks = all_tasks
+        if hasattr(self, "active_category_filter") and self.active_category_filter:
+            kf = self.active_category_filter
+            if kf == "downloading":
+                tasks = [t for t in tasks if t.status in (TaskStatus.DOWNLOADING, TaskStatus.QUEUED)]
+            elif kf == "finished":
+                tasks = [t for t in tasks if t.status == TaskStatus.COMPLETED]
+            elif kf in ("video", "music", "pictures", "programs", "documents", "compressed"):
+                cat_map_check = {
+                    "video": "video",
+                    "music": "musik",
+                    "pictures": "gambar",
+                    "programs": "program",
+                    "documents": "dokumen",
+                    "compressed": "berkas terkompresi",
+                }
+                expected = cat_map_check.get(kf, "")
+                tasks = [t for t in tasks if expected in self._detect_category(t.url, t.output_path).lower()]
 
         # Filter by search query if active
         if hasattr(self, "search_var") and self.search_var:

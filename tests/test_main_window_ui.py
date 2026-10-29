@@ -106,3 +106,36 @@ def test_main_window_live_telemetry_cards(tk_root):
     assert "2,5" in app.lbl_stat_speed.cget("text") or "2.5" in app.lbl_stat_speed.cget("text")
     assert "1" in app.lbl_stat_active.cget("text")
 
+
+def test_main_window_modern_sidebar_navigation_and_counts(tk_root):
+    app = IDMGUIApp(tk_root)
+    assert hasattr(app, "sidebar_items")
+    assert "all" in app.sidebar_items
+    assert "video" in app.sidebar_items
+    assert "finished" in app.sidebar_items
+
+    # Add 1 active video task and 1 finished music task
+    t1 = app.queue.add_task("https://example.com/nature.mp4", "nature.mp4")
+    from idm_scheduler.queue import TaskStatus
+    app.queue.get_task(t1).status = TaskStatus.DOWNLOADING
+
+    t2 = app.queue.add_task("https://example.com/song.mp3", "song.mp3")
+    app.queue.get_task(t2).status = TaskStatus.COMPLETED
+
+    app._tick_ui()
+
+    # Check count badges
+    assert app.sidebar_items["all"].count == 2
+    assert app.sidebar_items["video"].count == 1
+    assert app.sidebar_items["music"].count == 1
+    assert app.sidebar_items["finished"].count == 1
+
+    # Click video filter
+    app._on_sidebar_item_click("video")
+    assert app.active_category_filter == "video"
+
+    # Reset to all
+    app._on_sidebar_item_click("all")
+    assert app.active_category_filter == "all"
+
+
