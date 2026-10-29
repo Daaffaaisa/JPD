@@ -54,3 +54,27 @@ def test_engine_uses_known_size_without_probing():
         assert len(probe_called) == 0  # Probe was skipped!
 
 
+def test_engine_reports_per_part_progress():
+    engine = DownloadEngine()
+    recorded_snapshots = []
+
+    def part_cb(snapshot):
+        recorded_snapshots.append(snapshot)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_file = os.path.join(tmpdir, "part_test.bin")
+        res = engine.download(
+            "https://raw.githubusercontent.com/python/cpython/main/LICENSE",
+            out_file,
+            num_parts=4,
+            part_progress_callback=part_cb,
+        )
+
+        assert res.success is True
+        assert len(recorded_snapshots) > 0
+        last_snap = recorded_snapshots[-1]
+        assert len(last_snap) == 4
+        assert all("id" in p and "downloaded" in p for p in last_snap)
+
+
+

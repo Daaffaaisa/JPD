@@ -170,6 +170,7 @@ class DownloadEngine:
         headers: Optional[dict] = None,
         direct_write: bool = False,
         session: Optional[requests.Session] = None,
+        speed_limit_bps: int = 0,
     ) -> int:
         req_headers = {
             "Range": f"bytes={start}-{end}",
@@ -195,6 +196,9 @@ class DownloadEngine:
                     if stop_event and stop_event.is_set():
                         return bytes_written
                     if chunk:
+                        if speed_limit_bps and speed_limit_bps > 0:
+                            delay = len(chunk) / float(speed_limit_bps)
+                            time.sleep(min(0.2, delay))
                         f.write(chunk)
                         bytes_written += len(chunk)
                         if progress_callback:
@@ -215,6 +219,8 @@ class DownloadEngine:
         stop_event: Optional[threading.Event] = None,
         headers: Optional[dict] = None,
         known_size: Optional[int] = None,
+        part_progress_callback: Optional[Callable[[list[dict]], None]] = None,
+        speed_limit_bps: int = 0,
     ) -> DownloadResult:
         if stop_event and stop_event.is_set():
             return DownloadResult(
@@ -275,10 +281,29 @@ class DownloadEngine:
                                         error="Download stopped by user",
                                     )
                                 if chunk:
+                                    if speed_limit_bps and speed_limit_bps > 0:
+                                        delay = len(chunk) / float(speed_limit_bps)
+                                        time.sleep(min(0.2, delay))
                                     f.write(chunk)
                                     downloaded += len(chunk)
                                     if progress_callback:
                                         progress_callback(len(chunk))
+                                    if part_progress_callback:
+                                        part_progress_callback([{
+                                            "id": 1,
+                                            "start_byte": 0,
+                                            "end_byte": total_size - 1 if total_size > 0 else downloaded,
+                                            "downloaded": downloaded,
+                                            "status": "Menerima data...",
+                                        }])
+                        if part_progress_callback:
+                            part_progress_callback([{
+                                "id": 1,
+                                "start_byte": 0,
+                                "end_byte": total_size - 1 if total_size > 0 else downloaded,
+                                "downloaded": downloaded,
+                                "status": "Selesai",
+                            }])
                         return DownloadResult(
                             success=True,
                             bytes_downloaded=downloaded,
@@ -321,6 +346,31 @@ class DownloadEngine:
                 os.makedirs(temp_parts_dir, exist_ok=True)
                 part_files = [os.path.join(temp_parts_dir, f"part_{i}.tmp") for i in range(parts_count)]
 
+                part_progress_data = [
+                    {
+                        "id": i + 1,
+                        "start_byte": r[0],
+                        "end_byte": r[1],
+                        "downloaded": 0,
+                        "status": "Menerima data...",
+                    }
+                    for i, r in enumerate(ranges)
+                ]
+                part_lock = threading.Lock()
+                thread_speed = (speed_limit_bps // max(1, parts_count)) if (speed_limit_bps and speed_limit_bps > 0) else 0
+
+                def make_part_cb(p_idx: int):
+                    def _part_cb(chunk_len: int):
+                        with part_lock:
+                            part_progress_data[p_idx]["downloaded"] += chunk_len
+                            part_progress_data[p_idx]["status"] = "Menerima data..."
+                            if part_progress_callback:
+                                snapshot = [dict(item) for item in part_progress_data]
+                                part_progress_callback(snapshot)
+                        if progress_callback:
+                            progress_callback(chunk_len)
+                    return _part_cb
+
                 executor = ThreadPoolExecutor(max_workers=parts_count)
                 try:
                     futures = []
@@ -337,11 +387,12 @@ class DownloadEngine:
                                 r[0],
                                 r[1],
                                 part_files[idx],
-                                progress_callback,
+                                make_part_cb(idx),
                                 stop_event,
                                 headers,
                                 False,
                                 active_session,
+                                thread_speed,
                             )
                             futures.append(f)
                         if batch_start + batch_size < parts_count:
@@ -349,6 +400,12 @@ class DownloadEngine:
 
                     for future in as_completed(futures):
                         future.result()
+
+                    if part_progress_callback:
+                        with part_lock:
+                            for item in part_progress_data:
+                                item["status"] = "Selesai"
+                            part_progress_callback([dict(item) for item in part_progress_data])
 
                     if stop_event and stop_event.is_set():
                         executor.shutdown(wait=False, cancel_futures=True)

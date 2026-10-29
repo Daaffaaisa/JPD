@@ -487,6 +487,7 @@ class DownloadProgressDialog:
         on_pause: Optional[Callable[[str], None]] = None,
         on_cancel: Optional[Callable[[str], None]] = None,
         on_resume: Optional[Callable[[str], None]] = None,
+        on_speed_limit_change: Optional[Callable[[int], None]] = None,
     ):
         self.parent = parent
         self.task_id = task_id
@@ -497,10 +498,18 @@ class DownloadProgressDialog:
         self.on_pause = on_pause
         self.on_cancel = on_cancel
         self.on_resume = on_resume
+        self.on_speed_limit_change = on_speed_limit_change
 
         self.filename = os.path.basename(output_path) or "download.bin"
         self.show_details = True
         self.start_time = time.time()
+        self.active_tab = 1
+
+        self.speed_limit_enabled_var = tk.BooleanVar(master=self.parent, value=False)
+        self.speed_limit_val_var = tk.StringVar(master=self.parent, value="512")
+        self.cb_auto_close_var = tk.BooleanVar(master=self.parent, value=False)
+        self.cb_shutdown_var = tk.BooleanVar(master=self.parent, value=False)
+        self.cb_disconnect_var = tk.BooleanVar(master=self.parent, value=False)
 
         self._build_ui()
 
@@ -552,33 +561,152 @@ class DownloadProgressDialog:
             pady=4,
             relief=tk.SOLID,
             bd=1,
+            cursor="hand2",
         )
         self.lbl_tab1.pack(side=tk.LEFT, padx=2)
+        self.lbl_tab1.bind("<Button-1>", lambda e: self._switch_tab(1))
+
         self.lbl_tab2 = tk.Label(
             tab_frame,
-            text="Pembatas Kecepatan (Segera Hadir)",
+            text="Pembatas Kecepatan",
             bg=THEME["surface_alt"],
-            fg=THEME["text_disabled"],
-            font=("Segoe UI", 8, "italic"),
-            padx=8,
+            fg=THEME["text_secondary"],
+            font=("Segoe UI", 9),
+            padx=10,
             pady=4,
-            cursor="arrow",
+            cursor="hand2",
         )
         self.lbl_tab2.pack(side=tk.LEFT, padx=2)
+        self.lbl_tab2.bind("<Button-1>", lambda e: self._switch_tab(2))
+
         self.lbl_tab3 = tk.Label(
             tab_frame,
-            text="Opsi saat selesai (Segera Hadir)",
+            text="Opsi saat selesai",
             bg=THEME["surface_alt"],
-            fg=THEME["text_disabled"],
-            font=("Segoe UI", 8, "italic"),
-            padx=8,
+            fg=THEME["text_secondary"],
+            font=("Segoe UI", 9),
+            padx=10,
             pady=4,
-            cursor="arrow",
+            cursor="hand2",
         )
         self.lbl_tab3.pack(side=tk.LEFT, padx=2)
+        self.lbl_tab3.bind("<Button-1>", lambda e: self._switch_tab(3))
 
-        content_frame = tk.Frame(self.top, bg=BG, padx=14, pady=10)
-        content_frame.pack(fill=tk.BOTH, expand=True)
+        # Main Container for Tabs
+        self.tab_container = tk.Frame(self.top, bg=BG)
+        self.tab_container.pack(fill=tk.BOTH, expand=True)
+
+        self.tab1_frame = tk.Frame(self.tab_container, bg=BG, padx=14, pady=10)
+        self.tab1_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Tab 2: Pembatas Kecepatan Frame
+        self.tab2_frame = tk.Frame(self.tab_container, bg=BG, padx=16, pady=16)
+        t2_card = tk.Frame(self.tab2_frame, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=14, pady=14)
+        t2_card.pack(fill=tk.X, pady=(0, 14))
+
+        cb_enable_limit = tk.Checkbutton(
+            t2_card,
+            text="Aktifkan Pembatas Kecepatan untuk Unduhan Ini",
+            variable=self.speed_limit_enabled_var,
+            command=self._apply_speed_limit,
+            bg=CARD_BG,
+            fg=FG,
+            selectcolor=THEME["input_bg"],
+            activebackground=CARD_BG,
+            activeforeground=FG,
+            font=("Segoe UI", 10, "bold"),
+        )
+        cb_enable_limit.pack(anchor=tk.W, pady=(0, 10))
+
+        rate_box = tk.Frame(t2_card, bg=CARD_BG)
+        rate_box.pack(fill=tk.X, pady=(0, 10))
+
+        tk.Label(rate_box, text="Batas Kecepatan Maksimum:", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 8))
+        self.entry_speed_limit = tk.Entry(
+            rate_box,
+            textvariable=self.speed_limit_val_var,
+            bg=THEME["input_bg"],
+            fg=FG,
+            insertbackground=FG,
+            relief=tk.SOLID,
+            bd=1,
+            width=10,
+            font=("Segoe UI", 9, "bold"),
+        )
+        self.entry_speed_limit.pack(side=tk.LEFT, padx=(0, 6))
+        self.entry_speed_limit.bind("<KeyRelease>", lambda e: self._apply_speed_limit())
+        tk.Label(rate_box, text="KB/detik", bg=CARD_BG, fg=FG, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+
+        # Presets
+        tk.Label(t2_card, text="Pilih Preset Cepat:", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8)).pack(anchor=tk.W, pady=(0, 4))
+        presets_row = tk.Frame(t2_card, bg=CARD_BG)
+        presets_row.pack(fill=tk.X, pady=(0, 10))
+        for preset_kb, label_text in [(256, "256 KB/s"), (512, "512 KB/s"), (1024, "1 MB/s"), (2048, "2 MB/s"), (5120, "5 MB/s")]:
+            btn = create_modern_button(presets_row, label_text, lambda kb=preset_kb: self._set_speed_preset(kb), kind="secondary", padx=8, pady=2, radius=6)
+            btn.pack(side=tk.LEFT, padx=3)
+
+        self.lbl_speed_limit_status = tk.Label(
+            self.tab2_frame,
+            text="Status: Pembatas Kecepatan Dinonaktifkan (Kecepatan Penuh)",
+            bg=BG,
+            fg=THEME["text_secondary"],
+            font=("Segoe UI", 8, "italic"),
+        )
+        self.lbl_speed_limit_status.pack(anchor=tk.W, pady=(4, 0))
+
+        # Tab 3: Opsi saat selesai Frame
+        self.tab3_frame = tk.Frame(self.tab_container, bg=BG, padx=16, pady=16)
+        t3_card = tk.Frame(self.tab3_frame, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=14, pady=14)
+        t3_card.pack(fill=tk.X, pady=(0, 14))
+
+        tk.Label(t3_card, text="Tindakan Otomatis Pasca-Unduh:", bg=CARD_BG, fg=FG, font=("Segoe UI", 10, "bold")).pack(anchor=tk.W, pady=(0, 8))
+
+        tk.Checkbutton(
+            t3_card,
+            text="Tutup jendela dialog progres ini saat pengunduhan selesai",
+            variable=self.cb_auto_close_var,
+            bg=CARD_BG,
+            fg=FG,
+            selectcolor=THEME["input_bg"],
+            activebackground=CARD_BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=3)
+
+        tk.Checkbutton(
+            t3_card,
+            text="Putuskan sambungan internet / modem setelah berkas selesai diunduh",
+            variable=self.cb_disconnect_var,
+            bg=CARD_BG,
+            fg=FG,
+            selectcolor=THEME["input_bg"],
+            activebackground=CARD_BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=3)
+
+        tk.Checkbutton(
+            t3_card,
+            text="Matikan komputer (Shutdown) secara otomatis saat selesai mengunduh",
+            variable=self.cb_shutdown_var,
+            bg=CARD_BG,
+            fg=FG,
+            selectcolor=THEME["input_bg"],
+            activebackground=CARD_BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=3)
+
+        tk.Label(
+            self.tab3_frame,
+            text="* Catatan: Aksi penutupan atau shutdown aman hanya akan dieksekusi setelah seluruh bagian berkas diverifikasi utuh.",
+            bg=BG,
+            fg=THEME["text_tertiary"],
+            font=("Segoe UI", 8, "italic"),
+        ).pack(anchor=tk.W, pady=(4, 0))
+
+        # Build Tab 1 Content (Status Unduhan)
+        content_frame = self.tab1_frame
 
         # Info Box (bordered dark card)
         info_box = tk.Frame(content_frame, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=12, pady=10)
@@ -699,6 +827,47 @@ class DownloadProgressDialog:
             self.btn_toggle.config(text="<< Sembunyikan detail")
             self.top.geometry("560x440")
             self.show_details = True
+
+    def _switch_tab(self, tab_num: int):
+        self.active_tab = tab_num
+        self.tab1_frame.pack_forget()
+        self.tab2_frame.pack_forget()
+        self.tab3_frame.pack_forget()
+
+        for idx, lbl in enumerate([self.lbl_tab1, self.lbl_tab2, self.lbl_tab3], start=1):
+            if idx == tab_num:
+                lbl.config(bg=THEME["surface"], fg=THEME["text_primary"], relief=tk.SOLID, bd=1, font=("Segoe UI", 9, "bold"))
+            else:
+                lbl.config(bg=THEME["surface_alt"], fg=THEME["text_secondary"], relief=tk.FLAT, bd=0, font=("Segoe UI", 9))
+
+        if tab_num == 1:
+            self.tab1_frame.pack(fill=tk.BOTH, expand=True)
+        elif tab_num == 2:
+            self.tab2_frame.pack(fill=tk.BOTH, expand=True)
+        elif tab_num == 3:
+            self.tab3_frame.pack(fill=tk.BOTH, expand=True)
+
+    def _set_speed_preset(self, kbps: int):
+        self.speed_limit_enabled_var.set(True)
+        self.speed_limit_val_var.set(str(kbps))
+        self._apply_speed_limit()
+
+    def _apply_speed_limit(self):
+        if not self.speed_limit_enabled_var.get():
+            limit_bps = 0
+            if hasattr(self, "lbl_speed_limit_status"):
+                self.lbl_speed_limit_status.config(text="Status: Pembatas Kecepatan Dinonaktifkan (Kecepatan Penuh)", fg=THEME["text_secondary"])
+        else:
+            try:
+                kbps = int(self.speed_limit_val_var.get().strip())
+                limit_bps = max(1024, kbps * 1024)
+            except Exception:
+                limit_bps = 512 * 1024
+                self.speed_limit_val_var.set("512")
+            if hasattr(self, "lbl_speed_limit_status"):
+                self.lbl_speed_limit_status.config(text=f"Status: Aktif - Dibatasi hingga {limit_bps // 1024} KB/detik", fg=THEME["success"])
+        if self.on_speed_limit_change:
+            self.on_speed_limit_change(limit_bps)
 
     def _on_pause_click(self):
         if self.btn_pause.cget("text") == "Lanjutkan":
@@ -824,17 +993,18 @@ class DownloadCompleteDialog:
     def _build_ui(self):
         self.top = tk.Toplevel(self.parent)
         self.top.title("Unduhan Selesai")
-        self.top.geometry("480x210")
-        self.top.resizable(False, False)
-        self.top.configure(bg="#2b2b2b")
+        self.top.geometry("520x240")
+        self.top.minsize(480, 210)
+        self.top.resizable(True, False)
+        self.top.configure(bg=THEME["surface"])
 
         self.top.update_idletasks()
         try:
             screen_w = self.top.winfo_screenwidth()
             screen_h = self.top.winfo_screenheight()
-            x = max(0, (screen_w - 480) // 2)
-            y = max(0, (screen_h - 210) // 2)
-            self.top.geometry(f"480x210+{x}+{y}")
+            x = max(0, (screen_w - 520) // 2)
+            y = max(0, (screen_h - 240) // 2)
+            self.top.geometry(f"520x240+{x}+{y}")
             self.top.deiconify()
             self.top.lift()
             self.top.attributes("-topmost", True)
@@ -843,47 +1013,55 @@ class DownloadCompleteDialog:
         except Exception:
             pass
 
-        BG = "#2b2b2b"
-        FG = "#ffffff"
+        BG = THEME["surface"]
+        FG = THEME["text_primary"]
+        CARD_BG = THEME["surface_alt"]
+        BORDER = THEME["border"]
 
         content = tk.Frame(self.top, bg=BG, padx=16, pady=16)
         content.pack(fill=tk.BOTH, expand=True)
 
         hdr_frame = tk.Frame(content, bg=BG)
-        hdr_frame.pack(fill=tk.X, pady=(0, 10))
+        hdr_frame.pack(fill=tk.X, pady=(0, 12))
 
-        chk_canvas = tk.Canvas(hdr_frame, width=32, height=32, bg=BG, highlightthickness=0)
+        chk_canvas = tk.Canvas(hdr_frame, width=34, height=34, bg=BG, highlightthickness=0)
         chk_canvas.pack(side=tk.LEFT, padx=(0, 10))
-        chk_canvas.create_oval(2, 2, 30, 30, fill="#28a745", outline="#1e7e34")
-        chk_canvas.create_line(8, 16, 14, 22, 24, 10, fill="#ffffff", width=3)
+        # Outer soft glow ring
+        chk_canvas.create_oval(1, 1, 33, 33, fill="", outline="#10b981", width=1)
+        # Inner emerald check circle
+        chk_canvas.create_oval(3, 3, 31, 31, fill=THEME["success"], outline="")
+        chk_canvas.create_line([10, 17, 15, 22, 24, 12], fill="#ffffff", width=2)
 
         tk.Label(
             hdr_frame,
-            text="Unduhan Telah Selesai!",
+            text="Unduhan Berhasil Selesai!",
             bg=BG,
-            fg="#28a745",
+            fg=THEME["text_primary"],
             font=("Segoe UI", 12, "bold"),
         ).pack(side=tk.LEFT, anchor=tk.CENTER)
 
-        det_box = tk.Frame(content, bg="#222222", relief=tk.SOLID, bd=1, padx=10, pady=8)
+        det_box = tk.Frame(content, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=14, pady=10)
         det_box.pack(fill=tk.X, pady=(0, 14))
 
-        tk.Label(det_box, text=f"Berkas: {self.title}", bg="#222222", fg=FG, font=("Segoe UI", 9, "bold"), anchor=tk.W).pack(fill=tk.X)
-        tk.Label(det_box, text=f"Ukuran: {format_size_id(self.total_bytes)}", bg="#222222", fg="#aaaaaa", font=("Segoe UI", 8), anchor=tk.W).pack(fill=tk.X)
-        tk.Label(det_box, text=f"Lokasi: {self.output_path}", bg="#222222", fg="#888888", font=("Segoe UI", 8), anchor=tk.W).pack(fill=tk.X)
+        tk.Label(det_box, text=f"Berkas: {self.title}", bg=CARD_BG, fg=FG, font=("Segoe UI", 9, "bold"), anchor=tk.W).pack(fill=tk.X)
+        tk.Label(det_box, text=f"Ukuran: {format_size_id(self.total_bytes)}", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8), anchor=tk.W).pack(fill=tk.X, pady=(2, 0))
+        tk.Label(det_box, text=f"Lokasi: {self.output_path}", bg=CARD_BG, fg=THEME["text_tertiary"], font=("Segoe UI", 8), anchor=tk.W).pack(fill=tk.X, pady=(2, 0))
 
         btn_box = tk.Frame(content, bg=BG)
         btn_box.pack(fill=tk.X)
 
-        btn_open = create_modern_button(btn_box, "Buka", self._on_open, kind="primary", padx=14, pady=4)
-        btn_open.pack(side=tk.RIGHT, padx=4)
-        btn_open.focus_set()
+        self.btn_open = create_modern_button(btn_box, "Buka Berkas", self._on_open, kind="primary", padx=14, pady=4, radius=7)
+        self.btn_open.pack(side=tk.RIGHT, padx=4)
+        self.btn_open.focus_set()
 
-        btn_folder = create_modern_button(btn_box, "Buka Folder", self._on_open_folder, kind="secondary", padx=12, pady=4)
-        btn_folder.pack(side=tk.RIGHT, padx=4)
+        self.btn_folder = create_modern_button(btn_box, "Buka Folder", self._on_open_folder, kind="secondary", padx=12, pady=4, radius=7)
+        self.btn_folder.pack(side=tk.RIGHT, padx=4)
 
-        btn_done = create_modern_button(btn_box, "Selesai", self.close, kind="secondary", padx=12, pady=4)
-        btn_done.pack(side=tk.RIGHT, padx=4)
+        self.btn_done = create_modern_button(btn_box, "Selesai", self.close, kind="secondary", padx=12, pady=4, radius=7)
+        self.btn_done.pack(side=tk.RIGHT, padx=4)
+
+        self.top.bind("<Return>", lambda e: self._on_open())
+        self.top.bind("<Escape>", lambda e: self.close())
 
     def _on_open(self):
         try:
@@ -920,11 +1098,18 @@ class OptionsDialog:
         self._build_ui()
 
     def _build_ui(self):
+        try:
+            setup_global_ttk_theme()
+        except Exception:
+            pass
+
         self.top = tk.Toplevel(self.parent)
         self.top.title("Opsi Konfigurasi IDM Clone")
-        self.top.geometry("560x430")
-        self.top.resizable(False, False)
-        self.top.configure(bg="#2b2b2b")
+        self.top.geometry("560x440")
+        self.top.minsize(520, 390)
+        self.top.resizable(True, True)
+        self.top.configure(bg=THEME["surface"])
+        self.top.bind("<Escape>", lambda e: self.top.destroy())
         try:
             self.top.grab_set()
         except Exception:
@@ -936,25 +1121,28 @@ class OptionsDialog:
             screen_w = self.top.winfo_screenwidth()
             screen_h = self.top.winfo_screenheight()
             x = max(0, (screen_w - 560) // 2)
-            y = max(0, (screen_h - 430) // 2)
-            self.top.geometry(f"560x430+{x}+{y}")
+            y = max(0, (screen_h - 440) // 2)
+            self.top.geometry(f"560x440+{x}+{y}")
             self.top.deiconify()
             self.top.lift()
             self.top.focus_force()
         except Exception:
             pass
 
-        BG = "#2b2b2b"
-        FG = "#ffffff"
-        ENTRY_BG = "#1e1e1e"
+        BG = THEME["surface"]
+        FG = THEME["text_primary"]
+        CARD_BG = THEME["surface_alt"]
+        ENTRY_BG = THEME["input_bg"]
+        BORDER = THEME["border"]
 
-        main_frame = tk.Frame(self.top, bg=BG, padx=12, pady=12)
+        main_frame = tk.Frame(self.top, bg=BG, padx=14, pady=12)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Style the notebook
         style = ttk.Style()
-        style.configure("Options.TNotebook", background=BG)
-        style.configure("Options.TNotebook.Tab", padding=[10, 4], font=("Segoe UI", 9))
+        style.configure("Options.TNotebook", background=BG, borderwidth=0)
+        style.configure("Options.TNotebook.Tab", background=CARD_BG, foreground=THEME["text_secondary"], padding=[12, 5], font=("Segoe UI", 9))
+        style.map("Options.TNotebook.Tab", background=[("selected", BG)], foreground=[("selected", FG)])
 
         self.notebook = ttk.Notebook(main_frame, style="Options.TNotebook")
         self.notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
@@ -977,21 +1165,60 @@ class OptionsDialog:
         self.cb_firefox_var = tk.BooleanVar(value=browser_integration.get("firefox", True))
         self.cb_opera_var = tk.BooleanVar(value=browser_integration.get("opera", False))
 
-        browsers_frame = tk.Frame(tab_general, bg="#202020", relief=tk.SOLID, bd=1, padx=10, pady=8)
+        browsers_frame = tk.Frame(tab_general, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=12, pady=10)
         browsers_frame.pack(fill=tk.X, pady=(0, 12))
 
-        tk.Checkbutton(browsers_frame, text="Google Chrome", variable=self.cb_chrome_var, bg="#202020", fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=1)
-        tk.Checkbutton(browsers_frame, text="Microsoft Edge", variable=self.cb_edge_var, bg="#202020", fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=1)
-        tk.Checkbutton(browsers_frame, text="Mozilla Firefox", variable=self.cb_firefox_var, bg="#202020", fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=1)
-        tk.Checkbutton(browsers_frame, text="Opera Browser", variable=self.cb_opera_var, bg="#202020", fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=1)
+        for name, var in [
+            ("Google Chrome", self.cb_chrome_var),
+            ("Microsoft Edge", self.cb_edge_var),
+            ("Mozilla Firefox", self.cb_firefox_var),
+            ("Opera Browser", self.cb_opera_var),
+        ]:
+            tk.Checkbutton(
+                browsers_frame,
+                text=name,
+                variable=var,
+                bg=CARD_BG,
+                fg=FG,
+                selectcolor=ENTRY_BG,
+                activebackground=CARD_BG,
+                activeforeground=FG,
+                font=("Segoe UI", 9),
+            ).pack(anchor=tk.W, pady=2)
 
         self.cb_startup_var = tk.BooleanVar(value=self.sm.data.get("autorun_startup", True))
-        tk.Checkbutton(tab_general, text="Jalankan IDM Clone saat Windows dinyalakan", variable=self.cb_startup_var, bg=BG, fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=2)
+        tk.Checkbutton(
+            tab_general,
+            text="Jalankan IDM Clone saat Windows dinyalakan",
+            variable=self.cb_startup_var,
+            bg=BG,
+            fg=FG,
+            selectcolor=ENTRY_BG,
+            activebackground=BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=2)
 
         self.cb_clipboard_var = tk.BooleanVar(value=self.sm.data.get("monitor_clipboard", True))
-        tk.Checkbutton(tab_general, text="Pantau clipboard untuk tautan unduhan otomatis", variable=self.cb_clipboard_var, bg=BG, fg=FG, selectcolor=ENTRY_BG, font=("Segoe UI", 9)).pack(anchor=tk.W, pady=2)
+        tk.Checkbutton(
+            tab_general,
+            text="Pantau clipboard untuk tautan unduhan otomatis",
+            variable=self.cb_clipboard_var,
+            bg=BG,
+            fg=FG,
+            selectcolor=ENTRY_BG,
+            activebackground=BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=2)
 
-        tk.Label(tab_general, text="⚡ Port IPC Loopback: 127.0.0.1:19900 (Aktif & Siap)", bg=BG, fg="#28a745", font=("Segoe UI", 8, "italic")).pack(anchor=tk.W, pady=(8, 0))
+        tk.Label(
+            tab_general,
+            text="⚡ Port IPC Loopback: 127.0.0.1:19900 (Aktif & Siap)",
+            bg=BG,
+            fg=THEME["success"],
+            font=("Segoe UI", 8, "italic"),
+        ).pack(anchor=tk.W, pady=(8, 0))
 
         # ---------------- TAB 2: JENIS BERKAS (File Types) ----------------
         tab_types = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
@@ -1022,7 +1249,7 @@ class OptionsDialog:
         self.exceptions_var = tk.StringVar(value=self.sm.data.get("exceptions", "*.speedtest.net *.fast.com"))
         self.exceptions_entry = tk.Entry(tab_types, textvariable=self.exceptions_var, bg=ENTRY_BG, fg=FG, insertbackground=FG, relief=tk.SOLID, bd=1, font=("Segoe UI", 9))
         self.exceptions_entry.pack(fill=tk.X, pady=(0, 4))
-        tk.Label(tab_types, text="Ketik domain dipisahkan spasi (contoh: *.speedtest.net *.fast.com)", bg=BG, fg="#888888", font=("Segoe UI", 8)).pack(anchor=tk.W)
+        tk.Label(tab_types, text="Ketik domain dipisahkan spasi (contoh: *.speedtest.net *.fast.com)", bg=BG, fg=THEME["text_tertiary"], font=("Segoe UI", 8)).pack(anchor=tk.W)
 
         # ---------------- TAB 3: SIMPAN KE (Save To) ----------------
         tab_save = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
@@ -1051,11 +1278,11 @@ class OptionsDialog:
         self.path_entry = tk.Entry(path_frame, textvariable=self.path_var, bg=ENTRY_BG, fg=FG, insertbackground=FG, relief=tk.SOLID, bd=1, font=("Segoe UI", 9))
         self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 6))
 
-        btn_browse = tk.Button(path_frame, text="...", command=self._on_browse, bg="#3a3a3a", fg=FG, relief=tk.SOLID, bd=1, font=("Segoe UI", 8, "bold"), width=3)
-        btn_browse.pack(side=tk.RIGHT)
+        self.btn_browse = create_modern_button(path_frame, "...", self._on_browse, kind="secondary", padx=8, pady=2, radius=6)
+        self.btn_browse.pack(side=tk.RIGHT)
 
         # Temporary folder
-        sep = tk.Frame(tab_save, bg="#444444", height=1)
+        sep = tk.Frame(tab_save, bg=BORDER, height=1)
         sep.pack(fill=tk.X, pady=(0, 10))
 
         tk.Label(tab_save, text="Direktori Berkas Sementara (Temporary Directory):", bg=BG, fg=FG, font=("Segoe UI", 9, "bold")).pack(anchor=tk.W, pady=(0, 6))
@@ -1064,8 +1291,8 @@ class OptionsDialog:
         self.temp_var = tk.StringVar(value=self.sm.data.get("temp_dir", os.path.join(os.path.expanduser("~"), "AppData", "Local", "Temp")))
         self.temp_entry = tk.Entry(temp_frame, textvariable=self.temp_var, bg=ENTRY_BG, fg=FG, insertbackground=FG, relief=tk.SOLID, bd=1, font=("Segoe UI", 9))
         self.temp_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
-        btn_temp_browse = tk.Button(temp_frame, text="...", command=self._on_browse_temp, bg="#3a3a3a", fg=FG, relief=tk.SOLID, bd=1, font=("Segoe UI", 8, "bold"), width=3)
-        btn_temp_browse.pack(side=tk.RIGHT)
+        self.btn_temp_browse = create_modern_button(temp_frame, "...", self._on_browse_temp, kind="secondary", padx=8, pady=2, radius=6)
+        self.btn_temp_browse.pack(side=tk.RIGHT)
 
         # ---------------- TAB 4: KONEKSI (Connection) ----------------
         tab_conn = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
@@ -1101,13 +1328,13 @@ class OptionsDialog:
         self.conn_var = tk.StringVar(value=cur_conn)
         self.conn_combo = ttk.Combobox(conn_frame, textvariable=self.conn_var, values=self.conn_options, state="readonly", width=8)
         self.conn_combo.pack(side=tk.LEFT, padx=(0, 8))
-        tk.Label(conn_frame, text="jalur (32 = Kecepatan Maksimum IDM)", bg=BG, fg="#28a745", font=("Segoe UI", 8, "italic")).pack(side=tk.LEFT)
+        tk.Label(conn_frame, text="jalur (32 = Kecepatan Maksimum IDM)", bg=BG, fg=THEME["success"], font=("Segoe UI", 8, "italic")).pack(side=tk.LEFT)
 
         tk.Label(
             tab_conn,
             text="* IDM Clone menggunakan akselerasi multi-koneksi paralel bertahap (kelipatan 8)",
             bg=BG,
-            fg="#888888",
+            fg=THEME["text_tertiary"],
             font=("Segoe UI", 8),
         ).pack(anchor=tk.W, pady=(8, 0))
 
@@ -1115,11 +1342,11 @@ class OptionsDialog:
         btn_box = tk.Frame(main_frame, bg=BG)
         btn_box.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
 
-        btn_save = create_modern_button(btn_box, "Simpan", self._on_save, kind="primary", padx=16, pady=4)
-        btn_save.pack(side=tk.RIGHT, padx=4)
+        self.btn_save = create_modern_button(btn_box, "Simpan", self._on_save, kind="primary", padx=16, pady=4, radius=7)
+        self.btn_save.pack(side=tk.RIGHT, padx=4)
 
-        btn_cancel = create_modern_button(btn_box, "Batal", self.top.destroy, kind="secondary", padx=12, pady=4)
-        btn_cancel.pack(side=tk.RIGHT, padx=4)
+        self.btn_cancel = create_modern_button(btn_box, "Batal", self.top.destroy, kind="secondary", padx=12, pady=4, radius=7)
+        self.btn_cancel.pack(side=tk.RIGHT, padx=4)
 
     def _on_cat_change(self, event=None):
         cat = self.cat_var.get()

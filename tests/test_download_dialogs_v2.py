@@ -68,10 +68,14 @@ def test_download_complete_dialog_ui(tk_root):
 
     assert dlg.title == "We-Were-Here-Tomorrow-AnkerGames.zip"
     assert dlg.top is not None
+    assert hasattr(dlg, "btn_open")
+    assert hasattr(dlg, "btn_folder")
+    assert hasattr(dlg, "btn_done")
+    assert dlg.btn_open.cget("text") == "Buka Berkas"
     dlg.close()
 
 
-def test_download_progress_dialog_disabled_tabs(tk_root):
+def test_download_progress_dialog_functional_tabs(tk_root):
     dlg = DownloadProgressDialog(
         parent=tk_root,
         task_id="t_tab_test",
@@ -80,10 +84,18 @@ def test_download_progress_dialog_disabled_tabs(tk_root):
     )
     assert hasattr(dlg, "lbl_tab2")
     assert hasattr(dlg, "lbl_tab3")
-    assert "Segera Hadir" in dlg.lbl_tab2.cget("text")
-    assert "Segera Hadir" in dlg.lbl_tab3.cget("text")
-    assert dlg.lbl_tab2.cget("cursor") in ("arrow", "")
-    assert dlg.lbl_tab3.cget("cursor") in ("arrow", "")
+    assert "Pembatas Kecepatan" in dlg.lbl_tab2.cget("text")
+    assert "Opsi saat selesai" in dlg.lbl_tab3.cget("text")
+    assert dlg.lbl_tab2.cget("cursor") == "hand2"
+    assert dlg.lbl_tab3.cget("cursor") == "hand2"
+
+    # Test clicking Tab 2 & Tab 3
+    dlg._switch_tab(2)
+    assert dlg.active_tab == 2
+    dlg._switch_tab(3)
+    assert dlg.active_tab == 3
+    dlg._switch_tab(1)
+    assert dlg.active_tab == 1
     dlg.close()
 
 

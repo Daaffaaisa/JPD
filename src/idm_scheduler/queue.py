@@ -24,6 +24,8 @@ class DownloadTask:
     bytes_downloaded: int = 0
     total_bytes: int = 0
     error: Optional[str] = None
+    speed_limit_bps: int = 0
+    latest_part_progress: Optional[list[dict]] = None
 
 
 class DownloadQueue:

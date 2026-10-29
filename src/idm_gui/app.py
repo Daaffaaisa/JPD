@@ -846,6 +846,11 @@ class IDMGUIApp:
 
         progress_lock = threading.Lock()
 
+        if progress_dlg:
+            def _on_speed_limit(bps: int):
+                task.speed_limit_bps = bps
+            progress_dlg.on_speed_limit_change = _on_speed_limit
+
         def update_ui_progress():
             now = time.time()
             prev_b = self.last_bytes.get(task_id, 0)
@@ -860,7 +865,8 @@ class IDMGUIApp:
                     curr_b = task.bytes_downloaded
                     tot_b = task.total_bytes
                     dlg = progress_dlg
-                    self.root.after(0, lambda b=curr_b, t=tot_b, s=speed, d=dlg: d.update_progress(b, t, s))
+                    part_snap = getattr(task, "latest_part_progress", None)
+                    self.root.after(0, lambda b=curr_b, t=tot_b, s=speed, d=dlg, p=part_snap: d.update_progress(b, t, s, part_progress=p))
 
         def progress_cb(chunk_len: int):
             with progress_lock:
@@ -869,6 +875,11 @@ class IDMGUIApp:
                 else:
                     task.bytes_downloaded += chunk_len
                 update_ui_progress()
+
+        def part_cb(parts_data: list[dict]):
+            with progress_lock:
+                task.latest_part_progress = [dict(x) for x in parts_data]
+            update_ui_progress()
 
         def worker():
             referer = self.task_referers.get(task_id, "")
@@ -954,6 +965,8 @@ class IDMGUIApp:
                     stop_event=stop_event,
                     headers=req_headers,
                     known_size=task.total_bytes if task.total_bytes > 0 else None,
+                    part_progress_callback=part_cb,
+                    speed_limit_bps=getattr(task, "speed_limit_bps", 0),
                 )
                 if stop_event.is_set() or task.status in (TaskStatus.PAUSED, TaskStatus.CANCELLED) or (not res.success and "stopped" in (res.error or "").lower()):
                     self.task_speeds[task_id] = 0.0

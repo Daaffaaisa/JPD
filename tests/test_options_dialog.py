@@ -107,3 +107,20 @@ def test_options_dialog_saves_and_loads_browser_and_autorun_settings():
         root.destroy()
 
 
+def test_options_dialog_modern_theme_and_buttons():
+    from idm_gui.dialogs import OptionsDialog
+    from idm_gui.theme import THEME
+
+    root = tk.Tk()
+    root.withdraw()
+
+    dlg = OptionsDialog(parent=root)
+    assert dlg.top.cget("bg") == THEME["surface"]
+    assert hasattr(dlg, "btn_save")
+    assert hasattr(dlg, "btn_cancel")
+    assert dlg.btn_save.cget("text") == "Simpan"
+    dlg.top.destroy()
+    root.destroy()
+
+
+
