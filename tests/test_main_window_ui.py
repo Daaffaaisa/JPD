@@ -82,3 +82,27 @@ def test_open_add_url_dialog_structure_and_validation(tk_root, monkeypatch):
 
     # Clean up
     dlg.destroy()
+
+
+def test_main_window_live_telemetry_cards(tk_root):
+    app = IDMGUIApp(tk_root)
+    assert hasattr(app, "stat_bar")
+    assert hasattr(app, "lbl_stat_speed")
+    assert hasattr(app, "lbl_stat_active")
+    assert hasattr(app, "lbl_stat_total")
+
+    # Initial state
+    app._tick_ui()
+    assert "0" in app.lbl_stat_speed.cget("text")
+    assert "0" in app.lbl_stat_active.cget("text")
+
+    # Add an active task
+    t = app.queue.add_task("https://example.com/live_test.mp4", "live_test.mp4")
+    from idm_scheduler.queue import TaskStatus
+    app.queue.get_task(t).status = TaskStatus.DOWNLOADING
+    app.task_speeds[t] = 1024 * 1024 * 2.5 # 2.5 MB/s
+    app._tick_ui()
+
+    assert "2,5" in app.lbl_stat_speed.cget("text") or "2.5" in app.lbl_stat_speed.cget("text")
+    assert "1" in app.lbl_stat_active.cget("text")
+

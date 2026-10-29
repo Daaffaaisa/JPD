@@ -48,9 +48,10 @@ THEME = {
     "part_divider": "#e11d48",
 }
 
-FONT_FAMILY = "Segoe UI"
-FONT_TITLE = (FONT_FAMILY, 10, "bold")
-FONT_HEADING = (FONT_FAMILY, 9, "bold")
+FONT_DISPLAY = "SF Pro Display"
+FONT_FAMILY = "SF Pro Text"
+FONT_TITLE = (FONT_DISPLAY, 11, "bold")
+FONT_HEADING = (FONT_DISPLAY, 9, "bold")
 FONT_BODY = (FONT_FAMILY, 9)
 FONT_SMALL = (FONT_FAMILY, 8)
 FONT_CODE = ("Consolas", 9)

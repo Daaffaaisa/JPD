@@ -24,9 +24,13 @@ from idm_gui.theme import (
     setup_global_ttk_theme,
     create_modern_button,
     draw_round_rectangle,
+    FONT_DISPLAY,
+    FONT_FAMILY,
+    FONT_TITLE,
     FONT_HEADING,
     FONT_BODY,
     FONT_SMALL,
+    FONT_CODE,
 )
 
 
@@ -447,8 +451,21 @@ class IDMGUIApp:
         # Left Sidebar: Categories
         self.sidebar_frame = tk.Frame(self.paned, width=190, bg=THEME["surface_alt"])
         self.sidebar_visible = True
+
+        lbl_side_title = tk.Label(
+            self.sidebar_frame,
+            text="KATEGORI BERKAS",
+            bg=THEME["surface_alt"],
+            fg=THEME["text_tertiary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+            anchor=tk.W,
+            padx=12,
+            pady=6,
+        )
+        lbl_side_title.pack(fill=tk.X)
+
         self.category_tree = ttk.Treeview(self.sidebar_frame, show="tree", selectmode="browse")
-        self.category_tree.pack(fill=tk.BOTH, expand=True, padx=(2, 0), pady=2)
+        self.category_tree.pack(fill=tk.BOTH, expand=True, padx=(2, 0), pady=(0, 2))
 
         cat_root = self.category_tree.insert("", "end", text="📁 Kategori", open=True)
         self.category_tree.insert(cat_root, "end", text="Semua Unduhan", values=("all",))
@@ -464,8 +481,78 @@ class IDMGUIApp:
 
         self.paned.add(self.sidebar_frame, minsize=150)
 
-        # Right Panel: Downloads Table
-        table_frame = tk.Frame(self.paned, bg=THEME["tree_bg"])
+        # Right Container: Dashboard Live Stats + Downloads Table
+        right_container = tk.Frame(self.paned, bg=THEME["tree_bg"])
+
+        # 1. Live Telemetry Metric Strip
+        self.stat_bar = tk.Frame(right_container, bg=THEME["surface_alt"], padx=8, pady=8)
+        self.stat_bar.pack(side=tk.TOP, fill=tk.X)
+
+        # Card 1: Live Speed
+        card_speed = tk.Frame(self.stat_bar, bg=THEME["surface"], padx=12, pady=6, relief=tk.SOLID, bd=1)
+        card_speed.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        tk.Label(
+            card_speed,
+            text="⚡ KECEPATAN AKTIF",
+            bg=THEME["surface"],
+            fg=THEME["text_secondary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+            anchor=tk.W,
+        ).pack(anchor=tk.W)
+        self.lbl_stat_speed = tk.Label(
+            card_speed,
+            text="0 B/detik",
+            bg=THEME["surface"],
+            fg=THEME["accent_primary"],
+            font=(FONT_DISPLAY, 12, "bold"),
+            anchor=tk.W,
+        )
+        self.lbl_stat_speed.pack(anchor=tk.W, pady=(2, 0))
+
+        # Card 2: Active / Queued Tasks
+        card_active = tk.Frame(self.stat_bar, bg=THEME["surface"], padx=12, pady=6, relief=tk.SOLID, bd=1)
+        card_active.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        tk.Label(
+            card_active,
+            text="⏳ TUGAS BERJALAN",
+            bg=THEME["surface"],
+            fg=THEME["text_secondary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+            anchor=tk.W,
+        ).pack(anchor=tk.W)
+        self.lbl_stat_active = tk.Label(
+            card_active,
+            text="0 Berjalan • 0 Mengantri",
+            bg=THEME["surface"],
+            fg=THEME["text_primary"],
+            font=(FONT_DISPLAY, 12, "bold"),
+            anchor=tk.W,
+        )
+        self.lbl_stat_active.pack(anchor=tk.W, pady=(2, 0))
+
+        # Card 3: Library Stats
+        card_total = tk.Frame(self.stat_bar, bg=THEME["surface"], padx=12, pady=6, relief=tk.SOLID, bd=1)
+        card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        tk.Label(
+            card_total,
+            text="💾 TOTAL BERKAS",
+            bg=THEME["surface"],
+            fg=THEME["text_secondary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+            anchor=tk.W,
+        ).pack(anchor=tk.W)
+        self.lbl_stat_total = tk.Label(
+            card_total,
+            text="0 Berkas (0 B)",
+            bg=THEME["surface"],
+            fg=THEME["text_primary"],
+            font=(FONT_DISPLAY, 12, "bold"),
+            anchor=tk.W,
+        )
+        self.lbl_stat_total.pack(anchor=tk.W, pady=(2, 0))
+
+        # 2. Downloads Table Frame
+        table_frame = tk.Frame(right_container, bg=THEME["tree_bg"])
         cols = ("name", "size", "status", "progress", "speed", "url")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", selectmode="extended")
 
@@ -514,13 +601,13 @@ class IDMGUIApp:
             190, 92,
             text="Belum Ada Unduhan",
             fill=THEME["text_primary"],
-            font=("Segoe UI", 11, "bold"),
+            font=(FONT_DISPLAY, 11, "bold"),
         )
         self.empty_state_frame.create_text(
             190, 118,
             text="Salin tautan dari peramban atau klik tombol di bawah\nuntuk memulai unduhan baru.",
             fill=THEME["text_secondary"],
-            font=("Segoe UI", 9),
+            font=FONT_BODY,
             justify=tk.CENTER,
         )
 
@@ -540,7 +627,8 @@ class IDMGUIApp:
         if len(self.queue.list_tasks()) == 0:
             self.empty_state_frame.place(relx=0.5, rely=0.45, anchor=tk.CENTER)
 
-        self.paned.add(table_frame, minsize=400)
+        table_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+        self.paned.add(right_container, minsize=400)
 
     def _build_statusbar(self):
         self.statusbar = tk.Label(
@@ -1078,6 +1166,20 @@ class IDMGUIApp:
             else:
                 if bool(self.empty_state_frame.place_info()):
                     self.empty_state_frame.place_forget()
+
+        # Update Live Dashboard Metric Cards
+        if hasattr(self, "lbl_stat_speed") and self.lbl_stat_speed:
+            speed_val_str = f"{format_bytes(int(total_speed))}/s"
+            self.lbl_stat_speed.config(
+                text=speed_val_str,
+                fg=THEME["success"] if total_speed > 0 else THEME["accent_primary"],
+            )
+        if hasattr(self, "lbl_stat_active") and self.lbl_stat_active:
+            queued_count = sum(1 for t in tasks if t.status == TaskStatus.QUEUED)
+            self.lbl_stat_active.config(text=f"{active_count} Berjalan • {queued_count} Mengantri")
+        if hasattr(self, "lbl_stat_total") and self.lbl_stat_total:
+            total_bytes_dl = sum(t.bytes_downloaded for t in tasks)
+            self.lbl_stat_total.config(text=f"{len(tasks)} Berkas ({format_bytes(total_bytes_dl)})")
 
         self.statusbar.config(
             text=f"Total: {len(tasks)} unduhan  |  Aktif: {active_count}  |  Total Kecepatan: {format_bytes(int(total_speed))}/s"
