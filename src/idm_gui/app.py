@@ -45,6 +45,25 @@ def format_bytes(num_bytes: int) -> str:
         return f"{num_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 
+def get_file_type_glyph(category: str, filename: str = "") -> str:
+    """Returns a modern semantic glyph matching the file category and extension."""
+    c = category.lower()
+    fn = filename.lower()
+    if "video" in c or fn.endswith((".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv")):
+        return "🎬"
+    elif "musik" in c or "audio" in c or fn.endswith((".mp3", ".m4a", ".flac", ".wav", ".aac", ".ogg")):
+        return "🎵"
+    elif "gambar" in c or "image" in c or fn.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico", ".avif")):
+        return "🖼️"
+    elif "program" in c or fn.endswith((".exe", ".msi", ".iso", ".bat", ".cmd")):
+        return "📦"
+    elif "dokumen" in c or fn.endswith((".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt")):
+        return "📄"
+    elif "kompres" in c or "zip" in c or fn.endswith((".zip", ".rar", ".7z", ".tar", ".gz", ".bz2")):
+        return "🗜️"
+    return "📄"
+
+
 class TactileCard(tk.Canvas):
     """Modern 3D elevated tactile card with smooth rounded corners, specular highlight, and ambient shadow."""
 
@@ -867,8 +886,15 @@ class IDMGUIApp:
         card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
         self.lbl_stat_total = card_total.lbl_val
 
-        # 2. Downloads Table Frame
-        table_frame = tk.Frame(right_container, bg=THEME["tree_bg"])
+        # 2. Downloads Table Frame with 3D tactile card encapsulation
+        table_container = tk.Frame(right_container, bg=THEME["surface_alt"], padx=8, pady=0)
+        table_container.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, pady=(0, 8))
+
+        table_card = tk.Frame(table_container, bg=THEME["tree_bg"], padx=1, pady=1)
+        table_card.configure(highlightbackground=THEME["border"], highlightthickness=1, bd=0)
+        table_card.pack(fill=tk.BOTH, expand=True)
+        table_frame = table_card
+
         cols = ("name", "size", "status", "progress", "speed", "url")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", selectmode="extended")
 
@@ -879,12 +905,20 @@ class IDMGUIApp:
         self.tree.heading("speed", text="Kecepatan")
         self.tree.heading("url", text="URL Unduhan")
 
-        self.tree.column("name", width=240, minwidth=140)
+        self.tree.column("name", width=250, minwidth=150)
         self.tree.column("size", width=85, anchor=tk.E, minwidth=70)
-        self.tree.column("status", width=95, anchor=tk.CENTER, minwidth=80)
-        self.tree.column("progress", width=85, anchor=tk.CENTER, minwidth=75)
+        self.tree.column("status", width=110, anchor=tk.CENTER, minwidth=90)
+        self.tree.column("progress", width=125, anchor=tk.CENTER, minwidth=95)
         self.tree.column("speed", width=95, anchor=tk.E, minwidth=80)
-        self.tree.column("url", width=280, stretch=True)
+        self.tree.column("url", width=260, stretch=True)
+
+        # Color-coded tags for modern status styling
+        self.tree.tag_configure("downloading", foreground="#60a5fa")
+        self.tree.tag_configure("completed", foreground="#34d399")
+        self.tree.tag_configure("paused", foreground="#94a3b8")
+        self.tree.tag_configure("queued", foreground="#e2e8f0")
+        self.tree.tag_configure("failed", foreground="#f87171")
+        self.tree.tag_configure("cancelled", foreground="#f87171")
 
         scroll_y = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll_y.set)
@@ -943,7 +977,6 @@ class IDMGUIApp:
         if len(self.queue.list_tasks()) == 0:
             self.empty_state_frame.place(relx=0.5, rely=0.45, anchor=tk.CENTER)
 
-        table_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
         self.paned.add(right_container, minsize=400)
 
     def _build_statusbar(self):
@@ -1514,26 +1547,62 @@ class IDMGUIApp:
             else:
                 speed_str = "--"
 
-            pct_str = "0%"
+            # Format status with localized label and modern color tag
+            status_tag = "normal"
+            if task.status == TaskStatus.DOWNLOADING:
+                status_label = "⚡ Mengunduh"
+                status_tag = "downloading"
+            elif task.status == TaskStatus.COMPLETED:
+                status_label = "✓ Selesai"
+                status_tag = "completed"
+            elif task.status == TaskStatus.PAUSED:
+                status_label = "⏸ Dijeda"
+                status_tag = "paused"
+            elif task.status == TaskStatus.QUEUED:
+                status_label = "⏳ Mengantri"
+                status_tag = "queued"
+            elif task.status == TaskStatus.FAILED:
+                status_label = "✕ Gagal"
+                status_tag = "failed"
+            elif task.status == TaskStatus.CANCELLED:
+                status_label = "✕ Dibatalkan"
+                status_tag = "cancelled"
+            else:
+                status_label = task.status.value
+
+            pct = 0.0
             if task.total_bytes > 0:
                 pct = min(100.0, (task.bytes_downloaded / task.total_bytes) * 100)
-                pct_str = f"{pct:.1f}%"
             elif task.status == TaskStatus.COMPLETED:
-                pct_str = "100%"
+                pct = 100.0
+
+            if task.status == TaskStatus.COMPLETED:
+                pct_str = "■■■■■■ 100%"
+            elif pct > 0:
+                bars = 6
+                filled = min(bars, max(0, int(round((pct / 100.0) * bars))))
+                bar_glyph = "■" * filled + "□" * (bars - filled)
+                pct_str = f"{bar_glyph} {pct:.1f}%"
+            else:
+                pct_str = "□□□□□□ 0%"
+
+            cat = self._detect_category(task.url, task.output_path)
+            glyph = get_file_type_glyph(cat, fname)
+            disp_fname = f"{glyph} {fname}"
 
             values = (
-                fname,
+                disp_fname,
                 size_str,
-                task.status.value,
+                status_label,
                 pct_str,
                 speed_str,
                 task.url,
             )
 
             if self.tree.exists(tid):
-                self.tree.item(tid, values=values)
+                self.tree.item(tid, values=values, tags=(status_tag,))
             else:
-                self.tree.insert("", "end", iid=tid, values=values)
+                self.tree.insert("", "end", iid=tid, values=values, tags=(status_tag,))
 
         # Remove deleted tasks from treeview
         current_task_ids = {t.task_id for t in tasks}

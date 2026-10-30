@@ -139,3 +139,26 @@ def test_main_window_modern_sidebar_navigation_and_counts(tk_root):
     assert app.active_category_filter == "all"
 
 
+def test_main_window_table_modern_layout_and_tags(tk_root):
+    app = IDMGUIApp(tk_root)
+    t1 = app.queue.add_task("https://example.com/video.mp4", "video.mp4")
+    from idm_scheduler.queue import TaskStatus
+    app.queue.get_task(t1).status = TaskStatus.DOWNLOADING
+    app.queue.get_task(t1).total_bytes = 1000
+    app.queue.get_task(t1).bytes_downloaded = 500
+
+    app._tick_ui()
+
+    row_vals = app.tree.item(t1, "values")
+    # File name has category glyph
+    assert "🎬" in row_vals[0]
+    # Status has localized text
+    assert "Mengunduh" in row_vals[2]
+    # Progress has mini visualizer
+    assert "■" in row_vals[3]
+    # Tag is downloading
+    tags = app.tree.item(t1, "tags")
+    assert "downloading" in tags
+
+
+
