@@ -370,25 +370,55 @@ def setup_global_ttk_theme():
         rowheight=28,
         font=FONT_BODY,
         borderwidth=0,
+        lightcolor=THEME["tree_bg"],
+        darkcolor=THEME["tree_bg"],
+        bordercolor=THEME["tree_bg"],
     )
     style.map(
         "Treeview",
         background=[("selected", THEME["tree_select"])],
         foreground=[("selected", "#ffffff")],
+        lightcolor=[("!disabled", THEME["tree_bg"])],
+        darkcolor=[("!disabled", THEME["tree_bg"])],
+        bordercolor=[("!disabled", THEME["tree_bg"])],
     )
 
-    # Treeview Headings
+    # Treeview Headings (eliminating raw white/light gray bordercolor in clam)
     style.configure(
         "Treeview.Heading",
         background=THEME["tree_heading_bg"],
         foreground=THEME["tree_heading_fg"],
         font=FONT_HEADING,
         relief="flat",
+        borderwidth=0,
         padding=[6, 4],
+        lightcolor=THEME["tree_heading_bg"],
+        darkcolor=THEME["tree_heading_bg"],
+        bordercolor=THEME["tree_heading_bg"],
     )
     style.map(
         "Treeview.Heading",
         background=[("active", THEME["secondary_hover"])],
+        lightcolor=[("!disabled", THEME["tree_heading_bg"])],
+        darkcolor=[("!disabled", THEME["tree_heading_bg"])],
+        bordercolor=[("!disabled", THEME["tree_heading_bg"])],
+    )
+
+    # Dark Scrollbar styling
+    style.configure(
+        "Vertical.TScrollbar",
+        background=THEME["surface"],
+        troughcolor=THEME["tree_bg"],
+        bordercolor=THEME["tree_bg"],
+        arrowcolor=THEME["text_secondary"],
+        relief="flat",
+        borderwidth=0,
+    )
+    style.map(
+        "Vertical.TScrollbar",
+        background=[("active", THEME["secondary_hover"]), ("!disabled", THEME["surface"])],
+        troughcolor=[("!disabled", THEME["tree_bg"])],
+        bordercolor=[("!disabled", THEME["tree_bg"])],
     )
 
     # Dark Notebook Tabs

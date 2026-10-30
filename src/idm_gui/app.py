@@ -204,10 +204,8 @@ class TactileTableContainer(tk.Canvas):
         draw_round_rectangle(self, 3, 5, w - 3, h, r=r + 2, fill="#04070e", outline="", tags="card_bg")
         # 2. Outer dark bottom rim
         draw_round_rectangle(self, 2, 2, w - 2, h - 2, r=r, fill="#070b13", outline="", tags="card_bg")
-        # 3. Main body
-        draw_round_rectangle(self, 3, 3, w - 3, h - 3, r=r - 1, fill=THEME["tree_bg"], outline="#24334a", width=1, tags="card_bg")
-        # 4. Specular overhead rim highlight line
-        self.create_line(r + 4, 3, w - r - 4, 3, fill="#4e6894", width=1.5, tags="card_bg")
+        # 3. Main body with subtle dark border (no distracting bright white lines)
+        draw_round_rectangle(self, 3, 3, w - 3, h - 3, r=r - 1, fill=THEME["tree_bg"], outline="#1e293b", width=1, tags="card_bg")
 
         self.tag_lower("card_bg")
 
@@ -592,7 +590,7 @@ class IDMGUIApp:
         self.toolbar_frame = tk.Frame(self.root, bg=THEME["surface"], pady=7, padx=12, relief=tk.FLAT)
         self.toolbar_frame.pack(side=tk.TOP, fill=tk.X)
 
-        self.toolbar_border = tk.Frame(self.root, bg=THEME["border"], height=1)
+        self.toolbar_border = tk.Frame(self.root, bg="#162032", height=1)
         self.toolbar_border.pack(side=tk.TOP, fill=tk.X)
 
         # 1. Hero Primary Action Button: + Tambah URL
@@ -939,12 +937,12 @@ class IDMGUIApp:
         self.tree.heading("speed", text="Kecepatan")
         self.tree.heading("url", text="URL Unduhan")
 
-        self.tree.column("name", width=240, minwidth=140)
-        self.tree.column("size", width=85, anchor=tk.E, minwidth=70)
-        self.tree.column("status", width=110, anchor=tk.CENTER, minwidth=90)
-        self.tree.column("progress", width=125, anchor=tk.CENTER, minwidth=95)
-        self.tree.column("speed", width=125, anchor=tk.E, minwidth=110)
-        self.tree.column("url", width=220, stretch=True)
+        self.tree.column("name", width=220, minwidth=130)
+        self.tree.column("size", width=75, anchor=tk.E, minwidth=65)
+        self.tree.column("status", width=95, anchor=tk.CENTER, minwidth=85)
+        self.tree.column("progress", width=110, anchor=tk.CENTER, minwidth=90)
+        self.tree.column("speed", width=105, anchor=tk.E, minwidth=90)
+        self.tree.column("url", width=260, stretch=True)
 
         # Color-coded tags for modern status styling
         self.tree.tag_configure("downloading", foreground="#60a5fa")
