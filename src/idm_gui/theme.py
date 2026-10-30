@@ -143,7 +143,7 @@ class Tooltip:
             self.tip_window = None
 
 
-def draw_round_rectangle(canvas: tk.Canvas, x1: int, y1: int, x2: int, y2: int, r: int = 8, fill: str = "", outline: str = "", width: int = 1):
+def draw_round_rectangle(canvas: tk.Canvas, x1: int, y1: int, x2: int, y2: int, r: int = 8, fill: str = "", outline: str = "", width: int = 1, **kwargs):
     """Draws a smooth anti-aliased rounded rectangle on a Tkinter Canvas."""
     r = min(r, abs(x2 - x1) // 2, abs(y2 - y1) // 2)
     points = [
@@ -160,11 +160,11 @@ def draw_round_rectangle(canvas: tk.Canvas, x1: int, y1: int, x2: int, y2: int, 
         x1, y1 + r,
         x1, y1,
     ]
-    return canvas.create_polygon(points, fill=fill, outline=outline, width=width, smooth=True)
+    return canvas.create_polygon(points, fill=fill, outline=outline, width=width, smooth=True, **kwargs)
 
 
 class RoundedButton(tk.Canvas):
-    """Tactile rounded button built on Tkinter Canvas with smooth hover transitions."""
+    """Tactile rounded button built on Tkinter Canvas with 3D elevation and smooth hover transitions."""
 
     def __init__(
         self,
@@ -201,24 +201,36 @@ class RoundedButton(tk.Canvas):
             self.bg_normal = THEME["accent_primary"]
             self.bg_hover = THEME["accent_hover"]
             self.bg_active = THEME["accent_active"]
+            self.top_highlight = "#60a5fa"
+            self.bot_shadow = "#05080f"
+            self.border_col = "#1d4ed8"
             self.fg = "#ffffff"
             self.font = FONT_HEADING
         elif kind == "danger":
             self.bg_normal = THEME["danger"]
             self.bg_hover = THEME["danger_hover"]
             self.bg_active = "#8b0000"
+            self.top_highlight = "#fb7185"
+            self.bot_shadow = "#05080f"
+            self.border_col = "#9f1239"
             self.fg = "#ffffff"
             self.font = FONT_BODY
         elif kind == "toolbar":
             self.bg_normal = THEME["surface"]
             self.bg_hover = THEME["secondary_hover"]
             self.bg_active = THEME["accent_primary"]
+            self.top_highlight = "#384661"
+            self.bot_shadow = "#080c14"
+            self.border_col = "#243249"
             self.fg = THEME["text_primary"]
             self.font = FONT_BODY
         else:  # secondary
             self.bg_normal = THEME["secondary_bg"]
             self.bg_hover = THEME["secondary_hover"]
             self.bg_active = "#2c2c2e"
+            self.top_highlight = "#3e4f6d"
+            self.bot_shadow = "#080c14"
+            self.border_col = "#243249"
             self.fg = THEME["text_primary"]
             self.font = FONT_BODY
 
@@ -251,26 +263,41 @@ class RoundedButton(tk.Canvas):
         if tooltip:
             Tooltip(self, tooltip)
 
-    def _draw(self, fill_color):
+    def _draw(self, fill_color, is_pressed: bool = False):
         self.delete("all")
-        draw_round_rectangle(self, 0, 0, self.total_w, self.total_h, r=self.radius, fill=fill_color)
-        self.create_text(self.total_w // 2, self.total_h // 2, text=self.text, fill=self.fg, font=self.font)
+        w, h = self.total_w, self.total_h
+        r = self.radius
+
+        if is_pressed:
+            # Pressed state: sinks down slightly, darker inner border
+            draw_round_rectangle(self, 1, 2, w - 1, h, r=r, fill=fill_color, outline=self.bot_shadow, width=1)
+            self.create_text(w // 2, (h // 2) + 1, text=self.text, fill=self.fg, font=self.font)
+        else:
+            # 1. Subtle drop shadow for 3D elevation
+            draw_round_rectangle(self, 1, 2, w - 1, h, r=r, fill=self.bot_shadow, outline="")
+            # 2. Main rounded body with border
+            draw_round_rectangle(self, 1, 1, w - 1, h - 1, r=r, fill=fill_color, outline=self.border_col, width=1)
+            # 3. Overhead specular highlight line across the top edge
+            if w > 2 * r and h > 10:
+                self.create_line(r + 2, 2, w - r - 2, 2, fill=self.top_highlight, width=1.5)
+            # 4. Text
+            self.create_text(w // 2, h // 2, text=self.text, fill=self.fg, font=self.font)
 
     def _on_enter(self, e):
         if self.state != "disabled":
-            self._draw(self.bg_hover)
+            self._draw(self.bg_hover, is_pressed=False)
 
     def _on_leave(self, e):
         if self.state != "disabled":
-            self._draw(self.bg_normal)
+            self._draw(self.bg_normal, is_pressed=False)
 
     def _on_press(self, e):
         if self.state != "disabled":
-            self._draw(self.bg_active)
+            self._draw(self.bg_active, is_pressed=True)
 
     def _on_release(self, e):
         if self.state != "disabled":
-            self._draw(self.bg_hover)
+            self._draw(self.bg_hover, is_pressed=False)
             if self.command:
                 self.command()
 

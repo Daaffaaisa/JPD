@@ -45,6 +45,120 @@ def format_bytes(num_bytes: int) -> str:
         return f"{num_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 
+class TactileCard(tk.Canvas):
+    """Modern 3D elevated tactile card with smooth rounded corners, specular highlight, and ambient shadow."""
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        title: str,
+        initial_val: str,
+        val_fg: str = "#ffffff",
+        r: int = 12,
+        height: int = 70,
+    ):
+        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["surface_alt"]
+        super().__init__(parent, height=height, bg=bg_col, highlightthickness=0)
+        self.r = r
+        self.title_text = title
+        self.val_fg = val_fg
+
+        self.lbl_title = tk.Label(
+            self,
+            text=title,
+            bg="#1e2a3c",
+            fg=THEME["text_secondary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+        )
+        self.lbl_val = tk.Label(
+            self,
+            text=initial_val,
+            bg="#131b26",
+            fg=val_fg,
+            font=(FONT_DISPLAY, 12, "bold"),
+        )
+        self.win_t = self.create_window(16, 21, window=self.lbl_title, anchor=tk.W)
+        self.win_v = self.create_window(16, 48, window=self.lbl_val, anchor=tk.W)
+
+        self.bind("<Configure>", self._redraw)
+
+    def _redraw(self, event=None):
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 30 or h < 30:
+            return
+        self.delete("card_bg")
+        r = self.r
+        # 1. Ambient drop shadow (offset down 2px)
+        draw_round_rectangle(self, 2, 4, w - 2, h, r=r + 1, fill="#04070e", outline="", tags="card_bg")
+        # 2. Outer bottom bevel rim
+        draw_round_rectangle(self, 1, 1, w - 1, h - 2, r=r, fill="#070b13", outline="", tags="card_bg")
+        # 3. Stepped 3D body: top plate lighter, bottom plate deeper
+        mid = (h - 2) // 2
+        draw_round_rectangle(self, 2, 2, w - 2, h - 3, r=r - 1, fill="#1e2a3c", outline="", tags="card_bg")
+        draw_round_rectangle(self, 2, mid, w - 2, h - 3, r=r - 1, fill="#131b26", outline="", tags="card_bg")
+        # 4. Inset overhead specular rim highlight (Apple 3D gleam)
+        self.create_line(r + 2, 2, w - r - 2, 2, fill="#4e6894", width=1.5, tags="card_bg")
+        self.tag_lower("card_bg")
+
+
+class TactileStorageCard(tk.Canvas):
+    """Modern 3D elevated storage card with smooth rounded corners, specular highlight, and embedded open button."""
+
+    def __init__(self, parent: tk.Widget, on_open_folder: Any, r: int = 10):
+        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["surface_alt"]
+        super().__init__(parent, height=86, bg=bg_col, highlightthickness=0)
+        self.r = r
+        self.on_open_folder = on_open_folder
+
+        self.lbl_title = tk.Label(
+            self,
+            text="PENYIMPANAN",
+            bg="#192231",
+            fg=THEME["text_tertiary"],
+            font=(FONT_DISPLAY, 7, "bold"),
+        )
+        self.lbl_path = tk.Label(
+            self,
+            text=os.path.basename(os.path.expanduser("~")) + "/Downloads",
+            bg="#131b26",
+            fg=THEME["text_secondary"],
+            font=(FONT_FAMILY, 8),
+        )
+        self.btn_open = create_modern_button(
+            self,
+            text="↗ Buka Folder",
+            command=on_open_folder,
+            kind="secondary",
+            padx=6,
+            pady=2,
+            radius=6,
+            tooltip="Buka Folder Unduhan Utama",
+        )
+
+        self.win_t = self.create_window(14, 15, window=self.lbl_title, anchor=tk.W)
+        self.win_p = self.create_window(14, 34, window=self.lbl_path, anchor=tk.W)
+        self.win_b = self.create_window(14, 63, window=self.btn_open, anchor=tk.W)
+
+        self.bind("<Configure>", self._redraw)
+
+    def _redraw(self, event=None):
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 30 or h < 30:
+            return
+        self.delete("card_bg")
+        r = self.r
+        draw_round_rectangle(self, 2, 4, w - 2, h, r=r + 1, fill="#04070e", outline="", tags="card_bg")
+        draw_round_rectangle(self, 1, 1, w - 1, h - 2, r=r, fill="#070b13", outline="", tags="card_bg")
+        mid = (h - 2) // 2
+        draw_round_rectangle(self, 2, 2, w - 2, h - 3, r=r - 1, fill="#192231", outline="", tags="card_bg")
+        draw_round_rectangle(self, 2, mid, w - 2, h - 3, r=r - 1, fill="#131b26", outline="", tags="card_bg")
+        self.create_line(r + 2, 2, w - r - 2, 2, fill="#3d5275", width=1.5, tags="card_bg")
+        self.tag_lower("card_bg")
+        self.itemconfigure(self.win_b, width=max(40, w - 28))
+
+
 class SidebarNavItem(tk.Frame):
     """Modern macOS/Apple-inspired sidebar navigation pill item with live count badge."""
 
@@ -438,9 +552,8 @@ class IDMGUIApp:
         self.btn_add.pack(side=tk.LEFT, padx=(0, 10))
 
         # 2. Segmented Control Group 1: Transfer Controls (▷ Lanjutkan | ❚❚ Jeda | ✕ Hapus)
-        self.grp_transfer = tk.Frame(self.toolbar_frame, bg=THEME["surface_alt"], padx=2, pady=2)
-        self.grp_transfer.configure(highlightbackground=THEME["border"], highlightthickness=1, bd=0)
-        self.grp_transfer.pack(side=tk.LEFT, padx=(0, 10))
+        self.grp_transfer = tk.Frame(self.toolbar_frame, bg=THEME["surface"], padx=0, pady=0)
+        self.grp_transfer.pack(side=tk.LEFT, padx=(0, 6))
 
         btn_resume = create_modern_button(
             self.grp_transfer,
@@ -449,13 +562,10 @@ class IDMGUIApp:
             kind="toolbar",
             padx=9,
             pady=4,
-            radius=6,
+            radius=7,
             tooltip="Lanjutkan Unduhan Terpilih",
         )
-        btn_resume.pack(side=tk.LEFT, padx=1)
-
-        sep1 = tk.Frame(self.grp_transfer, width=1, bg=THEME["border"])
-        sep1.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+        btn_resume.pack(side=tk.LEFT, padx=2)
 
         btn_pause = create_modern_button(
             self.grp_transfer,
@@ -464,13 +574,10 @@ class IDMGUIApp:
             kind="toolbar",
             padx=9,
             pady=4,
-            radius=6,
+            radius=7,
             tooltip="Jeda Unduhan Terpilih",
         )
-        btn_pause.pack(side=tk.LEFT, padx=1)
-
-        sep2 = tk.Frame(self.grp_transfer, width=1, bg=THEME["border"])
-        sep2.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+        btn_pause.pack(side=tk.LEFT, padx=2)
 
         btn_delete = create_modern_button(
             self.grp_transfer,
@@ -479,15 +586,14 @@ class IDMGUIApp:
             kind="danger",
             padx=9,
             pady=4,
-            radius=6,
+            radius=7,
             tooltip="Hapus Unduhan Terpilih (Del)",
         )
-        btn_delete.pack(side=tk.LEFT, padx=1)
+        btn_delete.pack(side=tk.LEFT, padx=2)
 
         # 3. Segmented Control Group 2: Secondary Tools (■ Hentikan | ✓ Bersihkan | ↗ Buka Folder | ⋯ Pengaturan)
-        self.secondary_group = tk.Frame(self.toolbar_frame, bg=THEME["surface_alt"], padx=2, pady=2)
-        self.secondary_group.configure(highlightbackground=THEME["border"], highlightthickness=1, bd=0)
-        self.secondary_group.pack(side=tk.LEFT, padx=(0, 8))
+        self.secondary_group = tk.Frame(self.toolbar_frame, bg=THEME["surface"], padx=0, pady=0)
+        self.secondary_group.pack(side=tk.LEFT, padx=(0, 6))
 
         btn_stop = create_modern_button(
             self.secondary_group,
@@ -496,13 +602,10 @@ class IDMGUIApp:
             kind="toolbar",
             padx=8,
             pady=4,
-            radius=6,
+            radius=7,
             tooltip="Hentikan Semua Unduhan",
         )
-        btn_stop.pack(side=tk.LEFT, padx=1)
-
-        sep3 = tk.Frame(self.secondary_group, width=1, bg=THEME["border"])
-        sep3.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+        btn_stop.pack(side=tk.LEFT, padx=2)
 
         btn_clean = create_modern_button(
             self.secondary_group,
@@ -511,13 +614,10 @@ class IDMGUIApp:
             kind="toolbar",
             padx=8,
             pady=4,
-            radius=6,
+            radius=7,
             tooltip="Bersihkan Seluruh Unduhan Selesai",
         )
-        btn_clean.pack(side=tk.LEFT, padx=1)
-
-        sep4 = tk.Frame(self.secondary_group, width=1, bg=THEME["border"])
-        sep4.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+        btn_clean.pack(side=tk.LEFT, padx=2)
 
         btn_folder = create_modern_button(
             self.secondary_group,
@@ -526,13 +626,10 @@ class IDMGUIApp:
             kind="toolbar",
             padx=8,
             pady=4,
-            radius=6,
+            radius=7,
             tooltip="Buka Folder Berkas Terpilih",
         )
-        btn_folder.pack(side=tk.LEFT, padx=1)
-
-        sep5 = tk.Frame(self.secondary_group, width=1, bg=THEME["border"])
-        sep5.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+        btn_folder.pack(side=tk.LEFT, padx=2)
 
         btn_opts = create_modern_button(
             self.secondary_group,
@@ -541,10 +638,10 @@ class IDMGUIApp:
             kind="toolbar",
             padx=8,
             pady=4,
-            radius=6,
+            radius=7,
             tooltip="Opsi Konfigurasi IDM Clone",
         )
-        btn_opts.pack(side=tk.LEFT, padx=1)
+        btn_opts.pack(side=tk.LEFT, padx=2)
 
         self.toolbar_buttons = [
             (self.btn_add, "Tambah URL Baru (Ctrl+N)"),
@@ -582,17 +679,19 @@ class IDMGUIApp:
             kind="toolbar",
             padx=10,
             pady=4,
-            radius=6,
+            radius=7,
             tooltip="Aksi Tambahan...",
         )
 
-        # Search pill bar on the right side of toolbar with SF Pro font
-        self.search_canvas = tk.Canvas(self.toolbar_frame, width=195, height=30, bg=THEME["surface"], highlightthickness=0)
+        # Search pill bar on the right side of toolbar with SF Pro font and 3D elevation
+        self.search_canvas = tk.Canvas(self.toolbar_frame, width=200, height=32, bg=THEME["surface"], highlightthickness=0)
         self.search_canvas.pack(side=tk.RIGHT, padx=4)
-        draw_round_rectangle(self.search_canvas, 1, 1, 194, 29, r=8, fill=THEME["input_bg"], outline=THEME["border"])
+        draw_round_rectangle(self.search_canvas, 2, 4, 198, 31, r=9, fill="#04070e", outline="")
+        draw_round_rectangle(self.search_canvas, 1, 1, 199, 29, r=9, fill=THEME["input_bg"], outline="#26354c")
+        self.search_canvas.create_line(12, 2, 188, 2, fill="#425777", width=1.5)
 
         lbl_search = tk.Label(self.search_canvas, text="⌕", font=(FONT_DISPLAY, 11, "bold"), bg=THEME["input_bg"], fg=THEME["text_secondary"])
-        self.search_canvas.create_window(16, 15, window=lbl_search)
+        self.search_canvas.create_window(16, 16, window=lbl_search)
 
         try:
             self.search_var = tk.StringVar(master=self.root)
@@ -611,7 +710,7 @@ class IDMGUIApp:
             entry_kwargs["textvariable"] = self.search_var
         self.search_entry = tk.Entry(self.search_canvas, **entry_kwargs)
         self.search_entry.insert(0, "Cari unduhan...")
-        self.search_canvas.create_window(108, 15, window=self.search_entry, width=148)
+        self.search_canvas.create_window(110, 16, window=self.search_entry, width=150)
 
         def _on_search_focus_in(e):
             if self.search_entry.get() == "Cari unduhan...":
@@ -675,36 +774,9 @@ class IDMGUIApp:
         self.sidebar_frame = tk.Frame(self.paned, width=205, bg=THEME["surface_alt"])
         self.sidebar_visible = True
 
-        # Quick Storage Card anchored to bottom of sidebar
-        storage_card = tk.Frame(self.sidebar_frame, bg=THEME["surface"], padx=10, pady=8, relief=tk.SOLID, bd=1)
+        # Quick Storage Card anchored to bottom of sidebar (3D Tactile rounded card)
+        storage_card = TactileStorageCard(self.sidebar_frame, on_open_folder=self.open_selected_folder, r=10)
         storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
-        tk.Label(
-            storage_card,
-            text="PENYIMPANAN",
-            bg=THEME["surface"],
-            fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 7, "bold"),
-            anchor=tk.W,
-        ).pack(anchor=tk.W)
-        tk.Label(
-            storage_card,
-            text=os.path.basename(os.path.expanduser("~")) + "/Downloads",
-            bg=THEME["surface"],
-            fg=THEME["text_secondary"],
-            font=(FONT_FAMILY, 8),
-            anchor=tk.W,
-        ).pack(anchor=tk.W, pady=(2, 6))
-        btn_open_store = create_modern_button(
-            storage_card,
-            text="↗ Buka Folder",
-            command=self.open_selected_folder,
-            kind="secondary",
-            padx=6,
-            pady=2,
-            radius=6,
-            tooltip="Buka Folder Unduhan Utama",
-        )
-        btn_open_store.pack(fill=tk.X)
 
         # Section 1: PUSTAKA
         tk.Label(
@@ -776,72 +848,24 @@ class IDMGUIApp:
         # Right Container: Dashboard Live Stats + Downloads Table
         right_container = tk.Frame(self.paned, bg=THEME["tree_bg"])
 
-        # 1. Live Telemetry Metric Strip
+        # 1. Live Telemetry Metric Strip (3D Elevated Rounded Cards)
         self.stat_bar = tk.Frame(right_container, bg=THEME["surface_alt"], padx=8, pady=8)
         self.stat_bar.pack(side=tk.TOP, fill=tk.X)
 
-        # Card 1: Live Speed
-        card_speed = tk.Frame(self.stat_bar, bg=THEME["surface"], padx=12, pady=6, relief=tk.SOLID, bd=1)
+        # Card 1: Live Speed (3D Tactile Card)
+        card_speed = TactileCard(self.stat_bar, "⚡ KECEPATAN AKTIF", "0 B/detik", val_fg=THEME["accent_primary"], r=12)
         card_speed.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
-        tk.Label(
-            card_speed,
-            text="⚡ KECEPATAN AKTIF",
-            bg=THEME["surface"],
-            fg=THEME["text_secondary"],
-            font=(FONT_DISPLAY, 8, "bold"),
-            anchor=tk.W,
-        ).pack(anchor=tk.W)
-        self.lbl_stat_speed = tk.Label(
-            card_speed,
-            text="0 B/detik",
-            bg=THEME["surface"],
-            fg=THEME["accent_primary"],
-            font=(FONT_DISPLAY, 12, "bold"),
-            anchor=tk.W,
-        )
-        self.lbl_stat_speed.pack(anchor=tk.W, pady=(2, 0))
+        self.lbl_stat_speed = card_speed.lbl_val
 
-        # Card 2: Active / Queued Tasks
-        card_active = tk.Frame(self.stat_bar, bg=THEME["surface"], padx=12, pady=6, relief=tk.SOLID, bd=1)
+        # Card 2: Active / Queued Tasks (3D Tactile Card)
+        card_active = TactileCard(self.stat_bar, "⏳ TUGAS BERJALAN", "0 Berjalan • 0 Mengantri", val_fg=THEME["text_primary"], r=12)
         card_active.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
-        tk.Label(
-            card_active,
-            text="⏳ TUGAS BERJALAN",
-            bg=THEME["surface"],
-            fg=THEME["text_secondary"],
-            font=(FONT_DISPLAY, 8, "bold"),
-            anchor=tk.W,
-        ).pack(anchor=tk.W)
-        self.lbl_stat_active = tk.Label(
-            card_active,
-            text="0 Berjalan • 0 Mengantri",
-            bg=THEME["surface"],
-            fg=THEME["text_primary"],
-            font=(FONT_DISPLAY, 12, "bold"),
-            anchor=tk.W,
-        )
-        self.lbl_stat_active.pack(anchor=tk.W, pady=(2, 0))
+        self.lbl_stat_active = card_active.lbl_val
 
-        # Card 3: Library Stats
-        card_total = tk.Frame(self.stat_bar, bg=THEME["surface"], padx=12, pady=6, relief=tk.SOLID, bd=1)
+        # Card 3: Library Stats (3D Tactile Card)
+        card_total = TactileCard(self.stat_bar, "💾 TOTAL BERKAS", "0 Berkas (0 B)", val_fg=THEME["text_primary"], r=12)
         card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
-        tk.Label(
-            card_total,
-            text="💾 TOTAL BERKAS",
-            bg=THEME["surface"],
-            fg=THEME["text_secondary"],
-            font=(FONT_DISPLAY, 8, "bold"),
-            anchor=tk.W,
-        ).pack(anchor=tk.W)
-        self.lbl_stat_total = tk.Label(
-            card_total,
-            text="0 Berkas (0 B)",
-            bg=THEME["surface"],
-            fg=THEME["text_primary"],
-            font=(FONT_DISPLAY, 12, "bold"),
-            anchor=tk.W,
-        )
-        self.lbl_stat_total.pack(anchor=tk.W, pady=(2, 0))
+        self.lbl_stat_total = card_total.lbl_val
 
         # 2. Downloads Table Frame
         table_frame = tk.Frame(right_container, bg=THEME["tree_bg"])
