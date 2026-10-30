@@ -178,6 +178,44 @@ class TactileStorageCard(tk.Canvas):
         self.itemconfigure(self.win_b, width=max(40, w - 28))
 
 
+class TactileTableContainer(tk.Canvas):
+    """3D tactile rounded container for the downloads table with drop shadow and specular highlight."""
+
+    def __init__(self, parent: tk.Widget, r: int = 14):
+        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["bg_dark"]
+        super().__init__(parent, bg=bg_col, highlightthickness=0)
+        self.r = r
+
+        # Inner frame to hold treeview and scrollbar
+        self.inner_frame = tk.Frame(self, bg=THEME["tree_bg"])
+        self.win_id = self.create_window(0, 0, window=self.inner_frame, anchor=tk.NW)
+
+        self.bind("<Configure>", self._redraw)
+
+    def _redraw(self, event=None):
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 50 or h < 50:
+            return
+        self.delete("card_bg")
+        r = self.r
+
+        # 1. Ambient drop shadow
+        draw_round_rectangle(self, 3, 5, w - 3, h, r=r + 2, fill="#04070e", outline="", tags="card_bg")
+        # 2. Outer dark bottom rim
+        draw_round_rectangle(self, 2, 2, w - 2, h - 2, r=r, fill="#070b13", outline="", tags="card_bg")
+        # 3. Main body
+        draw_round_rectangle(self, 3, 3, w - 3, h - 3, r=r - 1, fill=THEME["tree_bg"], outline="#24334a", width=1, tags="card_bg")
+        # 4. Specular overhead rim highlight line
+        self.create_line(r + 4, 3, w - r - 4, 3, fill="#4e6894", width=1.5, tags="card_bg")
+
+        self.tag_lower("card_bg")
+
+        pad = 4
+        self.coords(self.win_id, pad, pad)
+        self.itemconfigure(self.win_id, width=max(10, w - (pad * 2)), height=max(10, h - (pad * 2)))
+
+
 class SidebarNavItem(tk.Frame):
     """Modern macOS/Apple-inspired sidebar navigation pill item with live count badge."""
 
@@ -886,14 +924,10 @@ class IDMGUIApp:
         card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
         self.lbl_stat_total = card_total.lbl_val
 
-        # 2. Downloads Table Frame with 3D tactile card encapsulation
-        table_container = tk.Frame(right_container, bg=THEME["surface_alt"], padx=8, pady=0)
-        table_container.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, pady=(0, 8))
-
-        table_card = tk.Frame(table_container, bg=THEME["tree_bg"], padx=1, pady=1)
-        table_card.configure(highlightbackground=THEME["border"], highlightthickness=1, bd=0)
-        table_card.pack(fill=tk.BOTH, expand=True)
-        table_frame = table_card
+        # 2. Downloads Table Frame inside 3D tactile rounded card container
+        self.table_container = TactileTableContainer(right_container, r=14)
+        self.table_container.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        table_frame = self.table_container.inner_frame
 
         cols = ("name", "size", "status", "progress", "speed", "url")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", selectmode="extended")
@@ -905,12 +939,12 @@ class IDMGUIApp:
         self.tree.heading("speed", text="Kecepatan")
         self.tree.heading("url", text="URL Unduhan")
 
-        self.tree.column("name", width=250, minwidth=150)
+        self.tree.column("name", width=240, minwidth=140)
         self.tree.column("size", width=85, anchor=tk.E, minwidth=70)
         self.tree.column("status", width=110, anchor=tk.CENTER, minwidth=90)
         self.tree.column("progress", width=125, anchor=tk.CENTER, minwidth=95)
-        self.tree.column("speed", width=95, anchor=tk.E, minwidth=80)
-        self.tree.column("url", width=260, stretch=True)
+        self.tree.column("speed", width=125, anchor=tk.E, minwidth=110)
+        self.tree.column("url", width=220, stretch=True)
 
         # Color-coded tags for modern status styling
         self.tree.tag_configure("downloading", foreground="#60a5fa")
