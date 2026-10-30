@@ -418,38 +418,145 @@ class IDMGUIApp:
         self.root.bind("<Delete>", lambda e: self.delete_selected())
 
     def _build_toolbar(self):
-        self.toolbar_frame = tk.Frame(self.root, bg=THEME["surface"], pady=6, padx=8, relief=tk.FLAT)
+        self.toolbar_frame = tk.Frame(self.root, bg=THEME["surface"], pady=7, padx=12, relief=tk.FLAT)
         self.toolbar_frame.pack(side=tk.TOP, fill=tk.X)
 
-        # Primary specs (always visible)
-        primary_specs = [
-            ("+ Tambah", self.open_add_url_dialog, "primary", "Tambah URL Baru (Ctrl+N)"),
-            ("▷ Lanjutkan", self.resume_selected, "toolbar", "Lanjutkan Unduhan Terpilih"),
-            ("❚❚ Jeda", self.pause_selected, "toolbar", "Jeda Unduhan Terpilih"),
-            ("✕ Hapus", self.delete_selected, "danger", "Hapus Unduhan Terpilih (Del)"),
+        self.toolbar_border = tk.Frame(self.root, bg=THEME["border"], height=1)
+        self.toolbar_border.pack(side=tk.TOP, fill=tk.X)
+
+        # 1. Hero Primary Action Button: + Tambah URL
+        self.btn_add = create_modern_button(
+            self.toolbar_frame,
+            text="+ Tambah URL",
+            command=self.open_add_url_dialog,
+            kind="primary",
+            padx=12,
+            pady=5,
+            radius=8,
+            tooltip="Tambah URL Baru (Ctrl+N)",
+        )
+        self.btn_add.pack(side=tk.LEFT, padx=(0, 10))
+
+        # 2. Segmented Control Group 1: Transfer Controls (▷ Lanjutkan | ❚❚ Jeda | ✕ Hapus)
+        self.grp_transfer = tk.Frame(self.toolbar_frame, bg=THEME["surface_alt"], padx=2, pady=2)
+        self.grp_transfer.configure(highlightbackground=THEME["border"], highlightthickness=1, bd=0)
+        self.grp_transfer.pack(side=tk.LEFT, padx=(0, 10))
+
+        btn_resume = create_modern_button(
+            self.grp_transfer,
+            text="▷ Lanjutkan",
+            command=self.resume_selected,
+            kind="toolbar",
+            padx=9,
+            pady=4,
+            radius=6,
+            tooltip="Lanjutkan Unduhan Terpilih",
+        )
+        btn_resume.pack(side=tk.LEFT, padx=1)
+
+        sep1 = tk.Frame(self.grp_transfer, width=1, bg=THEME["border"])
+        sep1.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+
+        btn_pause = create_modern_button(
+            self.grp_transfer,
+            text="❚❚ Jeda",
+            command=self.pause_selected,
+            kind="toolbar",
+            padx=9,
+            pady=4,
+            radius=6,
+            tooltip="Jeda Unduhan Terpilih",
+        )
+        btn_pause.pack(side=tk.LEFT, padx=1)
+
+        sep2 = tk.Frame(self.grp_transfer, width=1, bg=THEME["border"])
+        sep2.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+
+        btn_delete = create_modern_button(
+            self.grp_transfer,
+            text="✕ Hapus",
+            command=self.delete_selected,
+            kind="danger",
+            padx=9,
+            pady=4,
+            radius=6,
+            tooltip="Hapus Unduhan Terpilih (Del)",
+        )
+        btn_delete.pack(side=tk.LEFT, padx=1)
+
+        # 3. Segmented Control Group 2: Secondary Tools (■ Hentikan | ✓ Bersihkan | ↗ Buka Folder | ⋯ Pengaturan)
+        self.secondary_group = tk.Frame(self.toolbar_frame, bg=THEME["surface_alt"], padx=2, pady=2)
+        self.secondary_group.configure(highlightbackground=THEME["border"], highlightthickness=1, bd=0)
+        self.secondary_group.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_stop = create_modern_button(
+            self.secondary_group,
+            text="■ Hentikan",
+            command=self.stop_all,
+            kind="toolbar",
+            padx=8,
+            pady=4,
+            radius=6,
+            tooltip="Hentikan Semua Unduhan",
+        )
+        btn_stop.pack(side=tk.LEFT, padx=1)
+
+        sep3 = tk.Frame(self.secondary_group, width=1, bg=THEME["border"])
+        sep3.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+
+        btn_clean = create_modern_button(
+            self.secondary_group,
+            text="✓ Bersihkan",
+            command=self.delete_completed,
+            kind="toolbar",
+            padx=8,
+            pady=4,
+            radius=6,
+            tooltip="Bersihkan Seluruh Unduhan Selesai",
+        )
+        btn_clean.pack(side=tk.LEFT, padx=1)
+
+        sep4 = tk.Frame(self.secondary_group, width=1, bg=THEME["border"])
+        sep4.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+
+        btn_folder = create_modern_button(
+            self.secondary_group,
+            text="↗ Buka Folder",
+            command=self.open_selected_folder,
+            kind="toolbar",
+            padx=8,
+            pady=4,
+            radius=6,
+            tooltip="Buka Folder Berkas Terpilih",
+        )
+        btn_folder.pack(side=tk.LEFT, padx=1)
+
+        sep5 = tk.Frame(self.secondary_group, width=1, bg=THEME["border"])
+        sep5.pack(side=tk.LEFT, fill=tk.Y, pady=3)
+
+        btn_opts = create_modern_button(
+            self.secondary_group,
+            text="⋯ Pengaturan",
+            command=self.open_options_dialog,
+            kind="toolbar",
+            padx=8,
+            pady=4,
+            radius=6,
+            tooltip="Opsi Konfigurasi IDM Clone",
+        )
+        btn_opts.pack(side=tk.LEFT, padx=1)
+
+        self.toolbar_buttons = [
+            (self.btn_add, "Tambah URL Baru (Ctrl+N)"),
+            (btn_resume, "Lanjutkan Unduhan Terpilih"),
+            (btn_pause, "Jeda Unduhan Terpilih"),
+            (btn_delete, "Hapus Unduhan Terpilih (Del)"),
+            (btn_stop, "Hentikan Semua Unduhan"),
+            (btn_clean, "Bersihkan Seluruh Unduhan Selesai"),
+            (btn_folder, "Buka Folder Berkas Terpilih"),
+            (btn_opts, "Opsi Konfigurasi IDM Clone"),
         ]
-
-        # Secondary specs (moved to overflow when width < 760px)
-        secondary_specs = [
-            ("■ Hentikan", self.stop_all, "toolbar", "Hentikan Semua Unduhan"),
-            ("✓ Bersihkan", self.delete_completed, "toolbar", "Bersihkan Seluruh Unduhan Selesai"),
-            ("↗ Buka Folder", self.open_selected_folder, "toolbar", "Buka Folder Berkas Terpilih"),
-            ("⋯ Pengaturan", self.open_options_dialog, "toolbar", "Opsi Konfigurasi IDM Clone"),
-        ]
-
-        self.toolbar_buttons = []
-        self.secondary_buttons = []
-
-        for text, cmd, kind, tooltip_text in primary_specs:
-            btn = create_modern_button(self.toolbar_frame, text=text, command=cmd, kind=kind, padx=10, pady=4, tooltip=tooltip_text)
-            btn.pack(side=tk.LEFT, padx=3)
-            self.toolbar_buttons.append((btn, tooltip_text))
-
-        for text, cmd, kind, tooltip_text in secondary_specs:
-            btn = create_modern_button(self.toolbar_frame, text=text, command=cmd, kind=kind, padx=10, pady=4, tooltip=tooltip_text)
-            btn.pack(side=tk.LEFT, padx=3)
-            self.toolbar_buttons.append((btn, tooltip_text))
-            self.secondary_buttons.append(btn)
+        self.secondary_buttons = [btn_stop, btn_clean, btn_folder, btn_opts]
 
         # Overflow menu & button for responsive compact width (<760px)
         self.overflow_menu = tk.Menu(
@@ -475,16 +582,17 @@ class IDMGUIApp:
             kind="toolbar",
             padx=10,
             pady=4,
+            radius=6,
             tooltip="Aksi Tambahan...",
         )
 
-        # Search pill bar on the right side of toolbar for visual balance & quick filtering
-        self.search_canvas = tk.Canvas(self.toolbar_frame, width=190, height=28, bg=THEME["surface"], highlightthickness=0)
-        self.search_canvas.pack(side=tk.RIGHT, padx=6)
-        draw_round_rectangle(self.search_canvas, 1, 1, 189, 27, r=7, fill=THEME["input_bg"], outline=THEME["border"])
+        # Search pill bar on the right side of toolbar with SF Pro font
+        self.search_canvas = tk.Canvas(self.toolbar_frame, width=195, height=30, bg=THEME["surface"], highlightthickness=0)
+        self.search_canvas.pack(side=tk.RIGHT, padx=4)
+        draw_round_rectangle(self.search_canvas, 1, 1, 194, 29, r=8, fill=THEME["input_bg"], outline=THEME["border"])
 
-        lbl_search = tk.Label(self.search_canvas, text="⌕", font=("Segoe UI", 10, "bold"), bg=THEME["input_bg"], fg=THEME["text_secondary"])
-        self.search_canvas.create_window(14, 14, window=lbl_search)
+        lbl_search = tk.Label(self.search_canvas, text="⌕", font=(FONT_DISPLAY, 11, "bold"), bg=THEME["input_bg"], fg=THEME["text_secondary"])
+        self.search_canvas.create_window(16, 15, window=lbl_search)
 
         try:
             self.search_var = tk.StringVar(master=self.root)
@@ -496,14 +604,14 @@ class IDMGUIApp:
             "fg": THEME["text_secondary"],
             "insertbackground": THEME["text_primary"],
             "relief": tk.FLAT,
-            "font": ("Segoe UI", 9),
+            "font": FONT_BODY,
             "bd": 0,
         }
         if self.search_var:
             entry_kwargs["textvariable"] = self.search_var
         self.search_entry = tk.Entry(self.search_canvas, **entry_kwargs)
         self.search_entry.insert(0, "Cari unduhan...")
-        self.search_canvas.create_window(104, 14, window=self.search_entry, width=155)
+        self.search_canvas.create_window(108, 15, window=self.search_entry, width=148)
 
         def _on_search_focus_in(e):
             if self.search_entry.get() == "Cari unduhan...":
@@ -529,15 +637,25 @@ class IDMGUIApp:
     def _update_toolbar_overflow(self, width: Optional[int] = None):
         w = width if width is not None else self.root.winfo_width()
         if w < 760:
+            if hasattr(self, "secondary_group"):
+                self.secondary_group.pack_forget()
             for btn in self.secondary_buttons:
-                btn.pack_forget()
+                try:
+                    btn.pack_forget()
+                except Exception:
+                    pass
             if self.btn_overflow:
                 self.btn_overflow.pack(side=tk.LEFT, padx=3)
         else:
             if self.btn_overflow:
                 self.btn_overflow.pack_forget()
+            if hasattr(self, "secondary_group"):
+                self.secondary_group.pack(side=tk.LEFT, padx=(0, 8))
             for btn in self.secondary_buttons:
-                btn.pack(side=tk.LEFT, padx=3)
+                try:
+                    btn.pack(side=tk.LEFT, padx=1)
+                except Exception:
+                    pass
 
     def _show_overflow_menu(self):
         if not self.btn_overflow:
