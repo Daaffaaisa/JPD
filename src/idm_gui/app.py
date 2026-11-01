@@ -25,6 +25,7 @@ from idm_gui.theme import (
     create_modern_button,
     draw_round_rectangle,
     apply_window_icon,
+    get_app_png_path,
     FONT_DISPLAY,
     FONT_FAMILY,
     FONT_TITLE,
@@ -343,6 +344,8 @@ class IDMGUIApp:
         self.empty_state_frame: Optional[Any] = None
         self.active_category_filter = "all"
         self.sidebar_items: dict[str, Any] = {}
+        self.settings = settings
+        self.tray_icon = None
 
         # Start loopback server for Browser Extension communication
         self.server = LocalDownloadServer(
@@ -363,6 +366,12 @@ class IDMGUIApp:
         self._build_statusbar()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Initialize System Tray Icon
+        self._init_tray()
+
+        if self.settings.get_start_minimized():
+            self.root.withdraw()
 
         # Start periodic UI update timer
         self.root.after(300, self._tick_ui)
@@ -513,10 +522,89 @@ class IDMGUIApp:
 
         self.root.after(50, handle_incoming)
 
-    def _on_close(self):
+    def _init_tray(self):
+        """Initializes system tray icon in a background daemon thread."""
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        try:
+            import pystray
+            from PIL import Image
+
+            png_p = get_app_png_path() or os.path.abspath("icon.png")
+            if os.path.exists(png_p):
+                tray_img = Image.open(png_p).resize((32, 32))
+            else:
+                tray_img = Image.new("RGBA", (32, 32), color="#2563eb")
+
+            tray_menu = pystray.Menu(
+                pystray.MenuItem("Buka JustPressDownload (JPD)", self.restore_from_tray, default=True),
+                pystray.MenuItem("Tambah URL Baru...", lambda icon, item: self.root.after(0, self.open_add_url_dialog)),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Lanjutkan Semua Unduhan", lambda icon, item: self.root.after(0, self.resume_all)),
+                pystray.MenuItem("Jeda Semua Unduhan", lambda icon, item: self.root.after(0, self.pause_all)),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Pengaturan (Opsi)...", lambda icon, item: self.root.after(0, self.open_options_dialog)),
+                pystray.MenuItem("Keluar (Exit)", lambda icon, item: self.root.after(0, self.quit_app)),
+            )
+
+            self.tray_icon = pystray.Icon(
+                "JustPressDownload",
+                tray_img,
+                "JustPressDownload (JPD)",
+                tray_menu,
+            )
+            th = threading.Thread(target=self.tray_icon.run, daemon=True)
+            th.start()
+        except Exception:
+            self.tray_icon = None
+
+    def restore_from_tray(self, icon=None, item=None):
+        """Restores and brings main window to front."""
+        def _restore():
+            try:
+                self.root.deiconify()
+                self.root.lift()
+                self.root.focus_force()
+                self.root.state("normal")
+            except Exception:
+                pass
+        self.root.after(0, _restore)
+
+    def minimize_to_tray(self):
+        """Minimizes main window to system tray."""
+        try:
+            self.root.withdraw()
+            if hasattr(self, "tray_icon") and self.tray_icon and hasattr(self.tray_icon, "notify"):
+                try:
+                    self.tray_icon.notify("Aplikasi diminimalkan ke System Tray", "JustPressDownload (JPD)")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def quit_app(self):
+        """Full exit: stops background services, tray icon, and destroys root window."""
+        if hasattr(self, "tray_icon") and self.tray_icon:
+            try:
+                self.tray_icon.stop()
+            except Exception:
+                pass
+            self.tray_icon = None
         if hasattr(self, "server") and self.server:
-            self.server.stop()
-        self.root.destroy()
+            try:
+                self.server.stop()
+            except Exception:
+                pass
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def _on_close(self):
+        if self.settings.get_close_to_tray():
+            self.minimize_to_tray()
+        else:
+            self.quit_app()
 
     def _setup_styles(self):
         setup_global_ttk_theme()
@@ -531,7 +619,7 @@ class IDMGUIApp:
         tasks_menu.add_command(label="Ekspor ke berkas teks...", command=self.export_to_text_file)
         tasks_menu.add_command(label="Impor dari berkas teks...", command=self.import_from_text_file)
         tasks_menu.add_separator()
-        tasks_menu.add_command(label="Keluar (Exit)", accelerator="Alt+F4", command=self.root.quit)
+        tasks_menu.add_command(label="Keluar (Exit)", accelerator="Alt+F4", command=self.quit_app)
         self.menubar.add_cascade(label="Tugas (Tasks)", menu=tasks_menu)
 
         # 2. Menu Berkas (File)
@@ -1491,6 +1579,22 @@ class IDMGUIApp:
                 except Exception:
                     pass
             fname = os.path.basename(task.output_path)
+
+            # Play sound alert if enabled in Options
+            if self.settings.get_play_sound_on_complete():
+                try:
+                    import winsound
+                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                except Exception:
+                    pass
+
+            # Notify system tray if running
+            if hasattr(self, "tray_icon") and self.tray_icon and hasattr(self.tray_icon, "notify"):
+                try:
+                    self.tray_icon.notify(f"Unduhan Selesai: {fname}", "JustPressDownload (JPD)")
+                except Exception:
+                    pass
+
             DownloadCompleteDialog(
                 parent=self.root,
                 title=fname,
@@ -1694,7 +1798,8 @@ class IDMGUIApp:
         tids = self._get_selected_task_ids()
         if not tids:
             return
-        if confirm:
+        should_confirm = confirm and self.settings.get_confirm_on_delete()
+        if should_confirm:
             count = len(tids)
             msg = f"Apakah Anda yakin ingin menghapus {count} unduhan yang dipilih?" if count > 1 else "Apakah Anda yakin ingin menghapus unduhan yang dipilih?"
             if not messagebox.askyesno("Konfirmasi Hapus Unduhan", msg, parent=self.root):

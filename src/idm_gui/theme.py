@@ -117,9 +117,10 @@ def apply_window_icon(window: Any):
         try:
             from PIL import Image, ImageTk
             img = Image.open(png)
-            photo = ImageTk.PhotoImage(img.resize((32, 32), Image.Resampling.LANCZOS))
+            master_w = window if isinstance(window, (tk.Tk, tk.Toplevel)) else None
+            photo = ImageTk.PhotoImage(img.resize((32, 32), Image.Resampling.LANCZOS), master=master_w)
             window.iconphoto(True, photo)
-            window._app_icon_photo = photo
+            setattr(window, "_app_icon_photo", photo)
         except Exception:
             pass
 

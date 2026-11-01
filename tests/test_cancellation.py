@@ -57,7 +57,7 @@ def test_app_pause_and_cancel_signals_stop_event():
     assert ev.is_set() is True
     assert app.queue.get_task(task_id) is None
 
-    app._on_close()
+    app.quit_app()
 
 
 def test_cancel_from_pre_download_dialog_removes_task_completely():
@@ -90,5 +90,5 @@ def test_cancel_from_pre_download_dialog_removes_task_completely():
     assert app.queue.get_task(task_id) is None
     assert app.tree.exists(task_id) is False
 
-    app._on_close()
+    app.quit_app()
 

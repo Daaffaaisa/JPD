@@ -1094,9 +1094,9 @@ class DownloadCompleteDialog:
 class OptionsDialog:
     """Dialog Opsi / Pengaturan IDM Clone multi-tab (Umum, Jenis Berkas, Simpan ke, Koneksi) ala IDM asli."""
 
-    def __init__(self, parent: tk.Tk, settings_manager=None):
+    def __init__(self, parent: tk.Tk, settings_manager=None, settings_mgr=None):
         self.parent = parent
-        self.sm = settings_manager or settings
+        self.sm = settings_mgr or settings_manager or settings
         self.categories = ["Video", "Musik", "Gambar", "Program", "Dokumen", "Berkas Terkompresi", "Umum"]
         self.conn_options = ["1", "2", "4", "8", "16", "24", "32"]
         self._build_ui()
@@ -1191,11 +1191,76 @@ class OptionsDialog:
                 font=("Segoe UI", 9),
             ).pack(anchor=tk.W, pady=2)
 
-        self.cb_startup_var = tk.BooleanVar(value=self.sm.data.get("autorun_startup", True))
+        self.cb_startup_var = tk.BooleanVar(value=self.sm.get_autorun_startup())
         tk.Checkbutton(
             tab_general,
             text="Jalankan JustPressDownload (JPD) saat Windows dinyalakan",
             variable=self.cb_startup_var,
+            bg=BG,
+            fg=FG,
+            selectcolor=ENTRY_BG,
+            activebackground=BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=2)
+
+        self.cb_close_tray_var = tk.BooleanVar(value=self.sm.get_close_to_tray())
+        tk.Checkbutton(
+            tab_general,
+            text="Tutup jendela ke System Tray (Close with minimize)",
+            variable=self.cb_close_tray_var,
+            bg=BG,
+            fg=FG,
+            selectcolor=ENTRY_BG,
+            activebackground=BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=2)
+
+        self.cb_start_minimized_var = tk.BooleanVar(value=self.sm.get_start_minimized())
+        tk.Checkbutton(
+            tab_general,
+            text="Mulai aplikasi dalam keadaan terminimalisasi di Tray",
+            variable=self.cb_start_minimized_var,
+            bg=BG,
+            fg=FG,
+            selectcolor=ENTRY_BG,
+            activebackground=BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=2)
+
+        self.cb_sound_var = tk.BooleanVar(value=self.sm.get_play_sound_on_complete())
+        tk.Checkbutton(
+            tab_general,
+            text="Mainkan suara notifikasi saat unduhan selesai",
+            variable=self.cb_sound_var,
+            bg=BG,
+            fg=FG,
+            selectcolor=ENTRY_BG,
+            activebackground=BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=2)
+
+        self.cb_confirm_del_var = tk.BooleanVar(value=self.sm.get_confirm_on_delete())
+        tk.Checkbutton(
+            tab_general,
+            text="Tampilkan konfirmasi sebelum menghapus tugas unduhan",
+            variable=self.cb_confirm_del_var,
+            bg=BG,
+            fg=FG,
+            selectcolor=ENTRY_BG,
+            activebackground=BG,
+            activeforeground=FG,
+            font=("Segoe UI", 9),
+        ).pack(anchor=tk.W, pady=2)
+
+        self.cb_autoclose_progress_var = tk.BooleanVar(value=self.sm.get_autoclose_progress())
+        tk.Checkbutton(
+            tab_general,
+            text="Tutup otomatis jendela progres saat unduhan 100% selesai",
+            variable=self.cb_autoclose_progress_var,
             bg=BG,
             fg=FG,
             selectcolor=ENTRY_BG,
@@ -1396,7 +1461,7 @@ class OptionsDialog:
         except Exception:
             pass
 
-        # Save browser integration, autorun, file types and temp dir
+        # Save browser integration, autorun, tray and system settings
         try:
             self.sm.data["browser_integration"] = {
                 "chrome": bool(self.cb_chrome_var.get()),
@@ -1404,7 +1469,12 @@ class OptionsDialog:
                 "firefox": bool(self.cb_firefox_var.get()),
                 "opera": bool(self.cb_opera_var.get()),
             }
-            self.sm.data["autorun_startup"] = bool(self.cb_startup_var.get())
+            self.sm.set_autorun_startup(bool(self.cb_startup_var.get()))
+            self.sm.set_close_to_tray(bool(self.cb_close_tray_var.get()))
+            self.sm.set_start_minimized(bool(self.cb_start_minimized_var.get()))
+            self.sm.set_play_sound_on_complete(bool(self.cb_sound_var.get()))
+            self.sm.set_confirm_on_delete(bool(self.cb_confirm_del_var.get()))
+            self.sm.set_autoclose_progress(bool(self.cb_autoclose_progress_var.get()))
             self.sm.data["monitor_clipboard"] = bool(self.cb_clipboard_var.get())
             self.sm.data["file_types"] = self.exts_entry.get("1.0", tk.END).strip()
             self.sm.data["exceptions"] = self.exceptions_var.get().strip()
