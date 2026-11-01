@@ -4,6 +4,7 @@ High-precision dark utility theme inspired by Windows modern design and classic 
 """
 
 import os
+import sys
 from typing import Callable, Optional, Any
 import tkinter as tk
 from tkinter import ttk
@@ -59,12 +60,18 @@ FONT_CODE = ("Consolas", 9)
 
 
 def get_app_icon_path() -> Optional[str]:
-    """Finds icon.ico path in project directories."""
-    candidates = [
+    """Finds icon.ico path in project directories or bundled executable."""
+    candidates = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(os.path.join(meipass, "icon.ico"))
+    if getattr(sys, "frozen", False):
+        candidates.append(os.path.join(os.path.dirname(sys.executable), "icon.ico"))
+    candidates.extend([
         os.path.abspath("icon.ico"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "icon.ico"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico"),
-    ]
+    ])
     for p in candidates:
         if os.path.exists(p):
             return os.path.abspath(p)
@@ -72,12 +79,18 @@ def get_app_icon_path() -> Optional[str]:
 
 
 def get_app_png_path() -> Optional[str]:
-    """Finds icon.png path in project directories."""
-    candidates = [
+    """Finds icon.png path in project directories or bundled executable."""
+    candidates = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(os.path.join(meipass, "icon.png"))
+    if getattr(sys, "frozen", False):
+        candidates.append(os.path.join(os.path.dirname(sys.executable), "icon.png"))
+    candidates.extend([
         os.path.abspath("icon.png"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "icon.png"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png"),
-    ]
+    ])
     for p in candidates:
         if os.path.exists(p):
             return os.path.abspath(p)
