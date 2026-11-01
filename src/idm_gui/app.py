@@ -244,14 +244,21 @@ class SidebarNavItem(tk.Frame):
         self.content = tk.Frame(self, bg=THEME["surface_alt"], padx=8, pady=5)
         self.content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(2, 8), pady=1)
 
+        # Fixed-width 24px container for icon so all labels align with mathematical precision
+        self.icon_box = tk.Frame(self.content, bg=THEME["surface_alt"], width=24, height=20)
+        self.icon_box.pack_propagate(False)
+        self.icon_box.pack(side=tk.LEFT, padx=(2, 8))
+
+        clean_icon = icon.replace("\ufe0f", "")
         self.lbl_icon = tk.Label(
-            self.content,
-            text=icon,
+            self.icon_box,
+            text=clean_icon,
             bg=THEME["surface_alt"],
             fg=THEME["text_secondary"],
             font=(FONT_DISPLAY, 10),
+            anchor=tk.CENTER,
         )
-        self.lbl_icon.pack(side=tk.LEFT, padx=(2, 6))
+        self.lbl_icon.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
         self.lbl_text = tk.Label(
             self.content,
@@ -273,7 +280,7 @@ class SidebarNavItem(tk.Frame):
         )
         self.lbl_badge.pack(side=tk.RIGHT)
 
-        for w in (self, self.content, self.lbl_icon, self.lbl_text, self.lbl_badge):
+        for w in (self, self.content, self.icon_box, self.lbl_icon, self.lbl_text, self.lbl_badge):
             w.bind("<Button-1>", lambda e: self._handle_click())
             w.bind("<Double-Button-1>", lambda e: self._handle_double_click())
             w.bind("<Enter>", lambda e: self._on_enter())
@@ -297,6 +304,7 @@ class SidebarNavItem(tk.Frame):
         self.configure(bg=THEME["surface_alt"])
         self.indicator.configure(bg=ind_col)
         self.content.configure(bg=bg_col)
+        self.icon_box.configure(bg=bg_col)
         self.lbl_icon.configure(bg=bg_col, fg="#60a5fa" if active else THEME["text_secondary"])
         self.lbl_text.configure(bg=bg_col, fg=fg_col, font=(FONT_DISPLAY if active else FONT_FAMILY, 9, "bold" if active else "normal"))
         self.lbl_badge.configure(bg=THEME["input_bg"], fg=badge_fg)
@@ -309,12 +317,14 @@ class SidebarNavItem(tk.Frame):
         if not self.is_active:
             hover_bg = "#192231"
             self.content.configure(bg=hover_bg)
+            self.icon_box.configure(bg=hover_bg)
             self.lbl_icon.configure(bg=hover_bg)
             self.lbl_text.configure(bg=hover_bg)
 
     def _on_leave(self):
         if not self.is_active:
             self.content.configure(bg=THEME["surface_alt"])
+            self.icon_box.configure(bg=THEME["surface_alt"])
             self.lbl_icon.configure(bg=THEME["surface_alt"])
             self.lbl_text.configure(bg=THEME["surface_alt"])
 
@@ -965,10 +975,10 @@ class IDMGUIApp:
         cat_specs = [
             ("video", "🎬", "Video"),
             ("music", "🎵", "Musik"),
-            ("pictures", "🖼️", "Gambar"),
+            ("pictures", "🖼", "Gambar"),
             ("programs", "📦", "Program"),
             ("documents", "📄", "Dokumen"),
-            ("compressed", "🗜️", "Terkompresi"),
+            ("compressed", "🗜", "Terkompresi"),
         ]
         for key, icon, label in cat_specs:
             item = SidebarNavItem(
@@ -1027,12 +1037,12 @@ class IDMGUIApp:
         self.tree.heading("speed", text="Kecepatan")
         self.tree.heading("url", text="URL Unduhan")
 
-        self.tree.column("name", width=220, minwidth=130)
+        self.tree.column("name", width=210, minwidth=130)
         self.tree.column("size", width=75, anchor=tk.E, minwidth=65)
-        self.tree.column("status", width=95, anchor=tk.CENTER, minwidth=85)
-        self.tree.column("progress", width=110, anchor=tk.CENTER, minwidth=90)
+        self.tree.column("status", width=115, anchor=tk.CENTER, minwidth=100)
+        self.tree.column("progress", width=130, anchor=tk.CENTER, minwidth=110)
         self.tree.column("speed", width=105, anchor=tk.E, minwidth=90)
-        self.tree.column("url", width=260, stretch=True)
+        self.tree.column("url", width=235, stretch=True)
 
         # Color-coded tags for modern status styling
         self.tree.tag_configure("downloading", foreground="#60a5fa")
