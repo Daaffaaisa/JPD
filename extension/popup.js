@@ -1,4 +1,4 @@
-// Popup script for IDM Clone
+// Popup script for JustPressDownload (JPD)
 document.addEventListener("DOMContentLoaded", () => {
   const statusDiv = document.getElementById("status");
   const statusText = document.getElementById("status-text") || statusDiv;
@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (online) {
       statusDiv.classList.add("online");
       statusDiv.classList.remove("offline");
-      statusText.textContent = text || "IDM Clone Desktop Terhubung";
+      statusText.textContent = text || "JustPressDownload Desktop Terhubung";
     } else {
       statusDiv.classList.remove("online");
       statusDiv.classList.add("offline");
@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
     .then((r) => r.json())
     .then((data) => {
       if (data && data.status === "ok") {
-        setStatus(true, "IDM Clone Desktop Terhubung (Port 19900)");
+        setStatus(true, "JustPressDownload (JPD) Terhubung (Port 19900)");
       } else {
         throw new Error("Invalid ping response");
       }
@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendNativeMessage) {
         chrome.runtime.sendNativeMessage("com.idmclone.host", { action: "ping" }, (response) => {
           if (!chrome.runtime.lastError && response && response.status === "ok") {
-            setStatus(true, "IDM Host Terhubung (Native IPC)");
+            setStatus(true, "JustPressDownload (JPD) Host Terhubung (Native IPC)");
           } else {
             setStatus(false, "Aplikasi Belum Aktif (Buka run_gui.bat)");
           }
@@ -59,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
         { action: "download", url: url },
         (response) => {
           downloadBtn.disabled = false;
-          downloadBtn.innerHTML = "<span>+ Kirim ke IDM Clone</span>";
+          downloadBtn.innerHTML = "<span>+ Kirim ke JustPressDownload</span>";
           if (chrome.runtime.lastError || (response && response.status === "error")) {
             // Fallback to local HTTP loopback server
             fetch("http://127.0.0.1:19900/api/download", {
@@ -70,14 +70,14 @@ document.addEventListener("DOMContentLoaded", () => {
               .then((r) => r.json())
               .then((data) => {
                 urlInput.value = "";
-                alert("Tugas unduhan berhasil dikirim ke IDM Clone!");
+                alert("Tugas unduhan berhasil dikirim ke JustPressDownload (JPD)!");
               })
               .catch((err) => {
-                alert("Gagal mengirim tugas: Pastikan IDM Clone desktop aktif.");
+                alert("Gagal mengirim tugas: Pastikan JustPressDownload (JPD) aktif.");
               });
           } else {
             urlInput.value = "";
-            alert("Tugas unduhan berhasil dikirim ke IDM Clone!");
+            alert("Tugas unduhan berhasil dikirim ke JustPressDownload (JPD)!");
           }
         }
       );
@@ -90,14 +90,14 @@ document.addEventListener("DOMContentLoaded", () => {
         .then((r) => r.json())
         .then((data) => {
           downloadBtn.disabled = false;
-          downloadBtn.innerHTML = "<span>+ Kirim ke IDM Clone</span>";
+          downloadBtn.innerHTML = "<span>+ Kirim ke JustPressDownload</span>";
           urlInput.value = "";
-          alert("Tugas unduhan berhasil dikirim ke IDM Clone!");
+          alert("Tugas unduhan berhasil dikirim ke JustPressDownload (JPD)!");
         })
         .catch((err) => {
           downloadBtn.disabled = false;
-          downloadBtn.innerHTML = "<span>+ Kirim ke IDM Clone</span>";
-          alert("Gagal mengirim tugas: Pastikan IDM Clone desktop aktif.");
+          downloadBtn.innerHTML = "<span>+ Kirim ke JustPressDownload</span>";
+          alert("Gagal mengirim tugas: Pastikan JustPressDownload (JPD) aktif.");
         });
     }
   });

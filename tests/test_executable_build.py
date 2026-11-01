@@ -2,11 +2,18 @@ import os
 
 
 def test_standalone_executable_exists():
-    root_exe = os.path.abspath("IDMClone.exe")
-    dist_exe = os.path.abspath("dist/IDMClone.exe")
-    assert os.path.exists(root_exe) or os.path.exists(dist_exe), "IDMClone.exe must exist"
+    root_exe = os.path.abspath("JustPressDownload.exe")
+    dist_exe = os.path.abspath("dist/JustPressDownload.exe")
+    fallback_exe = os.path.abspath("IDMClone.exe")
+    assert (
+        os.path.exists(root_exe) or os.path.exists(dist_exe) or os.path.exists(fallback_exe)
+    ), "JustPressDownload.exe or IDMClone.exe must exist"
 
-    target_exe = root_exe if os.path.exists(root_exe) else dist_exe
+    target_exe = (
+        root_exe
+        if os.path.exists(root_exe)
+        else (dist_exe if os.path.exists(dist_exe) else fallback_exe)
+    )
     # Check that file size is reasonable for a bundled app (> 15 MB)
     size_mb = os.path.getsize(target_exe) / (1024 * 1024)
     assert size_mb > 15, f"Executable too small: {size_mb} MB"

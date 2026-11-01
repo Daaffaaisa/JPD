@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "IDM Clone Integration Module",
+  "name": "JustPressDownload (JPD) Integration Module",
   "version": "1.1.0",
-  "description": "Browser integration extension for IDM Clone with media stream sniffer and desktop acceleration",
+  "description": "Browser integration extension for JustPressDownload (JPD) with media stream sniffer and desktop acceleration",
   "permissions": [
     "contextMenus",
     "nativeMessaging",
@@ -29,7 +29,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "IDM Clone",
+    "default_title": "JustPressDownload (JPD)",
     "default_icon": {
       "16": "images/icon16.png",
       "32": "images/icon32.png",

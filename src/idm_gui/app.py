@@ -321,7 +321,7 @@ class SidebarNavItem(tk.Frame):
 class IDMGUIApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Internet Download Manager (Clone)")
+        self.root.title("JustPressDownload (JPD)")
         self.root.geometry("960x560")
         self.root.minsize(760, 440)
         self.root.configure(bg=THEME["bg_dark"])
@@ -578,7 +578,7 @@ class IDMGUIApp:
         help_menu.add_command(label="Tip Hari Ini... (Tip of the Day)", command=self.show_tip_of_the_day)
         help_menu.add_command(label="Periksa Pembaruan... (Check for Updates)", command=self.check_for_updates)
         help_menu.add_separator()
-        help_menu.add_command(label="Tentang IDM Clone (About)", command=self.show_about)
+        help_menu.add_command(label="Tentang JustPressDownload (About)", command=self.show_about)
         self.menubar.add_cascade(label="Bantuan (Help)", menu=help_menu)
 
         self.root.config(menu=self.menubar)
@@ -696,7 +696,7 @@ class IDMGUIApp:
             padx=8,
             pady=4,
             radius=7,
-            tooltip="Opsi Konfigurasi IDM Clone",
+            tooltip="Opsi Konfigurasi JustPressDownload (JPD)",
         )
         btn_opts.pack(side=tk.LEFT, padx=2)
 
@@ -708,7 +708,7 @@ class IDMGUIApp:
             (btn_stop, "Hentikan Semua Unduhan"),
             (btn_clean, "Bersihkan Seluruh Unduhan Selesai"),
             (btn_folder, "Buka Folder Berkas Terpilih"),
-            (btn_opts, "Opsi Konfigurasi IDM Clone"),
+            (btn_opts, "Opsi Konfigurasi JustPressDownload (JPD)"),
         ]
         self.secondary_buttons = [btn_stop, btn_clean, btn_folder, btn_opts]
 
@@ -1720,9 +1720,9 @@ class IDMGUIApp:
 
     def show_about(self):
         messagebox.showinfo(
-            "About IDM Clone",
-            "Internet Download Manager Clone\n"
-            "Reverse-Engineered Architecture Implementation\n"
+            "Tentang JustPressDownload (JPD)",
+            "JustPressDownload (JPD)\n"
+            "High-Performance Parallel Download Accelerator\n"
             "Developed with Python, Tkinter, and TDD.\n"
             "Features: Parallel Range Download, Streaming Muxer, Browser Native Host."
         )
@@ -1805,17 +1805,17 @@ class IDMGUIApp:
 
     def show_tip_of_the_day(self):
         messagebox.showinfo(
-            "Tip Hari Ini - IDM Clone",
+            "Tip Hari Ini - JustPressDownload (JPD)",
             "💡 Tip Cepat:\n\n"
-            "1. Anda dapat menyalin tautan berkas di browser, dan IDM Clone otomatis menangkapnya.\n"
+            "1. Anda dapat menyalin tautan berkas di browser, dan JustPressDownload (JPD) otomatis menangkapnya.\n"
             "2. Gunakan tombol '⚙ Opsi' di menu atas untuk mengubah jumlah koneksi paralel hingga 32 jalur.\n"
             "3. Klik dua kali baris unduhan untuk langsung membuka berkas yang telah selesai diunduh.",
         )
 
     def check_for_updates(self):
         messagebox.showinfo(
-            "Periksa Pembaruan - IDM Clone",
-            "✔ Anda telah menggunakan versi terbaru IDM Clone (v1.1.0 High-Performance Release)!\n\nSemua komponen sistem mutakhir dan terintegrasi.",
+            "Periksa Pembaruan - JustPressDownload (JPD)",
+            "✔ Anda telah menggunakan versi terbaru JustPressDownload (JPD) (v1.1.0 High-Performance Release)!\n\nSemua komponen sistem mutakhir dan terintegrasi.",
         )
 
 

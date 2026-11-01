@@ -1109,7 +1109,7 @@ class OptionsDialog:
 
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
-        self.top.title("Opsi Konfigurasi IDM Clone")
+        self.top.title("Opsi Konfigurasi JustPressDownload (JPD)")
         self.top.geometry("560x440")
         self.top.minsize(520, 390)
         self.top.resizable(True, True)
@@ -1194,7 +1194,7 @@ class OptionsDialog:
         self.cb_startup_var = tk.BooleanVar(value=self.sm.data.get("autorun_startup", True))
         tk.Checkbutton(
             tab_general,
-            text="Jalankan IDM Clone saat Windows dinyalakan",
+            text="Jalankan JustPressDownload (JPD) saat Windows dinyalakan",
             variable=self.cb_startup_var,
             bg=BG,
             fg=FG,
@@ -1337,7 +1337,7 @@ class OptionsDialog:
 
         tk.Label(
             tab_conn,
-            text="* IDM Clone menggunakan akselerasi multi-koneksi paralel bertahap (kelipatan 8)",
+            text="* JustPressDownload (JPD) menggunakan akselerasi multi-koneksi paralel bertahap (kelipatan 8)",
             bg=BG,
             fg=THEME["text_tertiary"],
             font=("Segoe UI", 8),

@@ -1,17 +1,17 @@
 @echo off
-title Build IDM Clone Standalone EXE
+title Build JustPressDownload (JPD) Standalone EXE
 cd /d "%~dp0"
-echo =======================================================
-echo Building IDM Clone Standalone Windows Executable (.exe)
-echo =======================================================
+echo =================================================================
+echo Building JustPressDownload (JPD) Standalone Windows Executable (.exe)
+echo =================================================================
 echo.
-uv run pyinstaller --noconsole --onefile --name "IDMClone" --icon "icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --paths "src" --hidden-import "PIL" --hidden-import "PIL.ImageTk" --hidden-import "requests" --hidden-import "yt_dlp" main_app.py
+uv run pyinstaller --noconsole --onefile --name "JustPressDownload" --icon "icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --paths "src" --hidden-import "PIL" --hidden-import "PIL.ImageTk" --hidden-import "requests" --hidden-import "yt_dlp" main_app.py
 if %ERRORLEVEL% EQU 0 (
-    copy /Y "dist\IDMClone.exe" "IDMClone.exe" >nul
+    copy /Y "dist\JustPressDownload.exe" "JustPressDownload.exe" >nul
     echo.
-    echo =======================================================
-    echo SUCCESS: IDMClone.exe created in project root and dist/
-    echo =======================================================
+    echo =================================================================
+    echo SUCCESS: JustPressDownload.exe created in project root and dist/
+    echo =================================================================
 ) else (
     echo.
     echo [ERROR] Build failed.

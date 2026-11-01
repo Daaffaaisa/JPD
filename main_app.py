@@ -1,4 +1,4 @@
-"""IDM Clone - Standalone Desktop Application Entry Point."""
+"""JustPressDownload (JPD) - Standalone Desktop Application Entry Point."""
 
 import sys
 import os
