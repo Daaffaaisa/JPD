@@ -1,4 +1,4 @@
-// IDM Clone Background Service Worker - Dual Bridge (Local HTTP Server + Native Messaging)
+// JustPressDownload (JPD) Background Service Worker - Dual Bridge (Local HTTP Server + Native Messaging)
 const LOCAL_SERVER_URL = "http://127.0.0.1:19900";
 const NATIVE_HOST = "com.idmclone.host";
 
@@ -9,13 +9,13 @@ const tabMedia = {};
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "idm_download_link",
-    title: "Download dengan IDM Clone",
+    title: "Download dengan JustPressDownload (JPD)",
     contexts: ["link", "video", "audio", "image"]
   });
 
   chrome.contextMenus.create({
     id: "idm_download_page",
-    title: "Download semua tautan dengan IDM Clone",
+    title: "Download semua tautan dengan JustPressDownload (JPD)",
     contexts: ["page"]
   });
 });
@@ -235,10 +235,10 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
 
   // Safety fallback timer to prevent infinite hang
   const timer = setTimeout(() => {
-    reply({ status: "error", error: "Connection to Desktop App timed out. Pastikan run_gui.bat terbuka!" });
+    reply({ status: "error", error: "Connection to Desktop App timed out. Pastikan JustPressDownload.exe atau run_gui.bat terbuka!" });
   }, 3500);
 
-  // Primary path: Direct HTTP Loopback to IDM Clone Desktop App
+  // Primary path: Direct HTTP Loopback to JustPressDownload (JPD) Desktop App
   try {
     const controller = new AbortController();
     const abortTimeout = setTimeout(() => controller.abort(), 3000);
@@ -254,8 +254,8 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
 
     if (resp.ok) {
       const data = await resp.json();
-      console.log("[IDM Clone] Successfully dispatched to desktop app:", data);
-      showNotification("IDM Clone", `Download started: ${title || url.slice(0, 40)}`);
+      console.log("[JustPressDownload] Successfully dispatched to desktop app:", data);
+      showNotification("JustPressDownload (JPD)", `Unduhan dimulai: ${title || url.slice(0, 40)}`);
       reply({ status: "ok", taskId: data.taskId });
       return;
     } else {
@@ -263,7 +263,7 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
       return;
     }
   } catch (err) {
-    console.log("[IDM Clone] Local server not active, trying Native Messaging fallback...", err);
+    console.log("[JustPressDownload] Local server not active, trying Native Messaging fallback...", err);
   }
 
   // Fallback path: Native Messaging
@@ -271,10 +271,10 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
     chrome.runtime.sendNativeMessage(NATIVE_HOST, { action: "download", ...payload }, (response) => {
       clearTimeout(timer);
       if (chrome.runtime.lastError) {
-        console.warn("[IDM Clone] Native host error:", chrome.runtime.lastError.message);
+        console.warn("[JustPressDownload] Native host error:", chrome.runtime.lastError.message);
         reply({ status: "error", error: chrome.runtime.lastError.message });
       } else {
-        showNotification("IDM Clone", `Download sent: ${title || "file"}`);
+        showNotification("JustPressDownload (JPD)", `Unduhan dikirim: ${title || "berkas"}`);
         reply(response || { status: "ok" });
       }
     });

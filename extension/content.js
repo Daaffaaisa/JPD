@@ -51,7 +51,7 @@
           <polyline points="7 10 12 15 17 10"></polyline>
           <line x1="12" y1="15" x2="12" y2="3"></line>
         </svg>
-        <span id="idm-dl-btn-text">Download dengan IDM Clone</span>
+        <span id="idm-dl-btn-text">Download dengan JustPressDownload</span>
       </div>
     `;
 
@@ -113,7 +113,7 @@
     const p = getOrCreatePanel();
     const btnText = p.querySelector("#idm-dl-btn-text");
     if (btnText) {
-      btnText.textContent = "Download dengan IDM Clone";
+      btnText.textContent = "Download dengan JustPressDownload";
     }
 
     const topPos = Math.max(8, rect.top + 8);
@@ -173,7 +173,7 @@
           font-weight: bold !important;
           font-size: 14px !important;
         ">
-          <span>⚡ IDM Clone - Unduh Berkas</span>
+          <span>⚡ JustPressDownload (JPD) - Unduh Berkas</span>
           <span id="idm-close-modal" style="cursor: pointer; font-size: 18px; line-height: 1;">&times;</span>
         </div>
         <div style="padding: 18px 20px !important; font-size: 13px !important;">
@@ -228,12 +228,12 @@
       const finalUrl = modal.querySelector("#idm-modal-url").value.trim() || url;
 
       startBtn.disabled = true;
-      startBtn.textContent = "Menghubungkan ke IDM...";
+      startBtn.textContent = "Menghubungkan ke JustPressDownload...";
 
       statusDiv.style.display = "block";
       statusDiv.style.background = "#cce5ff";
       statusDiv.style.color = "#004085";
-      statusDiv.textContent = "Mengirim tugas unduhan ke IDM Clone Desktop App...";
+      statusDiv.textContent = "Mengirim tugas unduhan ke JustPressDownload (JPD)...";
 
       let finished = false;
       const safetyTimer = setTimeout(() => {
@@ -241,7 +241,7 @@
           finished = true;
           statusDiv.style.background = "#f8d7da";
           statusDiv.style.color = "#721c24";
-          statusDiv.textContent = "⚠ Gagal terhubung ke port 19900. Pastikan aplikasi Desktop (run_gui.bat) sudah dibuka!";
+          statusDiv.textContent = "⚠ Gagal terhubung ke port 19900. Pastikan aplikasi Desktop (JustPressDownload.exe) sudah dibuka!";
           startBtn.disabled = false;
           startBtn.textContent = "Coba Lagi";
         }
@@ -262,13 +262,13 @@
           if (resp && resp.status === "ok") {
             statusDiv.style.background = "#d4edda";
             statusDiv.style.color = "#155724";
-            statusDiv.textContent = "✔ Berhasil dikirim ke IDM Clone! Sedang diunduh di Desktop App...";
+            statusDiv.textContent = "✔ Berhasil dikirim ke JustPressDownload (JPD)! Sedang diunduh di Desktop App...";
             startBtn.textContent = "✔ Terkirim!";
             setTimeout(closeModal, 1200);
           } else {
             statusDiv.style.background = "#f8d7da";
             statusDiv.style.color = "#721c24";
-            const errMsg = (resp && resp.error) ? resp.error : "Pastikan run_gui.bat sudah terbuka!";
+            const errMsg = (resp && resp.error) ? resp.error : "Pastikan JustPressDownload.exe sudah dibuka!";
             statusDiv.textContent = `⚠ ${errMsg}`;
             startBtn.disabled = false;
             startBtn.textContent = "Coba Lagi";

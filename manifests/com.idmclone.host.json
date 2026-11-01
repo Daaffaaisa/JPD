@@ -1,7 +1,7 @@
 {
     "name": "com.idmclone.host",
     "description": "IDM Clone Browser Extension Native Messaging Host",
-    "path": "idm-clone.exe",
+    "path": "F:\\Hermes Project\\REA\\idm_clone\\JustPressDownload.exe",
     "type": "stdio",
     "allowed_origins": [
         "chrome-extension://idmcloneextensionid/",

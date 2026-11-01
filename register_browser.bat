@@ -1,7 +1,10 @@
 @echo off
-title IDM Clone - Register Browser Integration
+title JustPressDownload (JPD) - Integrasi Browser
 cd /d "%~dp0"
-echo Registering IDM Clone Native Messaging Host for Chrome, Edge, and Firefox...
+echo ==================================================================
+echo   Mendaftarkan Integrasi Browser JustPressDownload (JPD)...
+echo ==================================================================
+echo.
 uv run python scripts/register_extension.py
 echo.
 pause
