@@ -32,6 +32,12 @@ def test_content_js_corner_persistence_and_drag():
     assert "mousemove" in code
     assert "mouseup" in code
 
+    # Verify active video persistence and YouTube Shorts tracker
+    assert "checkShortsAndVideos" in code
+    assert "/shorts/" in code
+    assert "syncPanelPosition" in code
+    assert "Download dengan JPD" in code
+
 
 def test_manifest_storage_permission():
     manifest_path = os.path.abspath("extension/manifest.json")

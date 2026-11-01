@@ -269,6 +269,18 @@
   }
 
   function scheduleHide() {
+    // If the active media is a video that is visible in the viewport, keep it visible!
+    if (activeMediaEl) {
+      const isVideo = activeMediaEl.tagName === "VIDEO" || (activeMediaEl.closest && activeMediaEl.closest("video, #movie_player, .html5-video-player, ytd-reel-video-renderer, ytd-shorts"));
+      if (isVideo) {
+        const rect = activeMediaEl.getBoundingClientRect();
+        if (rect.bottom > 0 && rect.top < window.innerHeight && rect.width > 60 && rect.height > 60) {
+          // Video is visible on screen — do not hide!
+          return;
+        }
+      }
+    }
+
     if (hideTimeout) clearTimeout(hideTimeout);
     hideTimeout = setTimeout(() => {
       if (panel) {
@@ -281,6 +293,30 @@
       }
     }, 2800);
   }
+
+  function syncPanelPosition() {
+    if (!panel || panel.style.display === "none" || isDragging) return;
+    if (!activeMediaEl) return;
+
+    if (!document.documentElement.contains(activeMediaEl)) {
+      activeMediaEl = null;
+      panel.style.display = "none";
+      return;
+    }
+
+    const rect = activeMediaEl.getBoundingClientRect();
+    if (rect.bottom < 0 || rect.top > window.innerHeight) {
+      panel.style.opacity = "0";
+      return;
+    }
+
+    applyCornerPosition(panel, rect, preferredCorner);
+    panel.style.display = "block";
+    panel.style.opacity = "1";
+  }
+
+  window.addEventListener("scroll", syncPanelPosition, { passive: true });
+  window.addEventListener("resize", syncPanelPosition, { passive: true });
 
   function positionPanelOnElement(el, labelText, url, title) {
     if (!el) return;
@@ -690,10 +726,8 @@
           ? window.location.href
           : (el.currentSrc || el.src);
         positionPanelOnElement(el, "Download dengan JPD", targetUrl, document.title);
-        scheduleHide();
       } else if (el && el.tagName === "AUDIO") {
         positionPanelOnElement(el, "Download dengan JPD", el.currentSrc || el.src, document.title);
-        scheduleHide();
       }
     },
     true
@@ -705,9 +739,56 @@
       const v = document.querySelector("video");
       if (v && v.getBoundingClientRect().width > 120) {
         positionPanelOnElement(v, "Download dengan JPD", msg.url, document.title);
-        scheduleHide();
       }
       sendResponse({ status: "ok" });
     }
   });
+
+  // 4. Dedicated active tracker for YouTube Shorts, Reels, and ongoing video playback
+  function checkShortsAndVideos() {
+    if (isDragging) return;
+
+    // A. YouTube Shorts handling (dynamic reel feed)
+    if (window.location.pathname.includes("/shorts/")) {
+      const activeReel =
+        document.querySelector("ytd-reel-video-renderer[is-active]") ||
+        document.querySelector("ytd-shorts [is-active]") ||
+        document.querySelector("ytd-reel-video-renderer");
+      const video = activeReel ? activeReel.querySelector("video") : document.querySelector("ytd-shorts video");
+      if (video) {
+        const rect = video.getBoundingClientRect();
+        if (rect.width > 80 && rect.height > 80 && rect.bottom > 0 && rect.top < window.innerHeight) {
+          positionPanelOnElement(video, "Download dengan JPD", window.location.href, document.title);
+          return;
+        }
+      }
+    }
+
+    // B. General YouTube main player
+    if (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be")) {
+      const player = document.querySelector("#movie_player, .html5-video-player");
+      const video = player ? player.querySelector("video") : null;
+      if (video && !video.paused) {
+        const rect = player.getBoundingClientRect();
+        if (rect.width > 100 && rect.height > 100 && rect.bottom > 0 && rect.top < window.innerHeight) {
+          positionPanelOnElement(player, "Download dengan JPD", window.location.href, document.title);
+          return;
+        }
+      }
+    }
+
+    // C. Any video actively playing on screen
+    const allVideos = Array.from(document.querySelectorAll("video"));
+    const playingVideo = allVideos.find((v) => !v.paused && v.currentTime > 0);
+    if (playingVideo) {
+      const rect = playingVideo.getBoundingClientRect();
+      if (rect.width > 120 && rect.height > 80 && rect.bottom > 0 && rect.top < window.innerHeight) {
+        const targetUrl = playingVideo.currentSrc || playingVideo.src || window.location.href;
+        positionPanelOnElement(playingVideo, "Download dengan JPD", targetUrl, document.title);
+      }
+    }
+  }
+
+  // Poll every 600ms to keep button permanently attached to active media without auto-hiding
+  setInterval(checkShortsAndVideos, 600);
 })();
