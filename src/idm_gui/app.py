@@ -477,8 +477,24 @@ class IDMGUIApp:
             if not task:
                 return
 
-            category = self._detect_category(url, title)
-            clean_title = self._get_clean_title_with_ext(url, title, category)
+            incoming_title = title
+            # Clean up browser notification count prefixes and generic tab slogans (e.g. "(8) Watch trending videos...")
+            if any(d in url for d in ["tiktok.com", "youtube.com"]):
+                import re
+                clean_t = re.sub(r"^\(\d+\)\s*", "", incoming_title).strip()
+                if not clean_t or any(x in clean_t.lower() for x in ["watch trending", "tiktok", "youtube"]):
+                    m = re.search(r"/video/(\d+)", url)
+                    if m:
+                        incoming_title = f"TikTok_Video_{m.group(1)}"
+                    elif "/shorts/" in url:
+                        m_short = re.search(r"/shorts/([a-zA-Z0-9_-]+)", url)
+                        if m_short:
+                            incoming_title = f"YouTube_Shorts_{m_short.group(1)}"
+                else:
+                    incoming_title = clean_t
+
+            category = self._detect_category(url, incoming_title)
+            clean_title = self._get_clean_title_with_ext(url, incoming_title, category)
             remembered_dir = settings.get_category_path(category)
             task.output_path = os.path.join(remembered_dir, clean_title)
 

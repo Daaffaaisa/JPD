@@ -276,7 +276,28 @@
         }
       }
 
-      openIDMDownloadDialog(targetUrl, targetTitle);
+      // Visual feedback on the floating button (Green flash: Sent!)
+      const oldBg = btn.style.background;
+      btn.style.background = "#10b981";
+      const btnSpan = btn.querySelector("#idm-dl-btn-text");
+      const oldText = btnSpan ? btnSpan.textContent : "Download dengan JPD";
+      if (btnSpan) btnSpan.textContent = "✔ Mengirim ke JPD...";
+
+      // Directly dispatch download task to JustPressDownload desktop app (NO double popups!)
+      chrome.runtime.sendMessage(
+        {
+          action: "download",
+          url: targetUrl,
+          title: targetTitle,
+          referer: window.location.href,
+        },
+        (resp) => {
+          setTimeout(() => {
+            btn.style.background = oldBg || "#2563eb";
+            if (btnSpan) btnSpan.textContent = oldText;
+          }, 1500);
+        }
+      );
     });
 
     document.documentElement.appendChild(panel);
@@ -727,16 +748,25 @@
 
   function getTikTokVideoTitle(container) {
     if (container) {
-      const textEl = container.querySelector('[data-e2e="video-desc"], [class*="DivTextContainer"], [class*="video-meta-caption"], h1');
+      const textEl = container.querySelector(
+        '[data-e2e="video-desc"], [class*="DivTextContainer"], [class*="video-meta-caption"], [class*="desc"], h1'
+      );
       if (textEl && textEl.textContent.trim()) {
-        return textEl.textContent.trim().slice(0, 80);
+        const clean = textEl.textContent.trim().replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
+        if (clean.length > 2) return clean;
       }
-      const authorEl = container.querySelector('[data-e2e="video-author-uniqueid"], [data-e2e="user-title"]');
+      const authorEl = container.querySelector('[data-e2e="video-author-uniqueid"], [data-e2e="user-title"], a[href*="/@"]');
       if (authorEl && authorEl.textContent.trim()) {
-        return `TikTok - ${authorEl.textContent.trim()}`;
+        const author = authorEl.textContent.trim().replace("@", "").slice(0, 30);
+        return `TikTok_${author}_${Date.now() % 100000}`;
       }
     }
-    return document.title || "TikTok_Video";
+    let docTitle = document.title || "";
+    docTitle = docTitle.replace(/^\(\d+\)\s*/, "").replace(/\s*\|\s*TikTok.*$/i, "").trim();
+    if (!docTitle || docTitle.toLowerCase().includes("watch trending") || docTitle.toLowerCase().includes("tiktok")) {
+      return `TikTok_Video_${Date.now() % 100000}`;
+    }
+    return docTitle.replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
   }
 
   // 1. Mouseover listener: attach panel to media/player on hover (IDM behavior)

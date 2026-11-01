@@ -300,7 +300,14 @@ class DownloadInfoDialog:
         self._tk_icon = None
         self._update_app_icon(self.title)
 
-        size_text = "Memeriksa ukuran..." if (self.is_probing and self.probed_size <= 0) else format_size_id(self.probed_size)
+        is_stream = any(d in self.url for d in ["youtube.com", "youtu.be", "tiktok.com", "vimeo.com"])
+        if is_stream and self.probed_size <= 0:
+            size_text = "Stream HD (1080p MP4)"
+        elif self.is_probing and self.probed_size <= 0:
+            size_text = "Memeriksa ukuran..."
+        else:
+            size_text = format_size_id(self.probed_size)
+
         self.lbl_size = tk.Label(icon_box, text=size_text, bg=CARD_BG, fg=FG_COLOR, font=("Segoe UI", 9, "bold"))
         self.lbl_size.pack(pady=(2, 0))
 
@@ -322,9 +329,14 @@ class DownloadInfoDialog:
 
         # Parallel Connections indicator
         active_conns = settings.get_max_connections()
+        if is_stream:
+            conn_text = "⚡ Akselerasi: Mode Ekstraksi Stream Video Cepat (yt-dlp High Speed)"
+        else:
+            conn_text = f"⚡ Akselerasi: {active_conns} Koneksi Paralel HTTP Range"
+
         self.conn_label = tk.Label(
             desc_box,
-            text=f"⚡ Akselerasi: {active_conns} Koneksi Paralel HTTP Range",
+            text=conn_text,
             bg=CARD_BG,
             fg=THEME["success"],
             font=("Segoe UI", 8, "italic"),
