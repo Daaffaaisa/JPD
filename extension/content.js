@@ -1,4 +1,4 @@
-// IDM Clone Content Script - Pure Event-Driven, Non-Blocking, 0% CPU Overhead
+// JustPressDownload (JPD) Content Script - Smart Corner-Persisted Draggable Download Panel
 (function () {
   "use strict";
 
@@ -10,6 +10,77 @@
   let currentTargetUrl = null;
   let currentTargetTitle = "";
   let hideTimeout = null;
+
+  // Corner persistence: "top-right" | "top-left" | "bottom-left" | "bottom-right"
+  let preferredCorner = "top-right";
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let panelStartLeft = 0;
+  let panelStartTop = 0;
+  let hasMoved = false;
+
+  // Load saved corner preference from storage
+  if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get({ jpd_panel_corner: "top-right" }, (items) => {
+      if (items && items.jpd_panel_corner) {
+        preferredCorner = items.jpd_panel_corner;
+      }
+    });
+  }
+
+  function getClosestCorner(pRect, mRect) {
+    const pMidX = pRect.left + pRect.width / 2;
+    const pMidY = pRect.top + pRect.height / 2;
+    const mMidX = mRect.left + mRect.width / 2;
+    const mMidY = mRect.top + mRect.height / 2;
+
+    const isTop = pMidY < mMidY;
+    const isLeft = pMidX < mMidX;
+
+    if (isTop && !isLeft) return "top-right";
+    if (isTop && isLeft) return "top-left";
+    if (!isTop && isLeft) return "bottom-left";
+    return "bottom-right";
+  }
+
+  function cornerToLabel(corner) {
+    switch (corner) {
+      case "top-left": return "Kiri Atas";
+      case "bottom-left": return "Kiri Bawah";
+      case "bottom-right": return "Kanan Bawah";
+      case "top-right":
+      default: return "Kanan Atas";
+    }
+  }
+
+  function applyCornerPosition(p, rect, corner) {
+    const margin = 10;
+    p.style.left = "auto";
+    p.style.right = "auto";
+    p.style.top = "auto";
+    p.style.bottom = "auto";
+
+    switch (corner) {
+      case "top-left":
+        p.style.top = `${Math.max(8, rect.top + margin)}px`;
+        p.style.left = `${Math.max(8, rect.left + margin)}px`;
+        break;
+      case "bottom-left":
+        p.style.bottom = `${Math.max(8, window.innerHeight - rect.bottom + margin)}px`;
+        p.style.left = `${Math.max(8, rect.left + margin)}px`;
+        break;
+      case "bottom-right":
+        p.style.bottom = `${Math.max(8, window.innerHeight - rect.bottom + margin)}px`;
+        p.style.right = `${Math.max(8, window.innerWidth - rect.right + margin)}px`;
+        break;
+      case "top-right":
+      default:
+        p.style.top = `${Math.max(8, rect.top + margin)}px`;
+        p.style.right = `${Math.max(8, window.innerWidth - rect.right + margin)}px`;
+        break;
+    }
+  }
 
   function getOrCreatePanel() {
     if (panel && document.documentElement.contains(panel)) {
@@ -30,29 +101,68 @@
     `;
 
     panel.innerHTML = `
-      <div id="idm-dl-action-btn" style="
+      <div id="jpd-panel-container" style="
         display: inline-flex !important;
         align-items: center !important;
-        gap: 6px !important;
-        background: linear-gradient(180deg, #2b78e4 0%, #1555b5 100%) !important;
-        color: #ffffff !important;
-        padding: 5px 11px !important;
-        border-radius: 4px !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45) !important;
-        cursor: pointer !important;
-        font-size: 11px !important;
-        font-weight: bold !important;
-        border: 1px solid #0e3d82 !important;
-        line-height: 1.2 !important;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+        background: rgba(15, 19, 29, 0.94) !important;
+        border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        border-radius: 6px !important;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5) !important;
+        backdrop-filter: blur(8px) !important;
+        overflow: hidden !important;
       ">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        <span id="idm-dl-btn-text">Download dengan JustPressDownload</span>
+        <div id="jpd-drag-handle" title="Tahan dan geser untuk memindahkan posisi tombol (Kanan Atas, Kiri Atas, Kiri Bawah, Kanan Bawah)" style="
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 6px 6px !important;
+          background: rgba(255, 255, 255, 0.06) !important;
+          cursor: grab !important;
+          color: #94a3b8 !important;
+          border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+        ">
+          <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor">
+            <circle cx="2.5" cy="2" r="1.2"/>
+            <circle cx="7.5" cy="2" r="1.2"/>
+            <circle cx="2.5" cy="6" r="1.2"/>
+            <circle cx="7.5" cy="6" r="1.2"/>
+            <circle cx="2.5" cy="10" r="1.2"/>
+            <circle cx="7.5" cy="10" r="1.2"/>
+          </svg>
+        </div>
+        <div id="idm-dl-action-btn" style="
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 6px !important;
+          background: #2563eb !important;
+          color: #ffffff !important;
+          padding: 5px 11px !important;
+          cursor: pointer !important;
+          font-size: 11px !important;
+          font-weight: 600 !important;
+          line-height: 1.2 !important;
+        ">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span id="idm-dl-btn-text">Download dengan JustPressDownload</span>
+        </div>
       </div>
+      <div id="jpd-pos-toast" style="
+        display: none;
+        margin-top: 4px;
+        background: #0f131d;
+        color: #60a5fa;
+        font-size: 10px;
+        font-weight: bold;
+        text-align: center;
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid #2563eb;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      "></div>
     `;
 
     panel.addEventListener("mouseenter", () => {
@@ -60,6 +170,78 @@
     });
 
     panel.addEventListener("mouseleave", () => {
+      if (!isDragging) scheduleHide();
+    });
+
+    const dragHandle = panel.querySelector("#jpd-drag-handle");
+    const posToast = panel.querySelector("#jpd-pos-toast");
+
+    dragHandle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isDragging = true;
+      hasMoved = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      const rect = panel.getBoundingClientRect();
+      panelStartLeft = rect.left;
+      panelStartTop = rect.top;
+
+      dragHandle.style.cursor = "grabbing";
+      panel.style.transition = "none";
+      if (hideTimeout) clearTimeout(hideTimeout);
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!isDragging || !panel) return;
+      hasMoved = true;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+
+      panel.style.left = `${panelStartLeft + dx}px`;
+      panel.style.top = `${panelStartTop + dy}px`;
+      panel.style.right = "auto";
+      panel.style.bottom = "auto";
+
+      if (activeMediaEl) {
+        const pRect = panel.getBoundingClientRect();
+        const mRect = activeMediaEl.getBoundingClientRect();
+        const hoveredCorner = getClosestCorner(pRect, mRect);
+        if (posToast) {
+          posToast.style.display = "block";
+          posToast.textContent = `Arahkan ke: ${cornerToLabel(hoveredCorner)}`;
+        }
+      }
+    });
+
+    document.addEventListener("mouseup", (e) => {
+      if (!isDragging || !panel) return;
+      isDragging = false;
+      dragHandle.style.cursor = "grab";
+      panel.style.transition = "opacity 0.2s ease, top 0.2s ease, left 0.2s ease, right 0.2s ease, bottom 0.2s ease";
+
+      if (hasMoved && activeMediaEl) {
+        const pRect = panel.getBoundingClientRect();
+        const mRect = activeMediaEl.getBoundingClientRect();
+        preferredCorner = getClosestCorner(pRect, mRect);
+
+        // Persist preference to chrome.storage.local
+        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ jpd_panel_corner: preferredCorner });
+        }
+
+        // Snap smoothly to chosen corner
+        applyCornerPosition(panel, mRect, preferredCorner);
+
+        // Show brief confirmation toast
+        if (posToast) {
+          posToast.style.display = "block";
+          posToast.textContent = `✔ Posisi disimpan: ${cornerToLabel(preferredCorner)}`;
+          setTimeout(() => {
+            if (posToast) posToast.style.display = "none";
+          }, 1800);
+        }
+      }
       scheduleHide();
     });
 
@@ -113,15 +295,12 @@
     const p = getOrCreatePanel();
     const btnText = p.querySelector("#idm-dl-btn-text");
     if (btnText) {
-      btnText.textContent = "Download dengan JustPressDownload";
+      btnText.textContent = labelText || "Download dengan JustPressDownload";
     }
 
-    const topPos = Math.max(8, rect.top + 8);
-    const rightPos = Math.max(8, window.innerWidth - rect.right + 8);
-
-    p.style.top = `${topPos}px`;
-    p.style.right = `${rightPos}px`;
-    p.style.left = "auto";
+    if (!isDragging) {
+      applyCornerPosition(p, rect, preferredCorner);
+    }
     p.style.display = "block";
 
     requestAnimationFrame(() => {
@@ -447,21 +626,21 @@
       if (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be")) {
         if (el.tagName === "VIDEO" || (el.closest && el.closest("#movie_player, .html5-video-player"))) {
           const player = el.closest("#movie_player, .html5-video-player") || el;
-          positionPanelOnElement(player, "Download dengan IDM Clone", window.location.href, document.title);
+          positionPanelOnElement(player, "Download dengan JustPressDownload", window.location.href, document.title);
           return;
         }
       }
 
       if (el.tagName === "VIDEO") {
-        positionPanelOnElement(el, "Download dengan IDM Clone", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, "Download dengan JustPressDownload", el.currentSrc || el.src, document.title);
       } else if (el.closest && el.closest("#movie_player, .html5-video-player")) {
         const player = el.closest("#movie_player, .html5-video-player");
         const video = player.querySelector("video");
         if (video) {
-          positionPanelOnElement(player, "Download dengan IDM Clone", window.location.href, document.title);
+          positionPanelOnElement(player, "Download dengan JustPressDownload", window.location.href, document.title);
         }
       } else if (el.tagName === "AUDIO") {
-        positionPanelOnElement(el, "Download dengan IDM Clone", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, "Download dengan JustPressDownload", el.currentSrc || el.src, document.title);
       } else if (el.tagName === "IMG") {
         const rect = el.getBoundingClientRect();
         if (rect.width >= 160 && rect.height >= 120) {
@@ -476,7 +655,7 @@
               } catch (err) {}
             }
             if (!imgTitle) imgTitle = "gambar";
-            positionPanelOnElement(el, "Download dengan IDM Clone", imgSrc, imgTitle);
+            positionPanelOnElement(el, "Download dengan JustPressDownload", imgSrc, imgTitle);
           }
         }
       }
@@ -510,10 +689,10 @@
         const targetUrl = (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be"))
           ? window.location.href
           : (el.currentSrc || el.src);
-        positionPanelOnElement(el, "Download dengan IDM Clone", targetUrl, document.title);
+        positionPanelOnElement(el, "Download dengan JustPressDownload", targetUrl, document.title);
         scheduleHide();
       } else if (el && el.tagName === "AUDIO") {
-        positionPanelOnElement(el, "Download dengan IDM Clone", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, "Download dengan JustPressDownload", el.currentSrc || el.src, document.title);
         scheduleHide();
       }
     },
@@ -525,7 +704,7 @@
     if (msg.action === "media_detected" && msg.url) {
       const v = document.querySelector("video");
       if (v && v.getBoundingClientRect().width > 120) {
-        positionPanelOnElement(v, "Download dengan IDM Clone", msg.url, document.title);
+        positionPanelOnElement(v, "Download dengan JustPressDownload", msg.url, document.title);
         scheduleHide();
       }
       sendResponse({ status: "ok" });
