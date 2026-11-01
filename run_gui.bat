@@ -6,10 +6,6 @@ if exist "JustPressDownload.exe" (
     start "" "JustPressDownload.exe"
     exit /b 0
 )
-if exist "IDMClone.exe" (
-    start "" "IDMClone.exe"
-    exit /b 0
-)
 
 echo Starting JustPressDownload (JPD) GUI...
 uv run idm-gui
