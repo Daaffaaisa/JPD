@@ -253,7 +253,22 @@
       let targetUrl = currentTargetUrl;
       let targetTitle = currentTargetTitle || document.title || "berkas_unduhan";
 
-      if (!targetUrl) {
+      // If on TikTok Web, resolve the exact permalink using video ID from DOM container
+      if (window.location.hostname.includes("tiktok.com")) {
+        const video = activeMediaEl ? (activeMediaEl.tagName === "VIDEO" ? activeMediaEl : activeMediaEl.querySelector("video")) : document.querySelector("video");
+        const container = video ? (video.closest('section, article, [data-e2e*="item"], div[class*="DivItemContainer"], [data-e2e="feed-video"]') || video.parentElement) : null;
+        if (video) {
+          const resolved = getTikTokVideoUrl(video, container);
+          if (resolved && !resolved.startsWith("blob:") && resolved !== "https://www.tiktok.com/" && resolved !== "https://www.tiktok.com/foryou") {
+            targetUrl = resolved;
+          }
+          if (container) {
+            targetTitle = getTikTokVideoTitle(container) || targetTitle;
+          }
+        }
+      }
+
+      if (!targetUrl || targetUrl.startsWith("blob:")) {
         if (activeMediaEl) {
           targetUrl = activeMediaEl.currentSrc || activeMediaEl.src;
         } else {
@@ -652,9 +667,13 @@
   }
 
   function getTikTokVideoUrl(videoEl, container) {
+    if (!videoEl) return window.location.href;
+
     if (window.location.pathname.includes("/video/")) {
       return window.location.href;
     }
+
+    // 1. Direct permalink anchor in container
     if (container) {
       const link = container.querySelector('a[href*="/video/"]');
       if (link && link.href) return link.href;
@@ -663,6 +682,39 @@
       (videoEl.closest && videoEl.closest('a[href*="/video/"]')) ||
       (videoEl.parentElement && videoEl.parentElement.querySelector('a[href*="/video/"]'));
     if (nearest && nearest.href) return nearest.href;
+
+    // 2. Extract author and 19-digit videoId from player container ID (xgwrapper-*-7...)
+    let cur = videoEl;
+    let videoId = null;
+    while (cur && cur !== document.body) {
+      if (cur.id) {
+        const m = cur.id.match(/\b(7\d{16,20})\b/);
+        if (m) {
+          videoId = m[1];
+          break;
+        }
+      }
+      cur = cur.parentElement;
+    }
+
+    if (videoId) {
+      let author = "user";
+      const card =
+        (container ||
+          (videoEl.closest &&
+            videoEl.closest(
+              'section, article, [data-e2e*="item"], div[class*="DivItemContainer"], [data-e2e="feed-video"]'
+            ))) ||
+        videoEl.parentElement;
+      if (card) {
+        const authorA = card.querySelector('a[href*="/@"]');
+        if (authorA) {
+          const parts = authorA.href.split("/@");
+          if (parts[1]) author = parts[1].split("/")[0].split("?")[0];
+        }
+      }
+      return `https://www.tiktok.com/@${author}/video/${videoId}`;
+    }
 
     if (videoEl.currentSrc && !videoEl.currentSrc.startsWith("blob:")) {
       return videoEl.currentSrc;

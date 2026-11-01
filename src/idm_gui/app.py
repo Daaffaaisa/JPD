@@ -388,7 +388,7 @@ class IDMGUIApp:
 
     def _detect_category(self, url: str, title: str) -> str:
         lower = (url + " " + title).lower()
-        if any(x in lower for x in ["video", ".mp4", ".mkv", ".webm", ".avi", ".flv", "youtube.com", "youtu.be", "googlevideo", "vimeo"]):
+        if any(x in lower for x in ["video", ".mp4", ".mkv", ".webm", ".avi", ".flv", "youtube.com", "youtu.be", "googlevideo", "vimeo", "tiktok.com", "tiktokcdn"]):
             return "Video"
         elif any(x in lower for x in [".mp3", ".m4a", ".wav", ".flac", ".aac", "audio"]):
             return "Musik"
@@ -493,7 +493,8 @@ class IDMGUIApp:
             if payload_size > 0:
                 probed_size = payload_size
             else:
-                probed_size, _ = self.engine.probe(url, headers=req_headers) if not any(d in url for d in ["youtube.com", "youtu.be"]) else (0, False)
+                is_stream_url = any(d in url for d in ["youtube.com", "youtu.be", "tiktok.com", "vimeo.com"])
+                probed_size, _ = (0, False) if is_stream_url else self.engine.probe(url, headers=req_headers)
 
             if probed_size > 0:
                 task.total_bytes = probed_size
@@ -1477,6 +1478,8 @@ class IDMGUIApp:
             if "googlevideo.com" in task.url and "youtube.com" in referer:
                 stream_url = referer
             elif ("tiktokcdn.com" in task.url or "byteoversea.com" in task.url or "ibytedtos.com" in task.url) and "tiktok.com" in referer:
+                stream_url = referer
+            elif "tiktok.com" in stream_url and "/video/" not in stream_url and "/video/" in referer:
                 stream_url = referer
 
             is_stream_site = any(d in stream_url for d in ["youtube.com", "youtu.be", "vimeo.com", "tiktok.com"]) or any(d in referer for d in ["tiktok.com", "instagram.com"])
