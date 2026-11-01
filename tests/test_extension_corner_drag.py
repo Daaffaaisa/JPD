@@ -32,11 +32,14 @@ def test_content_js_corner_persistence_and_drag():
     assert "mousemove" in code
     assert "mouseup" in code
 
-    # Verify active video persistence and YouTube Shorts tracker
+    # Verify active video persistence and YouTube Shorts & TikTok tracker
     assert "checkShortsAndVideos" in code
     assert "/shorts/" in code
     assert "syncPanelPosition" in code
     assert "Download dengan JPD" in code
+    assert "tiktok.com" in code
+    assert "getTikTokVideoUrl" in code
+    assert "getTikTokVideoTitle" in code
 
 
 def test_manifest_storage_permission():

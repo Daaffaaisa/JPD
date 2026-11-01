@@ -651,6 +651,42 @@
     return src;
   }
 
+  function getTikTokVideoUrl(videoEl, container) {
+    if (window.location.pathname.includes("/video/")) {
+      return window.location.href;
+    }
+    if (container) {
+      const link = container.querySelector('a[href*="/video/"]');
+      if (link && link.href) return link.href;
+    }
+    const nearest =
+      (videoEl.closest && videoEl.closest('a[href*="/video/"]')) ||
+      (videoEl.parentElement && videoEl.parentElement.querySelector('a[href*="/video/"]'));
+    if (nearest && nearest.href) return nearest.href;
+
+    if (videoEl.currentSrc && !videoEl.currentSrc.startsWith("blob:")) {
+      return videoEl.currentSrc;
+    }
+    if (videoEl.src && !videoEl.src.startsWith("blob:")) {
+      return videoEl.src;
+    }
+    return window.location.href;
+  }
+
+  function getTikTokVideoTitle(container) {
+    if (container) {
+      const textEl = container.querySelector('[data-e2e="video-desc"], [class*="DivTextContainer"], [class*="video-meta-caption"], h1');
+      if (textEl && textEl.textContent.trim()) {
+        return textEl.textContent.trim().slice(0, 80);
+      }
+      const authorEl = container.querySelector('[data-e2e="video-author-uniqueid"], [data-e2e="user-title"]');
+      if (authorEl && authorEl.textContent.trim()) {
+        return `TikTok - ${authorEl.textContent.trim()}`;
+      }
+    }
+    return document.title || "TikTok_Video";
+  }
+
   // 1. Mouseover listener: attach panel to media/player on hover (IDM behavior)
   document.addEventListener(
     "mouseover",
@@ -658,12 +694,45 @@
       const el = e.target;
       if (!el) return;
 
-      // Special handling for YouTube (videos are MSE blob: streams, use page URL for yt-dlp)
+      // Special handling for YouTube
       if (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be")) {
         if (el.tagName === "VIDEO" || (el.closest && el.closest("#movie_player, .html5-video-player"))) {
           const player = el.closest("#movie_player, .html5-video-player") || el;
           positionPanelOnElement(player, "Download dengan JPD", window.location.href, document.title);
           return;
+        }
+      }
+
+      // Special handling for TikTok Web
+      if (window.location.hostname.includes("tiktok.com")) {
+        const tiktokContainer =
+          el.closest &&
+          el.closest(
+            'div[data-e2e="feed-item"], div[data-e2e="recommend-list-item-container"], div[class*="DivVideoContainer"], div[class*="DivPlayerContainer"], div[data-e2e="user-post-item"], div[class*="DivBasicPlayerWrapper"], div[data-e2e="feed-video"]'
+          );
+        if (tiktokContainer) {
+          const video = tiktokContainer.querySelector("video");
+          if (video) {
+            const targetUrl = getTikTokVideoUrl(video, tiktokContainer);
+            const title = getTikTokVideoTitle(tiktokContainer);
+            positionPanelOnElement(video, "Download dengan JPD", targetUrl, title);
+            return;
+          }
+        }
+      }
+
+      // Generic container containing video (handles transparent overlay masks on video players)
+      if (el.tagName !== "VIDEO" && el.closest) {
+        const videoWrapper = el.closest('div[class*="video"], div[class*="player"], div[data-e2e*="video"], [class*="video-container"]');
+        if (videoWrapper) {
+          const video = videoWrapper.querySelector("video");
+          if (video && video.getBoundingClientRect().width > 100) {
+            const targetUrl = (window.location.hostname.includes("tiktok.com"))
+              ? getTikTokVideoUrl(video, videoWrapper)
+              : (video.currentSrc || video.src || window.location.href);
+            positionPanelOnElement(video, "Download dengan JPD", targetUrl, document.title);
+            return;
+          }
         }
       }
 
@@ -748,7 +817,26 @@
   function checkShortsAndVideos() {
     if (isDragging) return;
 
-    // A. YouTube Shorts handling (dynamic reel feed)
+    // A. TikTok Web active feed & single video handling
+    if (window.location.hostname.includes("tiktok.com")) {
+      const tiktokVideos = Array.from(document.querySelectorAll("video")).filter((v) => {
+        const r = v.getBoundingClientRect();
+        return r.width > 80 && r.height > 100 && r.bottom > 60 && r.top < window.innerHeight - 60;
+      });
+      const activeTiktok = tiktokVideos.find((v) => !v.paused && v.currentTime > 0) || tiktokVideos[0];
+      if (activeTiktok) {
+        const container =
+          activeTiktok.closest(
+            'div[data-e2e="feed-item"], div[data-e2e="recommend-list-item-container"], div[class*="DivVideoContainer"], div[class*="DivPlayerContainer"], div[data-e2e="user-post-item"], div[class*="DivBasicPlayerWrapper"]'
+          ) || activeTiktok.parentElement;
+        const targetUrl = getTikTokVideoUrl(activeTiktok, container);
+        const title = getTikTokVideoTitle(container);
+        positionPanelOnElement(activeTiktok, "Download dengan JPD", targetUrl, title);
+        return;
+      }
+    }
+
+    // B. YouTube Shorts handling (dynamic reel feed)
     if (window.location.pathname.includes("/shorts/")) {
       const activeReel =
         document.querySelector("ytd-reel-video-renderer[is-active]") ||

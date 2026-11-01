@@ -1476,7 +1476,10 @@ class IDMGUIApp:
             stream_url = task.url
             if "googlevideo.com" in task.url and "youtube.com" in referer:
                 stream_url = referer
-            is_stream_site = any(d in stream_url for d in ["youtube.com", "youtu.be", "vimeo.com", "tiktok.com"])
+            elif ("tiktokcdn.com" in task.url or "byteoversea.com" in task.url or "ibytedtos.com" in task.url) and "tiktok.com" in referer:
+                stream_url = referer
+
+            is_stream_site = any(d in stream_url for d in ["youtube.com", "youtu.be", "vimeo.com", "tiktok.com"]) or any(d in referer for d in ["tiktok.com", "instagram.com"])
             if is_stream_site:
                 try:
                     import yt_dlp
@@ -1501,8 +1504,14 @@ class IDMGUIApp:
                         elif d.get("status") == "finished":
                             task.bytes_downloaded = task.total_bytes
 
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                        "Referer": "https://www.tiktok.com/" if ("tiktok.com" in stream_url or "tiktok.com" in referer) else "https://www.google.com/",
+                    }
+
                     ydl_opts = {
                         "outtmpl": os.path.join(out_dir, "%(title)s.%(ext)s"),
+                        "http_headers": headers,
                         # Prioritize H.264 (avc1) video + AAC (mp4a) audio so video displays perfectly on Windows
                         "format": (
                             "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/"
@@ -1524,6 +1533,12 @@ class IDMGUIApp:
                             raise DownloadAborted("Download stopped by user")
                         if info:
                             downloaded_file = ydl.prepare_filename(info)
+                            if not os.path.exists(downloaded_file):
+                                base_stem, _ = os.path.splitext(downloaded_file)
+                                for ext in [".mp4", ".mkv", ".webm"]:
+                                    if os.path.exists(f"{base_stem}{ext}"):
+                                        downloaded_file = f"{base_stem}{ext}"
+                                        break
                             task.output_path = downloaded_file
                             if os.path.exists(downloaded_file):
                                 task.total_bytes = os.path.getsize(downloaded_file)
@@ -1546,7 +1561,13 @@ class IDMGUIApp:
                     if progress_dlg:
                         self.root.after(0, lambda: progress_dlg.lbl_status.config(text=f"Gagal: {e}"))
             else:
-                req_headers = self.task_headers.get(task_id)
+                req_headers = dict(self.task_headers.get(task_id) or {})
+                if any(k in task.url for k in ["tiktokcdn.com", "byteoversea.com", "ibytedtos.com"]) or "tiktok.com" in referer:
+                    if "Referer" not in req_headers:
+                        req_headers["Referer"] = "https://www.tiktok.com/"
+                    if "User-Agent" not in req_headers:
+                        req_headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
                 res: DownloadResult = self.engine.download(
                     task.url,
                     task.output_path,

@@ -146,7 +146,11 @@ chrome.webRequest.onResponseStarted.addListener(
     }
 
     const lowerUrl = url.toLowerCase();
-    const isStreamManifest = STREAM_EXTS.some((ext) => lowerUrl.includes(ext));
+    const isStreamManifest = STREAM_EXTS.some((ext) => lowerUrl.includes(ext)) ||
+                             lowerUrl.includes("mime_type=video") ||
+                             lowerUrl.includes("tiktokcdn.com") ||
+                             lowerUrl.includes("byteoversea.com") ||
+                             lowerUrl.includes("ibytedtos.com");
     if (!isStreamManifest) return;
 
     if (!tabMedia[details.tabId]) tabMedia[details.tabId] = [];
