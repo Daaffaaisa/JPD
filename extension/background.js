@@ -9,13 +9,13 @@ const tabMedia = {};
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "idm_download_link",
-    title: "Download dengan JustPressDownload (JPD)",
+    title: "Download dengan JPD",
     contexts: ["link", "video", "audio", "image"]
   });
 
   chrome.contextMenus.create({
     id: "idm_download_page",
-    title: "Download semua tautan dengan JustPressDownload (JPD)",
+    title: "Download semua tautan dengan JPD",
     contexts: ["page"]
   });
 });

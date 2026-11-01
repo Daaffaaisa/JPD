@@ -147,7 +147,7 @@
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
-          <span id="idm-dl-btn-text">Download dengan JustPressDownload</span>
+          <span id="idm-dl-btn-text">Download dengan JPD</span>
         </div>
       </div>
       <div id="jpd-pos-toast" style="
@@ -295,7 +295,7 @@
     const p = getOrCreatePanel();
     const btnText = p.querySelector("#idm-dl-btn-text");
     if (btnText) {
-      btnText.textContent = labelText || "Download dengan JustPressDownload";
+      btnText.textContent = labelText || "Download dengan JPD";
     }
 
     if (!isDragging) {
@@ -626,21 +626,21 @@
       if (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be")) {
         if (el.tagName === "VIDEO" || (el.closest && el.closest("#movie_player, .html5-video-player"))) {
           const player = el.closest("#movie_player, .html5-video-player") || el;
-          positionPanelOnElement(player, "Download dengan JustPressDownload", window.location.href, document.title);
+          positionPanelOnElement(player, "Download dengan JPD", window.location.href, document.title);
           return;
         }
       }
 
       if (el.tagName === "VIDEO") {
-        positionPanelOnElement(el, "Download dengan JustPressDownload", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, "Download dengan JPD", el.currentSrc || el.src, document.title);
       } else if (el.closest && el.closest("#movie_player, .html5-video-player")) {
         const player = el.closest("#movie_player, .html5-video-player");
         const video = player.querySelector("video");
         if (video) {
-          positionPanelOnElement(player, "Download dengan JustPressDownload", window.location.href, document.title);
+          positionPanelOnElement(player, "Download dengan JPD", window.location.href, document.title);
         }
       } else if (el.tagName === "AUDIO") {
-        positionPanelOnElement(el, "Download dengan JustPressDownload", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, "Download dengan JPD", el.currentSrc || el.src, document.title);
       } else if (el.tagName === "IMG") {
         const rect = el.getBoundingClientRect();
         if (rect.width >= 160 && rect.height >= 120) {
@@ -655,7 +655,7 @@
               } catch (err) {}
             }
             if (!imgTitle) imgTitle = "gambar";
-            positionPanelOnElement(el, "Download dengan JustPressDownload", imgSrc, imgTitle);
+            positionPanelOnElement(el, "Download dengan JPD", imgSrc, imgTitle);
           }
         }
       }
@@ -689,10 +689,10 @@
         const targetUrl = (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be"))
           ? window.location.href
           : (el.currentSrc || el.src);
-        positionPanelOnElement(el, "Download dengan JustPressDownload", targetUrl, document.title);
+        positionPanelOnElement(el, "Download dengan JPD", targetUrl, document.title);
         scheduleHide();
       } else if (el && el.tagName === "AUDIO") {
-        positionPanelOnElement(el, "Download dengan JustPressDownload", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, "Download dengan JPD", el.currentSrc || el.src, document.title);
         scheduleHide();
       }
     },
@@ -704,7 +704,7 @@
     if (msg.action === "media_detected" && msg.url) {
       const v = document.querySelector("video");
       if (v && v.getBoundingClientRect().width > 120) {
-        positionPanelOnElement(v, "Download dengan JustPressDownload", msg.url, document.title);
+        positionPanelOnElement(v, "Download dengan JPD", msg.url, document.title);
         scheduleHide();
       }
       sendResponse({ status: "ok" });
