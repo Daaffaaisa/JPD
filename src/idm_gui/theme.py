@@ -3,7 +3,8 @@ UI/UX Pro Max - Design Tokens and Unified Theme for IDM Clone
 High-precision dark utility theme inspired by Windows modern design and classic IDM.
 """
 
-from typing import Callable, Optional
+import os
+from typing import Callable, Optional, Any
 import tkinter as tk
 from tkinter import ttk
 import tkinter.font as tkfont
@@ -57,12 +58,66 @@ FONT_SMALL = (FONT_FAMILY, 8)
 FONT_CODE = ("Consolas", 9)
 
 
+def get_app_icon_path() -> Optional[str]:
+    """Finds icon.ico path in project directories."""
+    candidates = [
+        os.path.abspath("icon.ico"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "icon.ico"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return os.path.abspath(p)
+    return None
+
+
+def get_app_png_path() -> Optional[str]:
+    """Finds icon.png path in project directories."""
+    candidates = [
+        os.path.abspath("icon.png"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "icon.png"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return os.path.abspath(p)
+    return None
+
+
+def apply_window_icon(window: Any):
+    """Sets the custom 3D icon.ico and icon.png for the given window (Tk or Toplevel)."""
+    ico = get_app_icon_path()
+    if ico and os.path.exists(ico):
+        try:
+            if isinstance(window, tk.Tk):
+                try:
+                    window.iconbitmap(default=ico)
+                except Exception:
+                    window.iconbitmap(ico)
+            else:
+                window.iconbitmap(ico)
+        except Exception:
+            pass
+
+    png = get_app_png_path()
+    if png and os.path.exists(png):
+        try:
+            from PIL import Image, ImageTk
+            img = Image.open(png)
+            photo = ImageTk.PhotoImage(img.resize((32, 32), Image.Resampling.LANCZOS))
+            window.iconphoto(True, photo)
+            window._app_icon_photo = photo
+        except Exception:
+            pass
+
+
 def apply_theme_to_toplevel(top: tk.Toplevel, width: int, height: int, title: str):
     """Sets standard background, icon, and centered geometry for a modal or dialog."""
     top.title(title)
     top.geometry(f"{width}x{height}")
     top.resizable(False, False)
     top.configure(bg=THEME["surface"])
+    apply_window_icon(top)
 
     top.update_idletasks()
     try:

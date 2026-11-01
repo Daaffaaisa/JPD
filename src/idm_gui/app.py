@@ -24,6 +24,7 @@ from idm_gui.theme import (
     setup_global_ttk_theme,
     create_modern_button,
     draw_round_rectangle,
+    apply_window_icon,
     FONT_DISPLAY,
     FONT_FAMILY,
     FONT_TITLE,
@@ -324,6 +325,7 @@ class IDMGUIApp:
         self.root.geometry("960x560")
         self.root.minsize(760, 440)
         self.root.configure(bg=THEME["bg_dark"])
+        apply_window_icon(self.root)
 
         self.engine = DownloadEngine()
         self.queue = DownloadQueue()
@@ -1085,6 +1087,7 @@ class IDMGUIApp:
             dlg.minsize(440, 150)
             dlg.resizable(True, False)
             dlg.configure(bg=THEME["surface"])
+            apply_window_icon(dlg)
             dlg.transient(self.root)
             try:
                 dlg.grab_set()

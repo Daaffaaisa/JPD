@@ -15,6 +15,7 @@ from idm_gui.theme import (
     create_modern_button,
     apply_theme_to_toplevel,
     setup_global_ttk_theme,
+    apply_window_icon,
 )
 
 
@@ -106,6 +107,7 @@ class DownloadInfoDialog:
         except Exception:
             pass
         self.top = tk.Toplevel(self.parent)
+        apply_window_icon(self.top)
         self.top.title("Info Unduh Berkas")
         self.top.geometry("560x370")
         self.top.minsize(540, 340)
@@ -520,6 +522,7 @@ class DownloadProgressDialog:
             pass
 
         self.top = tk.Toplevel(self.parent)
+        apply_window_icon(self.top)
         self.top.title(f"0% {self.filename}")
         self.top.geometry("560x440")
         self.top.minsize(500, 360)
@@ -992,6 +995,7 @@ class DownloadCompleteDialog:
 
     def _build_ui(self):
         self.top = tk.Toplevel(self.parent)
+        apply_window_icon(self.top)
         self.top.title("Unduhan Selesai")
         self.top.geometry("520x240")
         self.top.minsize(480, 210)
@@ -1104,6 +1108,7 @@ class OptionsDialog:
             pass
 
         self.top = tk.Toplevel(self.parent)
+        apply_window_icon(self.top)
         self.top.title("Opsi Konfigurasi IDM Clone")
         self.top.geometry("560x440")
         self.top.minsize(520, 390)

@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 import pytest
 from idm_gui.app import IDMGUIApp
@@ -159,6 +160,23 @@ def test_main_window_table_modern_layout_and_tags(tk_root):
     # Tag is downloading
     tags = app.tree.item(t1, "tags")
     assert "downloading" in tags
+
+
+def test_app_icon_application(tk_root):
+    from idm_gui.theme import get_app_icon_path, get_app_png_path, apply_window_icon
+
+    ico = get_app_icon_path()
+    assert ico is not None
+    assert os.path.exists(ico)
+
+    png = get_app_png_path()
+    assert png is not None
+    assert os.path.exists(png)
+
+    # Test applying to root without error
+    apply_window_icon(tk_root)
+    assert hasattr(tk_root, "_app_icon_photo")
+
 
 
 
