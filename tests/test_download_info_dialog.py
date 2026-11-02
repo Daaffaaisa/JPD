@@ -97,12 +97,11 @@ def test_download_info_dialog_browse_folder_button(tk_root, monkeypatch):
     # Click [...]
     dlg._on_browse()
 
-    # Verify that path_var has the new folder, but NOT yet saved to settings because checkbox is False
+    # Verify that path_var has the new folder, and checkbox is automatically checked
     assert os.path.dirname(dlg.path_var.get()) == os.path.abspath(browsed_dir)
-    assert dlg.remember_var.get() is False
+    assert dlg.remember_var.get() is True
 
-    # Check remember box and start download
-    dlg.remember_var.set(True)
+    # Start download
     dlg._on_start()
 
     # Now verify settings are updated

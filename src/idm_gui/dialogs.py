@@ -459,6 +459,7 @@ class DownloadInfoDialog:
             new_path = os.path.join(chosen_dir, initial_file)
             self.path_var.set(new_path)
             self.cat_folder = chosen_dir
+            self.remember_var.set(True)
             self._update_app_icon(initial_file)
             if hasattr(self, "lbl_sub_folder") and self.lbl_sub_folder:
                 self.lbl_sub_folder.config(text=chosen_dir)
