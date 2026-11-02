@@ -12,7 +12,13 @@
   let hideTimeout = null;
 
   // Corner persistence: "top-right" | "top-left" | "bottom-left" | "bottom-right"
+  // Synchronously initialize preferredCorner from localStorage to prevent any 1ms default flash
   let preferredCorner = "top-right";
+  try {
+    const cached = localStorage.getItem("jpd_panel_corner");
+    if (cached) preferredCorner = cached;
+  } catch (e) {}
+
   let isDragging = false;
   let dragStartX = 0;
   let dragStartY = 0;
@@ -20,11 +26,14 @@
   let panelStartTop = 0;
   let hasMoved = false;
 
-  // Load saved corner preference from storage
+  // Asynchronously sync across browser tabs/domains via chrome.storage.local
   if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.get({ jpd_panel_corner: "top-right" }, (items) => {
+    chrome.storage.local.get({ jpd_panel_corner: preferredCorner }, (items) => {
       if (items && items.jpd_panel_corner) {
         preferredCorner = items.jpd_panel_corner;
+        try {
+          localStorage.setItem("jpd_panel_corner", preferredCorner);
+        } catch (e) {}
       }
     });
   }
@@ -218,19 +227,22 @@
       if (!isDragging || !panel) return;
       isDragging = false;
       dragHandle.style.cursor = "grab";
-      panel.style.transition = "opacity 0.2s ease, top 0.2s ease, left 0.2s ease, right 0.2s ease, bottom 0.2s ease";
+      panel.style.transition = "none";
 
       if (hasMoved && activeMediaEl) {
         const pRect = panel.getBoundingClientRect();
         const mRect = activeMediaEl.getBoundingClientRect();
         preferredCorner = getClosestCorner(pRect, mRect);
 
-        // Persist preference to chrome.storage.local
+        // Instantly save to synchronous localStorage and sync to chrome.storage.local
+        try {
+          localStorage.setItem("jpd_panel_corner", preferredCorner);
+        } catch (e) {}
         if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
           chrome.storage.local.set({ jpd_panel_corner: preferredCorner });
         }
 
-        // Snap smoothly to chosen corner
+        // Snap instantly to chosen corner without sliding across screen
         applyCornerPosition(panel, mRect, preferredCorner);
 
         // Show brief confirmation toast
@@ -346,6 +358,7 @@
       return;
     }
 
+    panel.style.transition = "none";
     applyCornerPosition(panel, rect, preferredCorner);
     panel.style.display = "block";
     panel.style.opacity = "1";
@@ -371,11 +384,14 @@
     }
 
     if (!isDragging) {
+      // Disable transition so panel does NOT slide or flash at previous/default coordinates
+      p.style.transition = "none";
       applyCornerPosition(p, rect, preferredCorner);
     }
     p.style.display = "block";
 
     requestAnimationFrame(() => {
+      p.style.transition = "opacity 0.18s ease";
       p.style.opacity = "1";
     });
 

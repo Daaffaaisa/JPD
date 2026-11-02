@@ -41,6 +41,11 @@ def test_content_js_corner_persistence_and_drag():
     assert "getTikTokVideoUrl" in code
     assert "getTikTokVideoTitle" in code
 
+    # Verify synchronous localStorage caching and zero-transition position jump elimination
+    assert "localStorage.getItem" in code
+    assert "localStorage.setItem" in code
+    assert 'p.style.transition = "none"' in code
+
 
 def test_manifest_storage_permission():
     manifest_path = os.path.abspath("extension/manifest.json")
