@@ -301,15 +301,17 @@ class DownloadInfoDialog:
         self._update_app_icon(self.title)
 
         is_stream = any(d in self.url for d in ["youtube.com", "youtu.be", "tiktok.com", "vimeo.com"])
-        self.lbl_size = tk.Label(icon_box, text="", bg=CARD_BG, fg=FG_COLOR, font=("Segoe UI", 9, "bold"))
         if self.probed_size > 0:
-            self.lbl_size.config(text=format_size_id(self.probed_size))
-            self.lbl_size.pack(pady=(2, 0))
-        elif self.is_probing and not is_stream and self.probed_size <= 0:
-            self.lbl_size.config(text="Memeriksa ukuran...")
-            self.lbl_size.pack(pady=(2, 0))
-        # If size is unknown (probed_size <= 0) or stream before probing:
-        # We do NOT pack self.lbl_size, so the size label is cleanly hidden.
+            size_text = format_size_id(self.probed_size)
+        elif is_stream:
+            size_text = "Stream HD (1080p MP4)"
+        elif self.is_probing and self.probed_size <= 0:
+            size_text = "Memeriksa ukuran..."
+        else:
+            size_text = format_size_id(self.probed_size)
+
+        self.lbl_size = tk.Label(icon_box, text=size_text, bg=CARD_BG, fg=FG_COLOR, font=("Segoe UI", 9, "bold"))
+        self.lbl_size.pack(pady=(2, 0))
 
         # Right: Description box
         desc_box = tk.Frame(self.info_frame, bg=CARD_BG)
@@ -379,16 +381,19 @@ class DownloadInfoDialog:
         self.is_probing = False
         try:
             if hasattr(self, "lbl_size") and self.lbl_size and self.lbl_size.winfo_exists():
+                is_stream = any(d in self.url for d in ["youtube.com", "youtu.be", "tiktok.com", "vimeo.com"])
                 if size > 0:
                     self.lbl_size.config(text=format_size_id(size))
-                    try:
-                        is_packed = bool(self.lbl_size.pack_info())
-                    except Exception:
-                        is_packed = False
-                    if not is_packed:
-                        self.lbl_size.pack(pady=(2, 0))
+                elif is_stream:
+                    self.lbl_size.config(text="Stream HD (1080p MP4)")
                 else:
-                    self.lbl_size.pack_forget()
+                    self.lbl_size.config(text=format_size_id(size))
+                try:
+                    is_packed = bool(self.lbl_size.pack_info())
+                except Exception:
+                    is_packed = False
+                if not is_packed:
+                    self.lbl_size.pack(pady=(2, 0))
         except Exception:
             pass
 
