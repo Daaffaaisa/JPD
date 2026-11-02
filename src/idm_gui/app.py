@@ -506,11 +506,8 @@ class IDMGUIApp:
 
             # If fileSize is already known from browser payload, use it directly (PREVENTS BURNING ONE-TIME TOKENS!)
             payload_size = int(payload.get("file_size", 0))
-            if payload_size > 0:
-                probed_size = payload_size
-            else:
-                is_stream_url = any(d in url for d in ["youtube.com", "youtu.be", "tiktok.com", "vimeo.com"])
-                probed_size, _ = (0, False) if is_stream_url else self.engine.probe(url, headers=req_headers)
+            is_stream_url = any(d in url for d in ["youtube.com", "youtu.be", "tiktok.com", "vimeo.com"])
+            probed_size = payload_size if payload_size > 0 else 0
 
             if probed_size > 0:
                 task.total_bytes = probed_size
@@ -536,7 +533,7 @@ class IDMGUIApp:
                 elif action == DialogAction.CANCEL:
                     self.delete_task_by_id(task_id)
 
-            DownloadInfoDialog(
+            dlg = DownloadInfoDialog(
                 parent=self.root,
                 url=url,
                 title=clean_title,
@@ -545,7 +542,55 @@ class IDMGUIApp:
                 on_action=on_dialog_action,
                 is_suspicious=is_suspicious,
                 security_warning=sec_warning,
+                is_probing=probed_size <= 0,
             )
+
+            if probed_size <= 0 and not os.environ.get("PYTEST_CURRENT_TEST"):
+                def probe_incoming_worker():
+                    sz = 0
+                    if is_stream_url:
+                        try:
+                            import yt_dlp
+                            headers = {
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                                "Referer": "https://www.tiktok.com/" if ("tiktok.com" in url or "tiktok.com" in referer) else "https://www.google.com/",
+                            }
+                            ydl_opts = {
+                                "quiet": True,
+                                "skip_download": True,
+                                "no_warnings": True,
+                                "http_headers": headers,
+                            }
+                            with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore[arg-type]
+                                info = ydl.extract_info(url, download=False)
+                                sz = info.get("filesize") or info.get("filesize_approx") or 0
+                                if not sz and "formats" in info and info["formats"]:
+                                    for fmt in reversed(info["formats"]):
+                                        if fmt.get("filesize"):
+                                            sz = fmt["filesize"]
+                                            break
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            sz, _ = self.engine.probe(url, headers=req_headers)
+                        except Exception:
+                            pass
+
+                    if sz > 0:
+                        task.total_bytes = sz
+                        def apply_size():
+                            try:
+                                if dlg and hasattr(dlg, "top") and dlg.top.winfo_exists():
+                                    dlg.update_probed_size(sz)
+                            except Exception:
+                                pass
+                        try:
+                            self.root.after(0, apply_size)
+                        except Exception:
+                            pass
+
+                threading.Thread(target=probe_incoming_worker, daemon=True).start()
 
         self.root.after(50, handle_incoming)
 
@@ -1399,9 +1444,29 @@ class IDMGUIApp:
         )
         dlg_ref["dlg"] = dlg
 
-        if not is_yt:
-            def probe_worker():
-                size, _ = self.engine.probe(url)
+        def probe_worker():
+            size = 0
+            if is_yt:
+                try:
+                    import yt_dlp
+                    ydl_opts = {"quiet": True, "skip_download": True, "no_warnings": True}
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore[arg-type]
+                        info = ydl.extract_info(url, download=False)
+                        size = info.get("filesize") or info.get("filesize_approx") or 0
+                        if not size and "formats" in info and info["formats"]:
+                            for fmt in reversed(info["formats"]):
+                                if fmt.get("filesize"):
+                                    size = fmt["filesize"]
+                                    break
+                except Exception:
+                    pass
+            else:
+                try:
+                    size, _ = self.engine.probe(url)
+                except Exception:
+                    pass
+
+            if size > 0:
                 def apply_probe():
                     try:
                         if dlg and hasattr(dlg, "top") and dlg.top.winfo_exists():
@@ -1413,6 +1478,7 @@ class IDMGUIApp:
                 except Exception:
                     pass
 
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
             threading.Thread(target=probe_worker, daemon=True).start()
 
     def start_download(self, url: str, folder: str, parts: Optional[int] = None):

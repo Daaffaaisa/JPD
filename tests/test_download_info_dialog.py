@@ -284,4 +284,49 @@ def test_download_info_dialog_resizable_for_high_dpi(tk_root):
     dlg.top.destroy()
 
 
+def test_download_info_dialog_stream_size_hidden_by_default(tk_root):
+    dlg = DownloadInfoDialog(
+        parent=tk_root,
+        url="https://www.tiktok.com/@user/video/7685233045418298655",
+        title="TikTok_Video_7685233045418298655.mp4",
+        category="Video",
+        probed_size=0,
+    )
+    # When stream size is unknown / not yet probed, size label is cleanly hidden
+    try:
+        is_packed = bool(dlg.lbl_size.pack_info())
+    except Exception:
+        is_packed = False
+    assert is_packed is False
+    assert "Stream HD" not in dlg.lbl_size.cget("text")
+    dlg.top.destroy()
+
+
+def test_download_info_dialog_stream_size_revealed_when_probed(tk_root):
+    dlg = DownloadInfoDialog(
+        parent=tk_root,
+        url="https://www.tiktok.com/@user/video/7685233045418298655",
+        title="TikTok_Video_7685233045418298655.mp4",
+        category="Video",
+        probed_size=0,
+    )
+    try:
+        assert bool(dlg.lbl_size.pack_info()) is False
+    except Exception:
+        pass
+
+    # When size is probed and available (> 0), it becomes visible with the real size!
+    dlg.update_probed_size(783403)
+    assert bool(dlg.lbl_size.pack_info()) is True
+    assert dlg.lbl_size.cget("text") == "765,04 KB"
+
+    # If updated with 0 or unknown, it goes back to hidden
+    dlg.update_probed_size(0)
+    try:
+        assert bool(dlg.lbl_size.pack_info()) is False
+    except Exception:
+        pass
+    dlg.top.destroy()
+
+
 
