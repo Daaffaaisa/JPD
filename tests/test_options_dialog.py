@@ -119,6 +119,16 @@ def test_options_dialog_modern_theme_and_buttons():
     assert hasattr(dlg, "btn_save")
     assert hasattr(dlg, "btn_cancel")
     assert dlg.btn_save.cget("text") == "Simpan"
+
+    # Verify buttons are packed at bottom and guaranteed visible
+    assert bool(dlg.btn_save.pack_info()) is True
+    assert bool(dlg.btn_cancel.pack_info()) is True
+
+    # Verify high-DPI friendly window size
+    min_w, min_h = dlg.top.minsize()
+    assert min_w >= 560
+    assert min_h >= 500
+
     dlg.top.destroy()
     root.destroy()
 

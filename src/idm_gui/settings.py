@@ -86,6 +86,10 @@ class SettingsManager:
 
         self.data: dict = self._load()
 
+    def get_tasks_filepath(self) -> str:
+        base_dir = os.path.dirname(os.path.abspath(self.config_path))
+        return os.path.join(base_dir, "tasks.json")
+
     def _load(self) -> dict:
         if os.path.exists(self.config_path):
             try:

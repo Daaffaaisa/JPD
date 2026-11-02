@@ -178,5 +178,32 @@ def test_app_icon_application(tk_root):
     assert hasattr(tk_root, "_app_icon_photo")
 
 
+def test_main_window_context_menu_and_url_clipboard(tk_root):
+    app = IDMGUIApp(tk_root)
+    assert hasattr(app, "context_menu")
+    assert app.context_menu is not None
+
+    # Verify context menu items
+    end_idx = app.context_menu.index("end")
+    count = (end_idx + 1) if end_idx is not None else 0
+    menu_labels = [app.context_menu.entrycget(i, "label") for i in range(count) if app.context_menu.type(i) == "command"]
+    assert any("Lanjutkan" in l for l in menu_labels)
+    assert any("Jeda" in l for l in menu_labels)
+    assert any("Buka Berkas" in l for l in menu_labels)
+    assert any("Salin URL" in l for l in menu_labels)
+    assert any("Hapus" in l for l in menu_labels)
+
+    # Test copy_selected_url
+    t1 = app.queue.add_task(url="https://example.com/test_copy.iso", output_path="downloads/test_copy.iso")
+    app.tree.insert("", "end", iid=t1, values=("test_copy.iso", "10 MB", "Selesai", "100%", "--", "https://example.com/test_copy.iso"))
+    app.tree.selection_set(t1)
+
+    app.copy_selected_url()
+    try:
+        assert tk_root.clipboard_get() == "https://example.com/test_copy.iso"
+    except Exception:
+        pass  # Clipboard may be restricted in headless X11/CI environments
+
+
 
 

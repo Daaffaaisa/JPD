@@ -333,13 +333,19 @@ class IDMGUIApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("JustPressDownload (JPD)")
-        self.root.geometry("960x560")
-        self.root.minsize(760, 440)
+        self.root.geometry("1040x620")
+        self.root.minsize(820, 480)
         self.root.configure(bg=THEME["bg_dark"])
         apply_window_icon(self.root)
 
         self.engine = DownloadEngine()
         self.queue = DownloadQueue()
+        self.settings = settings
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                self.queue.load_from_file(self.settings.get_tasks_filepath())
+            except Exception:
+                pass
         self.active_threads: dict[str, threading.Thread] = {}
         self.stop_events: dict[str, threading.Event] = {}
         self.task_referers: dict[str, str] = {}
@@ -656,6 +662,20 @@ class IDMGUIApp:
 
     def quit_app(self):
         """Full exit: stops background services, tray icon, and destroys root window."""
+        # Stop all running tasks
+        for event in list(self.stop_events.values()):
+            try:
+                event.set()
+            except Exception:
+                pass
+
+        # Save persistent task queue
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                self.queue.save_to_file(self.settings.get_tasks_filepath())
+            except Exception:
+                pass
+
         if hasattr(self, "tray_icon") and self.tray_icon:
             try:
                 self.tray_icon.stop()
@@ -1122,6 +1142,38 @@ class IDMGUIApp:
 
         self.tree.bind("<Double-1>", self.on_double_click_item)
 
+        # Context Menu for Right-Click on Treeview rows
+        self.context_menu = tk.Menu(
+            self.root,
+            tearoff=0,
+            bg=THEME["surface"],
+            fg=THEME["text_primary"],
+            activebackground=THEME["accent_primary"],
+            activeforeground="#ffffff",
+            bd=1,
+            relief=tk.SOLID,
+        )
+        self.context_menu.add_command(label="▶ Lanjutkan Unduh (Resume)", command=self.resume_selected)
+        self.context_menu.add_command(label="⏸ Jeda Unduh (Pause)", command=self.pause_selected)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="📂 Buka Berkas (Open)", command=self.open_selected_file)
+        self.context_menu.add_command(label="📁 Buka Folder Penyimpanan (Open Folder)", command=self.open_selected_folder)
+        self.context_menu.add_command(label="📋 Salin URL Unduhan (Copy URL)", command=self.copy_selected_url)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="🗑 Hapus dari Daftar (Remove)", command=self.delete_selected)
+        self.context_menu.add_command(label="❌ Hapus Berkas dari Komputer", command=self.delete_selected_file_from_disk)
+
+        def _on_tree_right_click(event):
+            item = self.tree.identify_row(event.y)
+            if item:
+                self.tree.selection_set(item)
+                try:
+                    self.context_menu.tk_popup(event.x_root, event.y_root)
+                finally:
+                    self.context_menu.grab_release()
+
+        self.tree.bind("<Button-3>", _on_tree_right_click)
+
         # Empty State Card Overlay (Apple-inspired rounded card with bespoke vector badge)
         self.empty_state_frame = tk.Canvas(
             table_frame,
@@ -1243,8 +1295,8 @@ class IDMGUIApp:
             # Modern URL input dialog with inline validation
             dlg = tk.Toplevel(self.root)
             dlg.title("Masukkan URL untuk Mengunduh")
-            dlg.geometry("480x160")
-            dlg.minsize(440, 150)
+            dlg.geometry("520x180")
+            dlg.minsize(460, 160)
             dlg.resizable(True, False)
             dlg.configure(bg=THEME["surface"])
             apply_window_icon(dlg)
@@ -1259,9 +1311,9 @@ class IDMGUIApp:
             try:
                 sw = dlg.winfo_screenwidth()
                 sh = dlg.winfo_screenheight()
-                x = max(0, (sw - 480) // 2)
-                y = max(0, (sh - 160) // 2)
-                dlg.geometry(f"480x160+{x}+{y}")
+                x = max(0, (sw - 520) // 2)
+                y = max(0, (sh - 180) // 2)
+                dlg.geometry(f"520x180+{x}+{y}")
                 dlg.deiconify()
                 dlg.lift()
                 dlg.focus_force()
@@ -1387,13 +1439,19 @@ class IDMGUIApp:
             self.tree.delete(task_id)
         if task and task.output_path:
             out_dir = os.path.dirname(os.path.abspath(task.output_path))
+            target_base = os.path.splitext(os.path.basename(task.output_path))[0]
             try:
-                # Clean up any partial or temp files
+                # Clean up only partial or temp files belonging to this specific task
                 for f in os.listdir(out_dir):
-                    if f.endswith(".part") or f.endswith(".ytdl"):
+                    if f.startswith(target_base) and (f.endswith(".part") or f.endswith(".ytdl")):
                         p = os.path.join(out_dir, f)
                         if os.path.exists(p):
                             os.remove(p)
+            except Exception:
+                pass
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                self.queue.save_to_file(self.settings.get_tasks_filepath())
             except Exception:
                 pass
 
@@ -1972,6 +2030,41 @@ class IDMGUIApp:
                 os.startfile(task.output_path)
             else:
                 self.open_selected_folder()
+
+    def copy_selected_url(self):
+        tid = self._get_selected_task_id()
+        if tid:
+            task = self.queue.get_task(tid)
+            if task and task.url:
+                try:
+                    self.root.clipboard_clear()
+                    self.root.clipboard_append(task.url)
+                except Exception:
+                    pass
+
+    def delete_selected_file_from_disk(self):
+        tid = self._get_selected_task_id()
+        if not tid:
+            return
+        task = self.queue.get_task(tid)
+        if not task:
+            return
+        if self.settings.get_confirm_on_delete():
+            fname = os.path.basename(task.output_path)
+            ans = messagebox.askyesno(
+                "Konfirmasi Hapus Berkas",
+                f"Apakah Anda yakin ingin menghapus berkas '{fname}' secara permanen dari komputer Anda?",
+                parent=self.root,
+            )
+            if not ans:
+                return
+        p = task.output_path
+        self.delete_task_by_id(tid)
+        if p and os.path.exists(p):
+            try:
+                os.remove(p)
+            except Exception as e:
+                messagebox.showerror("Gagal Menghapus", f"Tidak dapat menghapus berkas: {e}", parent=self.root)
 
     def toggle_sidebar(self):
         if self.sidebar_visible:

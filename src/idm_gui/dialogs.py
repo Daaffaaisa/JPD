@@ -109,8 +109,8 @@ class DownloadInfoDialog:
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
         self.top.title("Info Unduh Berkas")
-        self.top.geometry("560x370")
-        self.top.minsize(540, 340)
+        self.top.geometry("600x420")
+        self.top.minsize(560, 390)
         self.top.resizable(True, True)
         self.top.configure(bg=THEME["surface"])
         self.top.protocol("WM_DELETE_WINDOW", self._on_cancel)
@@ -125,9 +125,9 @@ class DownloadInfoDialog:
         try:
             screen_w = self.top.winfo_screenwidth()
             screen_h = self.top.winfo_screenheight()
-            x = max(0, (screen_w - 560) // 2)
-            y = max(0, (screen_h - 370) // 2)
-            self.top.geometry(f"560x370+{x}+{y}")
+            x = max(0, (screen_w - 600) // 2)
+            y = max(0, (screen_h - 420) // 2)
+            self.top.geometry(f"600x420+{x}+{y}")
             self.top.deiconify()
             self.top.lift()
             self.top.attributes("-topmost", True)
@@ -550,8 +550,8 @@ class DownloadProgressDialog:
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
         self.top.title(f"0% {self.filename}")
-        self.top.geometry("560x440")
-        self.top.minsize(500, 360)
+        self.top.geometry("600x480")
+        self.top.minsize(540, 420)
         self.top.configure(bg=THEME["surface"])
         self.top.protocol("WM_DELETE_WINDOW", self._on_cancel_click)
 
@@ -560,9 +560,9 @@ class DownloadProgressDialog:
         try:
             screen_w = self.top.winfo_screenwidth()
             screen_h = self.top.winfo_screenheight()
-            x = max(0, (screen_w - 560) // 2)
-            y = max(0, (screen_h - 440) // 2)
-            self.top.geometry(f"560x440+{x}+{y}")
+            x = max(0, (screen_w - 600) // 2)
+            y = max(0, (screen_h - 480) // 2)
+            self.top.geometry(f"600x480+{x}+{y}")
             self.top.deiconify()
             self.top.lift()
             self.top.attributes("-topmost", True)
@@ -849,12 +849,12 @@ class DownloadProgressDialog:
         if self.show_details:
             self.detail_frame.pack_forget()
             self.btn_toggle.config(text="Tampilkan detail >>")
-            self.top.geometry("560x250")
+            self.top.geometry("600x280")
             self.show_details = False
         else:
             self.detail_frame.pack(fill=tk.BOTH, expand=True)
             self.btn_toggle.config(text="<< Sembunyikan detail")
-            self.top.geometry("560x440")
+            self.top.geometry("600x480")
             self.show_details = True
 
     def _switch_tab(self, tab_num: int):
@@ -1023,8 +1023,8 @@ class DownloadCompleteDialog:
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
         self.top.title("Unduhan Selesai")
-        self.top.geometry("520x240")
-        self.top.minsize(480, 210)
+        self.top.geometry("560x260")
+        self.top.minsize(500, 230)
         self.top.resizable(True, False)
         self.top.configure(bg=THEME["surface"])
 
@@ -1032,9 +1032,9 @@ class DownloadCompleteDialog:
         try:
             screen_w = self.top.winfo_screenwidth()
             screen_h = self.top.winfo_screenheight()
-            x = max(0, (screen_w - 520) // 2)
-            y = max(0, (screen_h - 240) // 2)
-            self.top.geometry(f"520x240+{x}+{y}")
+            x = max(0, (screen_w - 560) // 2)
+            y = max(0, (screen_h - 260) // 2)
+            self.top.geometry(f"560x260+{x}+{y}")
             self.top.deiconify()
             self.top.lift()
             self.top.attributes("-topmost", True)
@@ -1136,8 +1136,8 @@ class OptionsDialog:
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
         self.top.title("Opsi Konfigurasi JustPressDownload (JPD)")
-        self.top.geometry("560x440")
-        self.top.minsize(520, 390)
+        self.top.geometry("620x590")
+        self.top.minsize(580, 520)
         self.top.resizable(True, True)
         self.top.configure(bg=THEME["surface"])
         self.top.bind("<Escape>", lambda e: self.top.destroy())
@@ -1151,9 +1151,9 @@ class OptionsDialog:
         try:
             screen_w = self.top.winfo_screenwidth()
             screen_h = self.top.winfo_screenheight()
-            x = max(0, (screen_w - 560) // 2)
-            y = max(0, (screen_h - 440) // 2)
-            self.top.geometry(f"560x440+{x}+{y}")
+            x = max(0, (screen_w - 620) // 2)
+            y = max(0, (screen_h - 590) // 2)
+            self.top.geometry(f"620x590+{x}+{y}")
             self.top.deiconify()
             self.top.lift()
             self.top.focus_force()
@@ -1169,6 +1169,16 @@ class OptionsDialog:
         main_frame = tk.Frame(self.top, bg=BG, padx=14, pady=12)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
+        # Bottom Action buttons (Packed FIRST with side=tk.BOTTOM so they are ALWAYS guaranteed visible!)
+        btn_box = tk.Frame(main_frame, bg=BG)
+        btn_box.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
+
+        self.btn_save = create_modern_button(btn_box, "Simpan", self._on_save, kind="primary", padx=18, pady=5, radius=7)
+        self.btn_save.pack(side=tk.RIGHT, padx=4)
+
+        self.btn_cancel = create_modern_button(btn_box, "Batal", self.top.destroy, kind="secondary", padx=14, pady=5, radius=7)
+        self.btn_cancel.pack(side=tk.RIGHT, padx=4)
+
         # Style the notebook
         style = ttk.Style()
         style.configure("Options.TNotebook", background=BG, borderwidth=0)
@@ -1176,7 +1186,7 @@ class OptionsDialog:
         style.map("Options.TNotebook.Tab", background=[("selected", BG)], foreground=[("selected", FG)])
 
         self.notebook = ttk.Notebook(main_frame, style="Options.TNotebook")
-        self.notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        self.notebook.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         # ---------------- TAB 1: UMUM (General) ----------------
         tab_general = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
@@ -1196,15 +1206,17 @@ class OptionsDialog:
         self.cb_firefox_var = tk.BooleanVar(value=browser_integration.get("firefox", True))
         self.cb_opera_var = tk.BooleanVar(value=browser_integration.get("opera", False))
 
-        browsers_frame = tk.Frame(tab_general, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=12, pady=10)
-        browsers_frame.pack(fill=tk.X, pady=(0, 12))
+        browsers_frame = tk.Frame(tab_general, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=12, pady=8)
+        browsers_frame.pack(fill=tk.X, pady=(0, 10))
 
-        for name, var in [
+        for idx, (name, var) in enumerate([
             ("Google Chrome", self.cb_chrome_var),
             ("Microsoft Edge", self.cb_edge_var),
             ("Mozilla Firefox", self.cb_firefox_var),
             ("Opera Browser", self.cb_opera_var),
-        ]:
+        ]):
+            r = idx // 2
+            c = idx % 2
             tk.Checkbutton(
                 browsers_frame,
                 text=name,
@@ -1215,7 +1227,9 @@ class OptionsDialog:
                 activebackground=CARD_BG,
                 activeforeground=FG,
                 font=("Segoe UI", 9),
-            ).pack(anchor=tk.W, pady=2)
+            ).grid(row=r, column=c, sticky=tk.W, padx=10, pady=2)
+        browsers_frame.columnconfigure(0, weight=1)
+        browsers_frame.columnconfigure(1, weight=1)
 
         self.cb_startup_var = tk.BooleanVar(value=self.sm.get_autorun_startup())
         tk.Checkbutton(
@@ -1433,16 +1447,6 @@ class OptionsDialog:
             fg=THEME["text_tertiary"],
             font=("Segoe UI", 8),
         ).pack(anchor=tk.W, pady=(8, 0))
-
-        # Bottom Action buttons
-        btn_box = tk.Frame(main_frame, bg=BG)
-        btn_box.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
-
-        self.btn_save = create_modern_button(btn_box, "Simpan", self._on_save, kind="primary", padx=16, pady=4, radius=7)
-        self.btn_save.pack(side=tk.RIGHT, padx=4)
-
-        self.btn_cancel = create_modern_button(btn_box, "Batal", self.top.destroy, kind="secondary", padx=12, pady=4, radius=7)
-        self.btn_cancel.pack(side=tk.RIGHT, padx=4)
 
     def _on_cat_change(self, event=None):
         cat = self.cat_var.get()

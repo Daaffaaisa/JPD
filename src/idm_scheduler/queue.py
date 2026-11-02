@@ -108,5 +108,63 @@ class DownloadQueue:
                 target_task.error = None
             else:
                 target_task.status = TaskStatus.FAILED
-                target_task.error = res.error or "Unknown download error"
+                target_task.error = res.error
         return target_task
+
+    def save_to_file(self, filepath: str) -> bool:
+        import json
+        import os
+        with self._lock:
+            data = [
+                {
+                    "task_id": t.task_id,
+                    "url": t.url,
+                    "output_path": t.output_path,
+                    "status": "PAUSED" if t.status == TaskStatus.DOWNLOADING else t.status.value,
+                    "priority": t.priority,
+                    "bytes_downloaded": t.bytes_downloaded,
+                    "total_bytes": t.total_bytes,
+                    "error": t.error,
+                }
+                for t in self._tasks.values()
+            ]
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return True
+        except Exception:
+            return False
+
+    def load_from_file(self, filepath: str) -> bool:
+        import json
+        import os
+        if not os.path.exists(filepath):
+            return False
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            with self._lock:
+                for item in data:
+                    st_val = item.get("status", "QUEUED")
+                    if st_val == "DOWNLOADING":
+                        st_val = "PAUSED"
+                    try:
+                        st = TaskStatus(st_val)
+                    except Exception:
+                        st = TaskStatus.PAUSED
+                    tid = item.get("task_id") or str(uuid.uuid4())[:8]
+                    task = DownloadTask(
+                        task_id=tid,
+                        url=item.get("url", ""),
+                        output_path=item.get("output_path", ""),
+                        status=st,
+                        priority=item.get("priority", 0),
+                        bytes_downloaded=item.get("bytes_downloaded", 0),
+                        total_bytes=item.get("total_bytes", 0),
+                        error=item.get("error"),
+                    )
+                    self._tasks[tid] = task
+            return True
+        except Exception:
+            return False
