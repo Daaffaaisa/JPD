@@ -387,13 +387,14 @@ class IDMGUIApp:
         self._init_tray()
 
         is_autostart = "--autostart" in sys.argv
-        if is_autostart or self.settings.get_start_minimized():
+        is_incoming = "--url" in sys.argv
+        if is_autostart or is_incoming or self.settings.get_start_minimized():
             self.root.withdraw()
         else:
             self.root.deiconify()
 
         # If launched with a download URL (from browser auto-launch or CLI)
-        if "--url" in sys.argv and not os.environ.get("PYTEST_CURRENT_TEST"):
+        if is_incoming and not os.environ.get("PYTEST_CURRENT_TEST"):
             try:
                 idx = sys.argv.index("--url")
                 if idx + 1 < len(sys.argv):
@@ -408,11 +409,8 @@ class IDMGUIApp:
                         r_idx = sys.argv.index("--referer")
                         if r_idx + 1 < len(sys.argv):
                             r_val = sys.argv[r_idx + 1]
-                    self.root.deiconify()
-                    self.root.lift()
-                    self.root.attributes("-topmost", True)
-                    self.root.after(300, lambda: self.root.attributes("-topmost", False))
-                    self.root.focus_force()
+                    # Keep main dashboard window silently in tray, only display the download info dialog!
+                    self.root.withdraw()
                     def _trigger_incoming():
                         category = self._detect_category(u_val, t_val)
                         save_dir = self.settings.get_category_path(category)
@@ -423,7 +421,7 @@ class IDMGUIApp:
                             "title": t_val,
                             "referer": r_val,
                         })
-                    self.root.after(400, _trigger_incoming)
+                    self.root.after(300, _trigger_incoming)
             except Exception:
                 pass
 

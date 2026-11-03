@@ -129,7 +129,10 @@ if __name__ == "__main__":
                     urllib.request.urlopen(req, timeout=1.0)
                 except Exception:
                     pass
+                # Kept minimized in tray, only the download dialog is opened by the running instance
+                sys.exit(0)
 
+            # Manual double-click launch: restore main dashboard window
             user32 = ctypes.windll.user32
             hwnd = user32.FindWindowW(None, "JustPressDownload (JPD)")
             if hwnd:
