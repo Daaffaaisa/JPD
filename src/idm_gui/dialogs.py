@@ -109,8 +109,8 @@ class DownloadInfoDialog:
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
         self.top.title("Info Unduh Berkas")
-        self.top.geometry("600x420")
-        self.top.minsize(560, 390)
+        self.top.geometry("580x350")
+        self.top.minsize(550, 340)
         self.top.resizable(True, True)
         self.top.configure(bg=THEME["surface"])
         self.top.protocol("WM_DELETE_WINDOW", self._on_cancel)
@@ -125,9 +125,9 @@ class DownloadInfoDialog:
         try:
             screen_w = self.top.winfo_screenwidth()
             screen_h = self.top.winfo_screenheight()
-            x = max(0, (screen_w - 600) // 2)
-            y = max(0, (screen_h - 420) // 2)
-            self.top.geometry(f"600x420+{x}+{y}")
+            x = max(0, (screen_w - 580) // 2)
+            y = max(0, (screen_h - 350) // 2)
+            self.top.geometry(f"580x350+{x}+{y}")
             self.top.deiconify()
             self.top.lift()
             self.top.attributes("-topmost", True)
@@ -287,8 +287,8 @@ class DownloadInfoDialog:
         self.lbl_sub_folder.grid(row=4, column=1, columnspan=2, sticky=tk.EW, padx=(6, 0), pady=(0, 4))
 
         # 5. File Info Frame (Icon, Size, Description)
-        self.info_frame = tk.Frame(main_frame, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=12, pady=10)
-        self.info_frame.grid(row=5, column=0, columnspan=3, sticky=tk.NSEW, pady=(6, 10))
+        self.info_frame = tk.Frame(main_frame, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=14, pady=12)
+        self.info_frame.grid(row=5, column=0, columnspan=3, sticky=tk.EW, pady=(8, 12))
 
         # Left: Icon & Size
         icon_box = tk.Frame(self.info_frame, bg=CARD_BG)
@@ -311,7 +311,7 @@ class DownloadInfoDialog:
             size_text = format_size_id(self.probed_size)
 
         self.lbl_size = tk.Label(icon_box, text=size_text, bg=CARD_BG, fg=FG_COLOR, font=("Segoe UI", 9, "bold"))
-        self.lbl_size.pack(pady=(2, 0))
+        self.lbl_size.pack(pady=(4, 0))
 
         # Right: Description box
         desc_box = tk.Frame(self.info_frame, bg=CARD_BG)
@@ -327,7 +327,7 @@ class DownloadInfoDialog:
             bd=1,
             font=("Segoe UI", 9),
         )
-        self.desc_entry.pack(fill=tk.X, expand=True, pady=(2, 0))
+        self.desc_entry.pack(fill=tk.X, expand=True, pady=(3, 0))
 
         # Parallel Connections indicator
         active_conns = settings.get_max_connections()
@@ -343,11 +343,11 @@ class DownloadInfoDialog:
             fg=THEME["success"],
             font=("Segoe UI", 8, "italic"),
         )
-        self.conn_label.pack(anchor=tk.W, pady=(4, 0))
+        self.conn_label.pack(anchor=tk.W, pady=(6, 0))
 
         # 6. Action Buttons Row (Unduh Nanti, Mulai Unduh, Batal)
         self.btn_frame = tk.Frame(main_frame, bg=BG_COLOR)
-        self.btn_frame.grid(row=6, column=0, columnspan=3, sticky=tk.E, pady=(6, 0))
+        self.btn_frame.grid(row=6, column=0, columnspan=3, sticky=tk.E, pady=(4, 2))
 
         btn_later = create_modern_button(self.btn_frame, "Unduh Nanti", self._on_later, kind="secondary", padx=12, pady=4, radius=7)
         btn_later.pack(side=tk.LEFT, padx=4)
@@ -363,7 +363,8 @@ class DownloadInfoDialog:
         self.top.bind("<Escape>", lambda e: self._on_cancel())
 
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(5, weight=1)
+        # Row 5 (info card) shouldn't blow up empty vertical space
+        main_frame.rowconfigure(5, weight=0)
 
     def _update_app_icon(self, filename: str):
         try:
