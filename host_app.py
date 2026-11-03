@@ -45,17 +45,26 @@ def main():
 
     gui_exe = os.path.join(base_dir, "JustPressDownload.exe")
 
-    # 1. If JustPressDownload is already running, HTTP loopback will succeed instantly
+    # 1. Fast socket check: if JustPressDownload is already running, port 19900 will answer in 1ms
     dispatched = False
     try:
-        req = urllib.request.Request(
-            "http://127.0.0.1:19900/api/download",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=1.0) as r:
-            if r.status == 200:
-                dispatched = True
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.04)
+        s.connect(("127.0.0.1", 19900))
+        # Port is open! Send HTTP request
+        s.settimeout(1.0)
+        body = json.dumps(payload).encode("utf-8")
+        http_data = (
+            f"POST /api/download HTTP/1.1\r\n"
+            f"Host: 127.0.0.1:19900\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            f"Connection: close\r\n\r\n"
+        ).encode("utf-8") + body
+        s.sendall(http_data)
+        s.close()
+        dispatched = True
     except Exception:
         dispatched = False
 

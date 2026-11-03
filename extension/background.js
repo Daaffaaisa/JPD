@@ -243,10 +243,10 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
     reply({ status: "error", error: "Connection to Desktop App timed out. Pastikan JustPressDownload.exe atau run_gui.bat terbuka!" });
   }, 3500);
 
-  // Primary path: Direct HTTP Loopback to JustPressDownload (JPD) Desktop App (fast 400ms check)
+  // Primary path: Direct HTTP Loopback to JustPressDownload (JPD) Desktop App (instant 120ms check)
   try {
     const controller = new AbortController();
-    const abortTimeout = setTimeout(() => controller.abort(), 400);
+    const abortTimeout = setTimeout(() => controller.abort(), 120);
 
     const resp = await fetch(`${LOCAL_SERVER_URL}/api/download`, {
       method: "POST",

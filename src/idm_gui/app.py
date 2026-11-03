@@ -421,7 +421,7 @@ class IDMGUIApp:
                             "title": t_val,
                             "referer": r_val,
                         })
-                    self.root.after(300, _trigger_incoming)
+                    self.root.after(30, _trigger_incoming)
             except Exception:
                 pass
 
@@ -446,23 +446,16 @@ class IDMGUIApp:
 
     def _get_clean_title_with_ext(self, url: str, title: str, category: str) -> str:
         clean = (title or "").strip()
-        common_exts = [
+        common_exts = {
             "jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "avif", "ico",
             "mp4", "mkv", "webm", "avi", "mov", "flv",
             "mp3", "m4a", "wav", "flac", "aac", "ogg",
             "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt",
             "zip", "rar", "7z", "tar", "gz",
             "exe", "msi", "iso"
-        ]
+        }
         if "." in clean and clean.rsplit(".", 1)[-1].lower() in common_exts:
             return clean
-
-        inferred = self.engine.get_filename(url)
-        if inferred and "." in inferred:
-            ext = "." + inferred.rsplit(".", 1)[-1].lower()
-            if ext.lstrip(".") in common_exts:
-                base = clean or inferred.rsplit(".", 1)[0]
-                return f"{base}{ext}"
 
         fallback_map = {
             "Gambar": ".jpg",
@@ -472,6 +465,26 @@ class IDMGUIApp:
             "Berkas Terkompresi": ".zip",
             "Program": ".exe",
         }
+
+        # For stream and social video URLs, immediately use category fallback without any blocking network probe
+        is_stream = any(d in url for d in ["youtube.com", "youtu.be", "tiktok.com", "vimeo.com", "googlevideo", "tiktokcdn"])
+        if is_stream:
+            ext = fallback_map.get(category, ".mp4")
+            base = clean or "video"
+            return f"{base}{ext}"
+
+        # Fast local URL path parsing (0ms overhead, no synchronous HTTP blocking!)
+        try:
+            parsed = urllib.parse.urlparse(url)
+            path_base = os.path.basename(parsed.path)
+            if path_base and "." in path_base:
+                ext = "." + path_base.rsplit(".", 1)[-1].lower()
+                if ext.lstrip(".") in common_exts:
+                    base = clean or path_base.rsplit(".", 1)[0]
+                    return f"{base}{ext}"
+        except Exception:
+            pass
+
         ext = fallback_map.get(category, ".bin")
         base = clean or "download"
         return f"{base}{ext}"
