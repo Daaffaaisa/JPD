@@ -1,7 +1,7 @@
 {
     "name": "com.justpressdownload.host",
     "description": "JustPressDownload (JPD) Browser Extension Native Messaging Host",
-    "path": "F:\\Hermes Project\\REA\\idm_clone\\JustPressDownload.exe",
+    "path": "F:\\Hermes Project\\REA\\idm_clone\\JustPressDownloadHost.exe",
     "type": "stdio",
     "allowed_origins": [
         "chrome-extension://pbhnaclienkiinppjnpfdhohagnpkjoj/",

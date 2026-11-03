@@ -76,9 +76,12 @@ def register_protocol(exe_path: str):
 
 def main():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    exe_path = os.path.join(base_dir, "JustPressDownload.exe")
-    if not os.path.exists(exe_path):
-        exe_path = os.path.join(base_dir, "run_gui.bat")
+    gui_exe = os.path.join(base_dir, "JustPressDownload.exe")
+    host_exe = os.path.join(base_dir, "JustPressDownloadHost.exe")
+    if not os.path.exists(host_exe):
+        host_exe = gui_exe
+    if not os.path.exists(gui_exe):
+        gui_exe = os.path.join(base_dir, "run_gui.bat")
 
     manifests = [
         os.path.join(base_dir, "manifests", "com.justpressdownload.host.json"),
@@ -90,12 +93,13 @@ def main():
     print("==================================================================")
     print("  JustPressDownload (JPD) - Registrasi Integrasi Browser Otomatis")
     print("==================================================================")
-    print(f"Target Binary: {exe_path}")
+    print(f"Target Host Binary: {host_exe}")
+    print(f"Target GUI Binary:  {gui_exe}")
 
     ext_dir = os.path.join(base_dir, "extension")
     for m in manifests:
         if os.path.exists(m):
-            update_manifest_target_path(m, exe_path, ext_dir)
+            update_manifest_target_path(m, host_exe, ext_dir)
 
     # Register hosts
     for browser in ["chrome", "edge", "brave"]:
@@ -106,7 +110,7 @@ def main():
     register_host("firefox", "com.idmclone.host", os.path.join(base_dir, "manifests", "com.idmclone.host.moz.json"))
 
     # Register custom protocol justpressdownload:// for instant desktop app launching from browser
-    register_protocol(exe_path)
+    register_protocol(gui_exe)
 
     ext_dir = os.path.join(base_dir, "extension")
     print("\n==================================================================")
