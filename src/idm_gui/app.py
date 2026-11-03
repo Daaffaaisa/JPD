@@ -386,8 +386,46 @@ class IDMGUIApp:
         # Initialize System Tray Icon
         self._init_tray()
 
-        if self.settings.get_start_minimized():
+        is_autostart = "--autostart" in sys.argv
+        if is_autostart or self.settings.get_start_minimized():
             self.root.withdraw()
+        else:
+            self.root.deiconify()
+
+        # If launched with a download URL (from browser auto-launch or CLI)
+        if "--url" in sys.argv and not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                idx = sys.argv.index("--url")
+                if idx + 1 < len(sys.argv):
+                    u_val = sys.argv[idx + 1]
+                    t_val = ""
+                    r_val = ""
+                    if "--title" in sys.argv:
+                        t_idx = sys.argv.index("--title")
+                        if t_idx + 1 < len(sys.argv):
+                            t_val = sys.argv[t_idx + 1]
+                    if "--referer" in sys.argv:
+                        r_idx = sys.argv.index("--referer")
+                        if r_idx + 1 < len(sys.argv):
+                            r_val = sys.argv[r_idx + 1]
+                    self.root.deiconify()
+                    self.root.lift()
+                    self.root.attributes("-topmost", True)
+                    self.root.after(300, lambda: self.root.attributes("-topmost", False))
+                    self.root.focus_force()
+                    def _trigger_incoming():
+                        category = self._detect_category(u_val, t_val)
+                        save_dir = self.settings.get_category_path(category)
+                        clean_fname = self._get_clean_title_with_ext(u_val, t_val, category)
+                        t_id = self.queue.add_task(url=u_val, output_path=os.path.join(save_dir, clean_fname))
+                        self._on_server_task_added(t_id, {
+                            "url": u_val,
+                            "title": t_val,
+                            "referer": r_val,
+                        })
+                    self.root.after(400, _trigger_incoming)
+            except Exception:
+                pass
 
         # Start periodic UI update timer
         self.root.after(300, self._tick_ui)

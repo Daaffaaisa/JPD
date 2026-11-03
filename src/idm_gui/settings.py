@@ -21,21 +21,22 @@ def set_windows_startup(enabled: bool) -> bool:
             winreg.HKEY_CURRENT_USER, REG_RUN_KEY, 0, winreg.KEY_SET_VALUE
         ) as key:
             if enabled:
-                exe_candidates = [
-                    os.path.abspath("JustPressDownload.exe"),
-                    os.path.abspath("dist/JustPressDownload.exe"),
-                ]
-                target_exe = None
-                for c in exe_candidates:
-                    if os.path.exists(c):
-                        target_exe = c
-                        break
-                if not target_exe:
-                    if getattr(sys, "frozen", False):
-                        target_exe = sys.executable
-                    else:
+                if getattr(sys, "frozen", False):
+                    target_exe = sys.executable
+                else:
+                    candidates = [
+                        os.path.abspath("JustPressDownload.exe"),
+                        os.path.abspath("dist/JustPressDownload.exe"),
+                    ]
+                    target_exe = None
+                    for c in candidates:
+                        if os.path.exists(c):
+                            target_exe = c
+                            break
+                    if not target_exe:
                         target_exe = os.path.abspath("run_gui.bat")
-                winreg.SetValueEx(key, APP_RUN_NAME, 0, winreg.REG_SZ, f'"{target_exe}"')
+                cmd = f'"{target_exe}" --autostart'
+                winreg.SetValueEx(key, APP_RUN_NAME, 0, winreg.REG_SZ, cmd)
             else:
                 try:
                     winreg.DeleteValue(key, APP_RUN_NAME)

@@ -1,6 +1,7 @@
 // JustPressDownload (JPD) Background Service Worker - Dual Bridge (Local HTTP Server + Native Messaging)
 const LOCAL_SERVER_URL = "http://127.0.0.1:19900";
-const NATIVE_HOST = "com.idmclone.host";
+const NATIVE_HOST = "com.justpressdownload.host";
+const FALLBACK_NATIVE_HOST = "com.idmclone.host";
 
 // Per-tab detected media cache
 const tabMedia = {};
@@ -270,22 +271,30 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
     console.log("[JustPressDownload] Local server not active, trying Native Messaging fallback...", err);
   }
 
-  // Fallback path: Native Messaging
-  try {
-    chrome.runtime.sendNativeMessage(NATIVE_HOST, { action: "download", ...payload }, (response) => {
+  // Fallback path: Native Messaging (Auto-launches JustPressDownload.exe if closed!)
+  const tryNative = (hostName, onFail) => {
+    try {
+      chrome.runtime.sendNativeMessage(hostName, { action: "download", ...payload }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn(`[JustPressDownload] Native host (${hostName}) error:`, chrome.runtime.lastError.message);
+          if (onFail) onFail();
+        } else {
+          clearTimeout(timer);
+          showNotification("JustPressDownload (JPD)", `Membuka aplikasi & mengirim: ${title || "berkas"}`);
+          reply(response || { status: "ok" });
+        }
+      });
+    } catch (err) {
+      if (onFail) onFail();
+    }
+  };
+
+  tryNative(NATIVE_HOST, () => {
+    tryNative(FALLBACK_NATIVE_HOST, () => {
       clearTimeout(timer);
-      if (chrome.runtime.lastError) {
-        console.warn("[JustPressDownload] Native host error:", chrome.runtime.lastError.message);
-        reply({ status: "error", error: chrome.runtime.lastError.message });
-      } else {
-        showNotification("JustPressDownload (JPD)", `Unduhan dikirim: ${title || "berkas"}`);
-        reply(response || { status: "ok" });
-      }
+      reply({ status: "error", error: "Gagal menghubungkan ke JustPressDownload. Pastikan JustPressDownload terpasang!" });
     });
-  } catch (err) {
-    clearTimeout(timer);
-    reply({ status: "error", error: err.message });
-  }
+  });
 }
 
 function showNotification(title, message) {

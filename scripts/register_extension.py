@@ -5,8 +5,8 @@ import json
 import winreg
 
 
-def update_manifest_target_path(manifest_path: str, target_binary: str):
-    """Updates the binary path inside the manifest to an absolute verified path."""
+def update_manifest_target_path(manifest_path: str, target_binary: str, ext_dir: str = ""):
+    """Updates the binary path inside the manifest to an absolute verified path and auto-computes extension ID."""
     abs_manifest = os.path.abspath(manifest_path)
     if not os.path.exists(abs_manifest):
         return
@@ -14,6 +14,14 @@ def update_manifest_target_path(manifest_path: str, target_binary: str):
         with open(abs_manifest, "r", encoding="utf-8") as f:
             data = json.load(f)
         data["path"] = os.path.abspath(target_binary)
+        if "allowed_origins" in data and ext_dir:
+            import hashlib
+            norm = os.path.abspath(ext_dir)
+            h = hashlib.sha256(norm.encode("utf-8")).hexdigest()[:32]
+            computed_id = "".join(chr(ord("a") + int(c, 16)) for c in h)
+            origin = f"chrome-extension://{computed_id}/"
+            if origin not in data["allowed_origins"]:
+                data["allowed_origins"].insert(0, origin)
         with open(abs_manifest, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
@@ -68,9 +76,10 @@ def main():
     print("==================================================================")
     print(f"Target Binary: {exe_path}")
 
+    ext_dir = os.path.join(base_dir, "extension")
     for m in manifests:
         if os.path.exists(m):
-            update_manifest_target_path(m, exe_path)
+            update_manifest_target_path(m, exe_path, ext_dir)
 
     # Register hosts
     for browser in ["chrome", "edge", "brave"]:

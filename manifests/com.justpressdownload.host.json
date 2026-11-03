@@ -4,6 +4,7 @@
     "path": "F:\\Hermes Project\\REA\\idm_clone\\JustPressDownload.exe",
     "type": "stdio",
     "allowed_origins": [
+        "chrome-extension://pbhnaclienkiinppjnpfdhohagnpkjoj/",
         "chrome-extension://idmcloneextensionid/",
         "chrome-extension://ngpampappnmepgilojfohadhhmbhlaek/"
     ]
