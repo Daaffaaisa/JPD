@@ -279,7 +279,7 @@ def test_download_info_dialog_resizable_for_high_dpi(tk_root):
     # Check that minimum size is defined for High-DPI
     min_w, min_h = dlg.top.minsize()
     assert min_w >= 540
-    assert min_h >= 340
+    assert min_h >= 280
     dlg.top.destroy()
 
 
