@@ -234,6 +234,7 @@ class SidebarNavItem(tk.Frame):
         self.on_click = on_click
         self.on_double_click = on_double_click
         self.is_active = False
+        self.is_compact = False
         self.count = 0
 
         # Left 3px active indicator bar
@@ -244,10 +245,10 @@ class SidebarNavItem(tk.Frame):
         self.content = tk.Frame(self, bg=THEME["surface_alt"], padx=8, pady=5)
         self.content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(2, 8), pady=1)
 
-        # Fixed-width 24px container for icon so all labels align with mathematical precision
-        self.icon_box = tk.Frame(self.content, bg=THEME["surface_alt"], width=24, height=20)
+        # Fixed-width 32px container for icon
+        self.icon_box = tk.Frame(self.content, bg=THEME["surface_alt"], width=32, height=24)
         self.icon_box.pack_propagate(False)
-        self.icon_box.pack(side=tk.LEFT, padx=(2, 8))
+        self.icon_box.pack(side=tk.LEFT, padx=(2, 6))
 
         clean_icon = icon.replace("\ufe0f", "")
         self.lbl_icon = tk.Label(
@@ -258,7 +259,10 @@ class SidebarNavItem(tk.Frame):
             font=(FONT_DISPLAY, 10),
             anchor=tk.CENTER,
         )
-        self.lbl_icon.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.lbl_icon.place(relx=0.45, rely=0.5, anchor=tk.CENTER)
+
+        # Phone-style round notification badge overlay for compact mode (top-right of icon)
+        self.badge_canvas = tk.Canvas(self.icon_box, width=14, height=14, bg=THEME["surface_alt"], highlightthickness=0)
 
         self.lbl_text = tk.Label(
             self.content,
@@ -280,11 +284,56 @@ class SidebarNavItem(tk.Frame):
         )
         self.lbl_badge.pack(side=tk.RIGHT)
 
-        for w in (self, self.content, self.icon_box, self.lbl_icon, self.lbl_text, self.lbl_badge):
+        for w in (self, self.content, self.icon_box, self.lbl_icon, self.lbl_text, self.lbl_badge, self.badge_canvas):
             w.bind("<Button-1>", lambda e: self._handle_click())
             w.bind("<Double-Button-1>", lambda e: self._handle_double_click())
             w.bind("<Enter>", lambda e: self._on_enter())
             w.bind("<Leave>", lambda e: self._on_leave())
+
+    def _draw_phone_badge(self):
+        if not self.is_compact or self.count <= 0:
+            self.badge_canvas.place_forget()
+            return
+
+        cnt_str = str(self.count) if self.count < 100 else "99+"
+        is_double = len(cnt_str) > 1
+        bw = 20 if is_double else 14
+        bh = 14
+        self.badge_canvas.configure(width=bw, height=bh)
+        self.badge_canvas.delete("all")
+
+        bg_col = self.icon_box.cget("bg")
+        self.badge_canvas.configure(bg=bg_col)
+
+        if not is_double:
+            self.badge_canvas.create_oval(1, 1, 13, 13, fill="#ef4444", outline="#070b13", width=1)
+            self.badge_canvas.create_text(7, 7, text=cnt_str, fill="#ffffff", font=(FONT_DISPLAY, 7, "bold"))
+        else:
+            self.badge_canvas.create_oval(1, 1, 13, 13, fill="#ef4444", outline="#070b13", width=1)
+            self.badge_canvas.create_oval(bw - 13, 1, bw - 1, 13, fill="#ef4444", outline="#070b13", width=1)
+            self.badge_canvas.create_rectangle(7, 1, bw - 7, 13, fill="#ef4444", outline="")
+            self.badge_canvas.create_line(7, 1, bw - 7, 1, fill="#070b13", width=1)
+            self.badge_canvas.create_line(7, 13, bw - 7, 13, fill="#070b13", width=1)
+            self.badge_canvas.create_text(bw // 2, 7, text=cnt_str, fill="#ffffff", font=(FONT_DISPLAY, 6, "bold"))
+
+        self.badge_canvas.place(relx=1.0, rely=0.0, anchor=tk.NE)
+
+    def set_compact(self, compact: bool):
+        self.is_compact = compact
+        if compact:
+            self.lbl_text.pack_forget()
+            self.lbl_badge.pack_forget()
+            self.content.pack_configure(padx=0, pady=3)
+            self.icon_box.pack_configure(padx=0)
+            self.lbl_icon.place_configure(relx=0.45, rely=0.55)
+            self._draw_phone_badge()
+        else:
+            self.badge_canvas.place_forget()
+            self.content.pack_configure(padx=(2, 8), pady=1)
+            self.icon_box.pack_configure(padx=(2, 6))
+            self.lbl_icon.place_configure(relx=0.45, rely=0.5)
+            self.lbl_text.pack(side=tk.LEFT)
+            self.lbl_badge.pack(side=tk.RIGHT)
 
     def _handle_click(self):
         if self.on_click:
@@ -305,28 +354,36 @@ class SidebarNavItem(tk.Frame):
         self.indicator.configure(bg=ind_col)
         self.content.configure(bg=bg_col)
         self.icon_box.configure(bg=bg_col)
+        self.badge_canvas.configure(bg=bg_col)
         self.lbl_icon.configure(bg=bg_col, fg="#60a5fa" if active else THEME["text_secondary"])
         self.lbl_text.configure(bg=bg_col, fg=fg_col, font=(FONT_DISPLAY if active else FONT_FAMILY, 9, "bold" if active else "normal"))
         self.lbl_badge.configure(bg=THEME["input_bg"], fg=badge_fg)
+        if self.is_compact:
+            self._draw_phone_badge()
 
     def set_count(self, count: int):
         self.count = count
         self.lbl_badge.config(text=str(count))
+        if self.is_compact:
+            self._draw_phone_badge()
 
     def _on_enter(self):
         if not self.is_active:
             hover_bg = "#192231"
             self.content.configure(bg=hover_bg)
             self.icon_box.configure(bg=hover_bg)
+            self.badge_canvas.configure(bg=hover_bg)
             self.lbl_icon.configure(bg=hover_bg)
             self.lbl_text.configure(bg=hover_bg)
 
     def _on_leave(self):
         if not self.is_active:
-            self.content.configure(bg=THEME["surface_alt"])
-            self.icon_box.configure(bg=THEME["surface_alt"])
-            self.lbl_icon.configure(bg=THEME["surface_alt"])
-            self.lbl_text.configure(bg=THEME["surface_alt"])
+            bg_col = THEME["surface_alt"]
+            self.content.configure(bg=bg_col)
+            self.icon_box.configure(bg=bg_col)
+            self.badge_canvas.configure(bg=bg_col)
+            self.lbl_icon.configure(bg=bg_col)
+            self.lbl_text.configure(bg=bg_col)
 
 
 class IDMGUIApp:
@@ -1059,13 +1116,51 @@ class IDMGUIApp:
         # Left Sidebar: Modern Apple/Linear Navigation Bar
         self.sidebar_frame = tk.Frame(self.paned, width=205, bg=THEME["surface_alt"])
         self.sidebar_visible = True
+        self.sidebar_compact = False
 
         # Quick Storage Card anchored to bottom of sidebar (3D Tactile rounded card)
-        storage_card = TactileStorageCard(self.sidebar_frame, on_open_folder=self.open_selected_folder, r=10)
-        storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
+        self.storage_card = TactileStorageCard(self.sidebar_frame, on_open_folder=self.open_selected_folder, r=10)
+        self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
+
+        # Compact Folder Button for Compact Mode (at bottom of sidebar)
+        self.btn_compact_folder = create_modern_button(
+            self.sidebar_frame,
+            text="📁",
+            command=self.open_selected_folder,
+            kind="secondary",
+            padx=8,
+            pady=6,
+            radius=6,
+            tooltip="Buka Folder Unduhan Utama",
+        )
+
+        # Sidebar Header with Hamburger (Garis Tiga ☰) Toggle Button
+        self.sidebar_header = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=36)
+        self.sidebar_header.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(8, 2))
+
+        self.btn_hamburger = create_modern_button(
+            self.sidebar_header,
+            text="☰",
+            command=self.toggle_sidebar_compact,
+            kind="secondary",
+            padx=8,
+            pady=3,
+            radius=6,
+            tooltip="Sembunyikan / Tampilkan Label Menu (Garis Tiga)",
+        )
+        self.btn_hamburger.pack(side=tk.LEFT)
+
+        self.lbl_sidebar_title = tk.Label(
+            self.sidebar_header,
+            text="NAVIGASI",
+            bg=THEME["surface_alt"],
+            fg=THEME["text_tertiary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+        )
+        self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(8, 0))
 
         # Section 1: PUSTAKA
-        tk.Label(
+        self.lbl_sec_pustaka = tk.Label(
             self.sidebar_frame,
             text="PUSTAKA",
             bg=THEME["surface_alt"],
@@ -1073,7 +1168,8 @@ class IDMGUIApp:
             font=(FONT_DISPLAY, 8, "bold"),
             anchor=tk.W,
             padx=14,
-        ).pack(fill=tk.X, pady=(12, 4))
+        )
+        self.lbl_sec_pustaka.pack(fill=tk.X, pady=(6, 4))
 
         pustaka_specs = [
             ("all", "📥", "Semua Unduhan"),
@@ -1092,8 +1188,11 @@ class IDMGUIApp:
             item.pack(fill=tk.X)
             self.sidebar_items[key] = item
 
+        # Subtle divider between sections in compact mode
+        self.div_sec_kategori = tk.Frame(self.sidebar_frame, height=1, bg=THEME["border"])
+
         # Section 2: KATEGORI BERKAS
-        tk.Label(
+        self.lbl_sec_kategori = tk.Label(
             self.sidebar_frame,
             text="KATEGORI BERKAS",
             bg=THEME["surface_alt"],
@@ -1101,7 +1200,8 @@ class IDMGUIApp:
             font=(FONT_DISPLAY, 8, "bold"),
             anchor=tk.W,
             padx=14,
-        ).pack(fill=tk.X, pady=(14, 4))
+        )
+        self.lbl_sec_kategori.pack(fill=tk.X, pady=(12, 4))
 
         cat_specs = [
             ("video", "🎬", "Video"),
@@ -1129,7 +1229,7 @@ class IDMGUIApp:
         # Dummy hidden category_tree for total backward compatibility
         self.category_tree = ttk.Treeview(self.sidebar_frame)
 
-        self.paned.add(self.sidebar_frame, minsize=160)
+        self.paned.add(self.sidebar_frame, minsize=56)
 
         # Right Container: Dashboard Live Stats + Downloads Table
         right_container = tk.Frame(self.paned, bg=THEME["tree_bg"])
@@ -2115,17 +2215,70 @@ class IDMGUIApp:
             except Exception as e:
                 messagebox.showerror("Gagal Menghapus", f"Tidak dapat menghapus berkas: {e}", parent=self.root)
 
+    def toggle_sidebar_compact(self):
+        """Toggle between expanded sidebar with labels and compact sidebar with icons and phone notification badges."""
+        self.sidebar_compact = not self.sidebar_compact
+        self._apply_sidebar_compact_state()
+
+    def _apply_sidebar_compact_state(self):
+        if self.sidebar_compact:
+            self.lbl_sidebar_title.pack_forget()
+            self.btn_hamburger.pack_configure(side=tk.TOP)
+            self.lbl_sec_pustaka.pack_forget()
+            self.lbl_sec_kategori.pack_forget()
+            if "video" in self.sidebar_items:
+                self.div_sec_kategori.pack(before=self.sidebar_items["video"], fill=tk.X, padx=10, pady=8)
+            self.storage_card.pack_forget()
+            self.btn_compact_folder.pack(side=tk.BOTTOM, pady=8)
+
+            for item in self.sidebar_items.values():
+                item.set_compact(True)
+
+            self.sidebar_frame.configure(width=56)
+            try:
+                self.paned.paneconfig(self.sidebar_frame, minsize=56)
+                self.paned.sash_place(0, 56, 0)
+            except Exception:
+                pass
+        else:
+            self.div_sec_kategori.pack_forget()
+            self.btn_compact_folder.pack_forget()
+            self.btn_hamburger.pack_configure(side=tk.LEFT)
+            self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(8, 0))
+
+            if "all" in self.sidebar_items:
+                self.lbl_sec_pustaka.pack(before=self.sidebar_items["all"], fill=tk.X, pady=(6, 4))
+            if "video" in self.sidebar_items:
+                self.lbl_sec_kategori.pack(before=self.sidebar_items["video"], fill=tk.X, pady=(12, 4))
+            self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
+
+            for item in self.sidebar_items.values():
+                item.set_compact(False)
+
+            self.sidebar_frame.configure(width=205)
+            try:
+                self.paned.paneconfig(self.sidebar_frame, minsize=160)
+                self.paned.sash_place(0, 205, 0)
+            except Exception:
+                pass
+
     def toggle_sidebar(self):
         if self.sidebar_visible:
             self.paned.forget(self.sidebar_frame)
             self.sidebar_visible = False
         else:
             panes = self.paned.panes()
+            min_s = 56 if self.sidebar_compact else 160
             if panes:
-                self.paned.add(self.sidebar_frame, before=panes[0], minsize=140)
+                self.paned.add(self.sidebar_frame, before=panes[0], minsize=min_s)
             else:
-                self.paned.add(self.sidebar_frame, minsize=140)
+                self.paned.add(self.sidebar_frame, minsize=min_s)
             self.sidebar_visible = True
+            target_w = 56 if self.sidebar_compact else 205
+            try:
+                self.paned.sash_place(0, target_w, 0)
+            except Exception:
+                pass
 
     def sort_by_column(self, col: str):
         col_map = {"name": 0, "size": 1, "status": 2, "speed": 4}

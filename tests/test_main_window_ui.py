@@ -140,6 +140,37 @@ def test_main_window_modern_sidebar_navigation_and_counts(tk_root):
     assert app.active_category_filter == "all"
 
 
+def test_main_window_sidebar_compact_toggle_and_phone_badges(tk_root):
+    app = IDMGUIApp(tk_root)
+    assert hasattr(app, "btn_hamburger")
+    assert app.sidebar_compact is False
+
+    # Set some test counts
+    app.sidebar_items["all"].set_count(5)
+    app.sidebar_items["video"].set_count(2)
+    app.sidebar_items["music"].set_count(0)
+
+    # 1. Toggle to compact mode
+    app.toggle_sidebar_compact()
+    assert app.sidebar_compact is True
+    assert app.sidebar_items["all"].is_compact is True
+    assert app.sidebar_items["video"].is_compact is True
+
+    # Check that items with count > 0 have phone badge drawn
+    assert bool(app.sidebar_items["all"].badge_canvas.place_info()) is True
+    assert bool(app.sidebar_items["video"].badge_canvas.place_info()) is True
+    # Item with count 0 should NOT show phone badge
+    assert bool(app.sidebar_items["music"].badge_canvas.place_info()) is False
+
+    # 2. Toggle back to expanded mode
+    app.toggle_sidebar_compact()
+    assert app.sidebar_compact is False
+    assert app.sidebar_items["all"].is_compact is False
+    # Phone badge should be forgotten in expanded mode
+    assert bool(app.sidebar_items["all"].badge_canvas.place_info()) is False
+    assert app.sidebar_items["all"].lbl_badge.cget("text") == "5"
+
+
 def test_main_window_table_modern_layout_and_tags(tk_root):
     app = IDMGUIApp(tk_root)
     t1 = app.queue.add_task("https://example.com/video.mp4", "video.mp4")
