@@ -304,6 +304,18 @@
           referer: window.location.href,
         },
         (resp) => {
+          if (resp && resp.action === "launch_protocol" && resp.uri) {
+            const a = document.createElement("a");
+            a.href = resp.uri;
+            a.style.display = "none";
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => a.remove(), 1000);
+          }
+          if (resp && resp.status === "error") {
+            btn.style.background = "#ef4444";
+            if (btnSpan) btnSpan.textContent = "✕ Gagal membuka JPD";
+          }
           setTimeout(() => {
             btn.style.background = oldBg || "#2563eb";
             if (btnSpan) btnSpan.textContent = oldText;

@@ -243,10 +243,10 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
     reply({ status: "error", error: "Connection to Desktop App timed out. Pastikan JustPressDownload.exe atau run_gui.bat terbuka!" });
   }, 3500);
 
-  // Primary path: Direct HTTP Loopback to JustPressDownload (JPD) Desktop App
+  // Primary path: Direct HTTP Loopback to JustPressDownload (JPD) Desktop App (fast 400ms check)
   try {
     const controller = new AbortController();
-    const abortTimeout = setTimeout(() => controller.abort(), 3000);
+    const abortTimeout = setTimeout(() => controller.abort(), 400);
 
     const resp = await fetch(`${LOCAL_SERVER_URL}/api/download`, {
       method: "POST",
@@ -263,15 +263,18 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
       showNotification("JustPressDownload (JPD)", `Unduhan dimulai: ${title || url.slice(0, 40)}`);
       reply({ status: "ok", taskId: data.taskId });
       return;
-    } else {
-      reply({ status: "error", error: `Server error ${resp.status}` });
-      return;
     }
   } catch (err) {
-    console.log("[JustPressDownload] Local server not active, trying Native Messaging fallback...", err);
+    console.log("[JustPressDownload] Local server not active, launching desktop app via Native Messaging / Protocol...");
   }
 
-  // Fallback path: Native Messaging (Auto-launches JustPressDownload.exe if closed!)
+  // App is closed: Auto-launch JustPressDownload desktop app!
+  const pUrl = encodeURIComponent(url);
+  const pTitle = encodeURIComponent(title || "");
+  const pReferer = encodeURIComponent(referer || "");
+  const customUri = `justpressdownload://download?url=${pUrl}&title=${pTitle}&referer=${pReferer}`;
+
+  // Step 1: Try Native Messaging
   const tryNative = (hostName, onFail) => {
     try {
       chrome.runtime.sendNativeMessage(hostName, { action: "download", ...payload }, (response) => {
@@ -280,7 +283,7 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
           if (onFail) onFail();
         } else {
           clearTimeout(timer);
-          showNotification("JustPressDownload (JPD)", `Membuka aplikasi & mengirim: ${title || "berkas"}`);
+          showNotification("JustPressDownload (JPD)", `Membuka aplikasi & menyiapkan: ${title || "berkas"}`);
           reply(response || { status: "ok" });
         }
       });
@@ -291,8 +294,10 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
 
   tryNative(NATIVE_HOST, () => {
     tryNative(FALLBACK_NATIVE_HOST, () => {
+      // Step 2: Protocol Fallback (100% reliable system launch)
       clearTimeout(timer);
-      reply({ status: "error", error: "Gagal menghubungkan ke JustPressDownload. Pastikan JustPressDownload terpasang!" });
+      showNotification("JustPressDownload (JPD)", `Membuka aplikasi JustPressDownload...`);
+      reply({ status: "ok", action: "launch_protocol", uri: customUri });
     });
   });
 }

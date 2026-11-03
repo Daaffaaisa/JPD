@@ -58,6 +58,22 @@ def register_host(browser: str, host_name: str, manifest_path: str):
         return False
 
 
+def register_protocol(exe_path: str):
+    """Registers justpressdownload:// custom URI scheme in HKCU."""
+    try:
+        key_path = r"Software\Classes\justpressdownload"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as k:
+            winreg.SetValue(k, "", winreg.REG_SZ, "URL:JustPressDownload Protocol")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path + r"\shell\open\command") as k:
+            winreg.SetValue(k, "", winreg.REG_SZ, f'"{exe_path}" "%1"')
+        print(f"[✔] Berhasil mendaftarkan protokol justpressdownload:// -> {exe_path}")
+        return True
+    except Exception as e:
+        print(f"[-] Gagal mendaftarkan protokol: {e}")
+        return False
+
+
 def main():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     exe_path = os.path.join(base_dir, "JustPressDownload.exe")
@@ -88,6 +104,9 @@ def main():
 
     register_host("firefox", "com.justpressdownload.host", os.path.join(base_dir, "manifests", "com.justpressdownload.host.moz.json"))
     register_host("firefox", "com.idmclone.host", os.path.join(base_dir, "manifests", "com.idmclone.host.moz.json"))
+
+    # Register custom protocol justpressdownload:// for instant desktop app launching from browser
+    register_protocol(exe_path)
 
     ext_dir = os.path.join(base_dir, "extension")
     print("\n==================================================================")

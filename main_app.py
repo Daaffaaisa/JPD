@@ -85,6 +85,19 @@ def handle_native_messaging():
 
 
 if __name__ == "__main__":
+    # Check if launched via custom protocol scheme: justpressdownload://download?url=...
+    if len(sys.argv) > 1 and sys.argv[1].startswith("justpressdownload://"):
+        try:
+            import urllib.parse
+            parsed = urllib.parse.urlparse(sys.argv[1])
+            params = urllib.parse.parse_qs(parsed.query)
+            target_url = params.get("url", [""])[0]
+            target_title = params.get("title", [""])[0]
+            target_referer = params.get("referer", [""])[0]
+            sys.argv = [sys.argv[0], "--url", target_url, "--title", target_title, "--referer", target_referer]
+        except Exception:
+            pass
+
     # Check if launched by browser Native Messaging (e.g. chrome-extension://...)
     if len(sys.argv) > 1 and ("chrome-extension://" in sys.argv[1] or sys.argv[1].endswith(".json")):
         handle_native_messaging()
