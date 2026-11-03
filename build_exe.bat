@@ -5,8 +5,8 @@ echo =================================================================
 echo Building JustPressDownload (JPD) Standalone Windows Executable (.exe)
 echo =================================================================
 echo.
-uv run pyinstaller --noconsole --onefile --runtime-tmpdir _app_cache --name "JustPressDownload" --icon "icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --paths "src" --hidden-import "PIL" --hidden-import "PIL.ImageTk" --hidden-import "requests" --hidden-import "yt_dlp" --hidden-import "pystray" --hidden-import "pystray._win32" main_app.py
-uv run pyinstaller --onefile --runtime-tmpdir _app_cache --name "JustPressDownloadHost" --icon "icon.ico" host_app.py
+uv run pyinstaller --noconsole --onefile --name "JustPressDownload" --icon "icon.ico" --add-data "icon.ico;." --add-data "icon.png;." --paths "src" --hidden-import "PIL" --hidden-import "PIL.ImageTk" --hidden-import "requests" --hidden-import "yt_dlp" --hidden-import "pystray" --hidden-import "pystray._win32" main_app.py
+uv run pyinstaller --onefile --name "JustPressDownloadHost" --icon "icon.ico" host_app.py
 if %ERRORLEVEL% EQU 0 (
     copy /Y "dist\JustPressDownload.exe" "JustPressDownload.exe" >nul
     copy /Y "dist\JustPressDownloadHost.exe" "JustPressDownloadHost.exe" >nul
