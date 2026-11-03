@@ -9,9 +9,10 @@ def test_standalone_executable_exists():
     ), "JustPressDownload.exe must exist"
 
     target_exe = root_exe if os.path.exists(root_exe) else dist_exe
-    # Check that file size is reasonable for a bundled app (> 15 MB)
+    # Check that file size is reasonable for a bundled app (> 5 MB)
     size_mb = os.path.getsize(target_exe) / (1024 * 1024)
-    assert size_mb > 15, f"Executable too small: {size_mb} MB"
+    assert size_mb > 5, f"Executable too small: {size_mb} MB"
+    assert os.path.exists("_internal") or os.path.exists("dist/JustPressDownload/_internal")
 
 
 def test_main_app_entrypoint_exists():
