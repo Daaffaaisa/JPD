@@ -41,6 +41,13 @@ def test_content_js_corner_persistence_and_drag():
     assert "getTikTokVideoUrl" in code
     assert "getTikTokVideoTitle" in code
 
+    # Verify free-form positioning anywhere and persistence
+    assert "applyPanelPosition" in code
+    assert "preferredPos" in code
+    assert "jpd_panel_position" in code
+    assert "relX" in code
+    assert "relY" in code
+
     # Verify synchronous localStorage caching and zero-transition position jump elimination
     assert "localStorage.getItem" in code
     assert "localStorage.setItem" in code

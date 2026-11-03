@@ -11,12 +11,35 @@
   let currentTargetTitle = "";
   let hideTimeout = null;
 
-  // Corner persistence: "top-right" | "top-left" | "bottom-left" | "bottom-right"
-  // Synchronously initialize preferredCorner from localStorage to prevent any 1ms default flash
+  // Position persistence: free-form relative coordinates { relX, relY } + fallback corner
+  // Synchronously initialize preferredPos & preferredCorner from localStorage to prevent any 1ms default flash
+  let preferredPos = { relX: 1.0, relY: 0.0 };
   let preferredCorner = "top-right";
+
+  function cornerToPos(corner) {
+    switch (corner) {
+      case "top-left": return { relX: 0.0, relY: 0.0 };
+      case "bottom-left": return { relX: 0.0, relY: 1.0 };
+      case "bottom-right": return { relX: 1.0, relY: 1.0 };
+      case "top-right":
+      default: return { relX: 1.0, relY: 0.0 };
+    }
+  }
+
   try {
-    const cached = localStorage.getItem("jpd_panel_corner");
-    if (cached) preferredCorner = cached;
+    const cachedPos = localStorage.getItem("jpd_panel_position");
+    if (cachedPos) {
+      const parsed = JSON.parse(cachedPos);
+      if (parsed && typeof parsed.relX === "number" && typeof parsed.relY === "number") {
+        preferredPos = parsed;
+      }
+    } else {
+      const cachedCorner = localStorage.getItem("jpd_panel_corner");
+      if (cachedCorner) {
+        preferredCorner = cachedCorner;
+        preferredPos = cornerToPos(cachedCorner);
+      }
+    }
   } catch (e) {}
 
   let isDragging = false;
@@ -28,9 +51,15 @@
 
   // Asynchronously sync across browser tabs/domains via chrome.storage.local
   if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.get({ jpd_panel_corner: preferredCorner }, (items) => {
-      if (items && items.jpd_panel_corner) {
+    chrome.storage.local.get({ jpd_panel_position: null, jpd_panel_corner: preferredCorner }, (items) => {
+      if (items && items.jpd_panel_position) {
+        preferredPos = items.jpd_panel_position;
+        try {
+          localStorage.setItem("jpd_panel_position", JSON.stringify(preferredPos));
+        } catch (e) {}
+      } else if (items && items.jpd_panel_corner) {
         preferredCorner = items.jpd_panel_corner;
+        preferredPos = cornerToPos(preferredCorner);
         try {
           localStorage.setItem("jpd_panel_corner", preferredCorner);
         } catch (e) {}
@@ -63,32 +92,52 @@
     }
   }
 
-  function applyCornerPosition(p, rect, corner) {
+  function applyPanelPosition(p, rect, pos) {
+    const pWidth = p.offsetWidth || 160;
+    const pHeight = p.offsetHeight || 34;
     const margin = 10;
-    p.style.left = "auto";
-    p.style.right = "auto";
-    p.style.top = "auto";
-    p.style.bottom = "auto";
 
-    switch (corner) {
-      case "top-left":
-        p.style.top = `${Math.max(8, rect.top + margin)}px`;
-        p.style.left = `${Math.max(8, rect.left + margin)}px`;
-        break;
-      case "bottom-left":
-        p.style.bottom = `${Math.max(8, window.innerHeight - rect.bottom + margin)}px`;
-        p.style.left = `${Math.max(8, rect.left + margin)}px`;
-        break;
-      case "bottom-right":
-        p.style.bottom = `${Math.max(8, window.innerHeight - rect.bottom + margin)}px`;
-        p.style.right = `${Math.max(8, window.innerWidth - rect.right + margin)}px`;
-        break;
-      case "top-right":
-      default:
-        p.style.top = `${Math.max(8, rect.top + margin)}px`;
-        p.style.right = `${Math.max(8, window.innerWidth - rect.right + margin)}px`;
-        break;
+    const minLeft = rect.left + margin;
+    const maxLeft = rect.left + rect.width - pWidth - margin;
+    const minTop = rect.top + margin;
+    const maxTop = rect.top + rect.height - pHeight - margin;
+
+    let targetLeft;
+    let targetTop;
+
+    const effectivePos = (pos && typeof pos.relX === "number") ? pos : preferredPos;
+
+    if (maxLeft >= minLeft) {
+      targetLeft = minLeft + effectivePos.relX * (maxLeft - minLeft);
+    } else {
+      targetLeft = rect.left + margin;
     }
+
+    if (maxTop >= minTop) {
+      targetTop = minTop + effectivePos.relY * (maxTop - minTop);
+    } else {
+      targetTop = rect.top + margin;
+    }
+
+    const viewportLeft = Math.max(8, Math.min(window.innerWidth - pWidth - 8, targetLeft));
+    const viewportTop = Math.max(8, Math.min(window.innerHeight - pHeight - 8, targetTop));
+
+    p.style.left = `${Math.round(viewportLeft)}px`;
+    p.style.top = `${Math.round(viewportTop)}px`;
+    p.style.right = "auto";
+    p.style.bottom = "auto";
+  }
+
+  function applyCornerPosition(p, rect, corner) {
+    if (corner && typeof corner === "object" && typeof corner.relX === "number") {
+      applyPanelPosition(p, rect, corner);
+      return;
+    }
+    if (corner && typeof corner === "string") {
+      applyPanelPosition(p, rect, cornerToPos(corner));
+      return;
+    }
+    applyPanelPosition(p, rect, preferredPos);
   }
 
   function getOrCreatePanel() {
@@ -120,7 +169,7 @@
         backdrop-filter: blur(8px) !important;
         overflow: hidden !important;
       ">
-        <div id="jpd-drag-handle" title="Tahan dan geser untuk memindahkan posisi tombol (Kanan Atas, Kiri Atas, Kiri Bawah, Kanan Bawah)" style="
+        <div id="jpd-drag-handle" title="Tahan dan geser untuk memindahkan posisi tombol secara bebas ke mana saja" style="
           display: inline-flex !important;
           align-items: center !important;
           justify-content: center !important;
@@ -212,14 +261,9 @@
       panel.style.right = "auto";
       panel.style.bottom = "auto";
 
-      if (activeMediaEl) {
-        const pRect = panel.getBoundingClientRect();
-        const mRect = activeMediaEl.getBoundingClientRect();
-        const hoveredCorner = getClosestCorner(pRect, mRect);
-        if (posToast) {
-          posToast.style.display = "block";
-          posToast.textContent = `Arahkan ke: ${cornerToLabel(hoveredCorner)}`;
-        }
+      if (posToast) {
+        posToast.style.display = "block";
+        posToast.textContent = "Lepas untuk menyimpan posisi";
       }
     });
 
@@ -232,26 +276,52 @@
       if (hasMoved && activeMediaEl) {
         const pRect = panel.getBoundingClientRect();
         const mRect = activeMediaEl.getBoundingClientRect();
+        const margin = 10;
+        const minLeft = mRect.left + margin;
+        const maxLeft = mRect.left + mRect.width - pRect.width - margin;
+        const minTop = mRect.top + margin;
+        const maxTop = mRect.top + mRect.height - pRect.height - margin;
+
+        let relX = 1.0;
+        if (maxLeft > minLeft) {
+          relX = (pRect.left - minLeft) / (maxLeft - minLeft);
+        }
+        relX = Math.max(0, Math.min(1, relX));
+
+        let relY = 0.0;
+        if (maxTop > minTop) {
+          relY = (pRect.top - minTop) / (maxTop - minTop);
+        }
+        relY = Math.max(0, Math.min(1, relY));
+
+        preferredPos = {
+          relX: Math.round(relX * 1000) / 1000,
+          relY: Math.round(relY * 1000) / 1000
+        };
         preferredCorner = getClosestCorner(pRect, mRect);
 
         // Instantly save to synchronous localStorage and sync to chrome.storage.local
         try {
+          localStorage.setItem("jpd_panel_position", JSON.stringify(preferredPos));
           localStorage.setItem("jpd_panel_corner", preferredCorner);
         } catch (e) {}
         if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-          chrome.storage.local.set({ jpd_panel_corner: preferredCorner });
+          chrome.storage.local.set({
+            jpd_panel_position: preferredPos,
+            jpd_panel_corner: preferredCorner
+          });
         }
 
-        // Snap instantly to chosen corner without sliding across screen
-        applyCornerPosition(panel, mRect, preferredCorner);
+        // Apply chosen position exactly where dropped (free-form placement anywhere)
+        applyPanelPosition(panel, mRect, preferredPos);
 
         // Show brief confirmation toast
         if (posToast) {
           posToast.style.display = "block";
-          posToast.textContent = `✔ Posisi disimpan: ${cornerToLabel(preferredCorner)}`;
+          posToast.textContent = "✔ Posisi tombol disimpan";
           setTimeout(() => {
             if (posToast) posToast.style.display = "none";
-          }, 1800);
+          }, 1500);
         }
       }
       scheduleHide();
@@ -371,7 +441,7 @@
     }
 
     panel.style.transition = "none";
-    applyCornerPosition(panel, rect, preferredCorner);
+    applyCornerPosition(panel, rect, preferredPos);
     panel.style.display = "block";
     panel.style.opacity = "1";
   }
@@ -398,7 +468,7 @@
     if (!isDragging) {
       // Disable transition so panel does NOT slide or flash at previous/default coordinates
       p.style.transition = "none";
-      applyCornerPosition(p, rect, preferredCorner);
+      applyCornerPosition(p, rect, preferredPos);
     }
     p.style.display = "block";
 
