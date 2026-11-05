@@ -6,6 +6,10 @@
     "allowed_origins": [
         "chrome-extension://pbhnaclienkiinppjnpfdhohagnpkjoj/",
         "chrome-extension://idmcloneextensionid/",
-        "chrome-extension://ngpampappnmepgilojfohadhhmbhlaek/"
+        "chrome-extension://ngpampappnmepgilojfohadhhmbhlaek/",
+        "chrome-extension://bklflnamihbmgfcfhohlnijdlfmbockf/",
+        "chrome-extension://nmjmgbboaliolgkcdpnpiidomfopedon/",
+        "chrome-extension://kifmopflbjnpjkeancheojgldghifnae/",
+        "chrome-extension://fpomopnfmdpfnmdhomjpildjjpapimei/"
     ]
 }

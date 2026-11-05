@@ -151,3 +151,33 @@ def test_host_app_native_messaging_handling(monkeypatch):
     resp_len = struct.unpack("<I", raw_len)[0]
     resp_data = json.loads(fake_stdout.read(resp_len).decode("utf-8"))
     assert resp_data.get("status") == "ok"
+
+
+def test_brave_browser_native_messaging_registration():
+    import os
+    import winreg
+    from scripts.register_extension import register_host, update_manifest_target_path
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    manifest = os.path.join(base_dir, "manifests", "com.justpressdownload.host.json")
+    host_exe = os.path.join(base_dir, "JustPressDownloadHost.exe")
+    ext_dir = os.path.join(base_dir, "extension")
+
+    update_manifest_target_path(manifest, host_exe, ext_dir)
+    with open(manifest, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert "allowed_origins" in data
+    # At least one candidate origin matches
+    assert any("pbhnaclienkiinppjnpfdhohagnpkjoj" in orig for orig in data["allowed_origins"])
+
+    # Test registering for Brave
+    ok_brave = register_host("brave", "com.justpressdownload.host", manifest)
+    assert ok_brave is True
+    ok_brave_alt = register_host("brave_alt", "com.justpressdownload.host", manifest)
+    assert ok_brave_alt is True
+
+    # Verify HKCU registry key actually points to manifest
+    key_path = r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.justpressdownload.host"
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as k:
+        val, _ = winreg.QueryValueEx(k, "")
+        assert os.path.normpath(val) == os.path.normpath(manifest)

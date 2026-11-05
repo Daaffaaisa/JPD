@@ -17,11 +17,18 @@ def update_manifest_target_path(manifest_path: str, target_binary: str, ext_dir:
         if "allowed_origins" in data and ext_dir:
             import hashlib
             norm = os.path.abspath(ext_dir)
-            h = hashlib.sha256(norm.encode("utf-8")).hexdigest()[:32]
-            computed_id = "".join(chr(ord("a") + int(c, 16)) for c in h)
-            origin = f"chrome-extension://{computed_id}/"
-            if origin not in data["allowed_origins"]:
-                data["allowed_origins"].insert(0, origin)
+            for p in [
+                norm,
+                norm.lower(),
+                norm.upper(),
+                norm.replace(os.sep, "/"),
+                norm.lower().replace(os.sep, "/"),
+            ]:
+                h = hashlib.sha256(p.encode("utf-8")).hexdigest()[:32]
+                computed_id = "".join(chr(ord("a") + int(c, 16)) for c in h)
+                origin = f"chrome-extension://{computed_id}/"
+                if origin not in data["allowed_origins"]:
+                    data["allowed_origins"].append(origin)
         with open(abs_manifest, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
@@ -39,6 +46,7 @@ def register_host(browser: str, host_name: str, manifest_path: str):
         "chrome": rf"Software\Google\Chrome\NativeMessagingHosts\{host_name}",
         "edge": rf"Software\Microsoft\Edge\NativeMessagingHosts\{host_name}",
         "brave": rf"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\{host_name}",
+        "brave_alt": rf"Software\BraveSoftware\Brave\NativeMessagingHosts\{host_name}",
         "firefox": rf"Software\Mozilla\NativeMessagingHosts\{host_name}",
     }
 
@@ -102,7 +110,7 @@ def main():
             update_manifest_target_path(m, host_exe, ext_dir)
 
     # Register hosts
-    for browser in ["chrome", "edge", "brave"]:
+    for browser in ["chrome", "edge", "brave", "brave_alt"]:
         register_host(browser, "com.justpressdownload.host", os.path.join(base_dir, "manifests", "com.justpressdownload.host.json"))
         register_host(browser, "com.idmclone.host", os.path.join(base_dir, "manifests", "com.idmclone.host.json"))
 
