@@ -170,6 +170,11 @@ def test_main_window_sidebar_compact_toggle_and_phone_badges(tk_root):
     assert bool(app.sidebar_items["all"].badge_canvas.place_info()) is False
     assert app.sidebar_items["all"].lbl_badge.cget("text") == "5"
 
+    # Test fade interpolation logic directly
+    app.sidebar_items["all"].set_text_fade(0.0)
+    app.sidebar_items["all"].set_text_fade(0.5)
+    app.sidebar_items["all"].set_text_fade(1.0)
+
 
 def test_main_window_table_modern_layout_and_tags(tk_root):
     app = IDMGUIApp(tk_root)

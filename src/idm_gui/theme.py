@@ -530,3 +530,28 @@ def setup_global_ttk_theme():
         selectforeground=[("readonly", "#ffffff")],
         arrowcolor=[("readonly", THEME["text_primary"]), ("!disabled", THEME["text_primary"])],
     )
+
+
+def hex_to_rgb(h: str) -> tuple[int, int, int]:
+    clean = h.lstrip("#")
+    if len(clean) == 3:
+        clean = "".join([c * 2 for c in clean])
+    return (int(clean[0:2], 16), int(clean[2:4], 16), int(clean[4:6], 16))
+
+
+def rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    r = max(0, min(255, int(rgb[0])))
+    g = max(0, min(255, int(rgb[1])))
+    b = max(0, min(255, int(rgb[2])))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def interpolate_color(c1_hex: str, c2_hex: str, t: float) -> str:
+    """Linearly interpolate between two hex color codes with factor t (0.0 to 1.0)."""
+    factor = max(0.0, min(1.0, float(t)))
+    r1, g1, b1 = hex_to_rgb(c1_hex)
+    r2, g2, b2 = hex_to_rgb(c2_hex)
+    r = int(r1 + (r2 - r1) * factor)
+    g = int(g1 + (g2 - g1) * factor)
+    b = int(b1 + (b2 - b1) * factor)
+    return rgb_to_hex((r, g, b))
