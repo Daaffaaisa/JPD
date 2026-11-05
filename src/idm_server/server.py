@@ -32,7 +32,18 @@ class LocalServerHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self._send_cors_headers()
             self.end_headers()
-            data = {"status": "ok", "app": "idm-clone", "version": "1.0.0"}
+            lang = "id"
+            try:
+                from idm_gui.settings import settings
+                lang = settings.get_language()
+            except Exception:
+                pass
+            data = {
+                "status": "ok",
+                "app": "Just Press Download (IDM Integration)",
+                "version": "2.0.0",
+                "language": lang,
+            }
             self.wfile.write(json.dumps(data).encode("utf-8"))
             return
 

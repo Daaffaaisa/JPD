@@ -9,11 +9,11 @@ except ImportError:
     winreg = None  # type: ignore
 
 REG_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-APP_RUN_NAME = "JustPressDownload"
+APP_RUN_NAME = "Just Press Download"
 
 
 def set_windows_startup(enabled: bool) -> bool:
-    """Registers or unregisters JustPressDownload in Windows HKCU Run key."""
+    """Registers or unregisters Just Press Download in Windows HKCU Run key."""
     if winreg is None:
         return False
     try:
@@ -25,7 +25,9 @@ def set_windows_startup(enabled: bool) -> bool:
                     target_exe = sys.executable
                 else:
                     candidates = [
+                        os.path.abspath("Just Press Download.exe"),
                         os.path.abspath("JustPressDownload.exe"),
+                        os.path.abspath("dist/Just Press Download.exe"),
                         os.path.abspath("dist/JustPressDownload.exe"),
                     ]
                     target_exe = None
@@ -177,6 +179,14 @@ class SettingsManager:
 
     def set_autoclose_progress(self, val: bool) -> None:
         self.data["autoclose_progress"] = bool(val)
+        self._save()
+
+    def get_language(self) -> str:
+        return str(self.data.get("language", "id"))
+
+    def set_language(self, lang: str) -> None:
+        val = "en" if str(lang).lower().startswith("en") else "id"
+        self.data["language"] = val
         self._save()
 
 

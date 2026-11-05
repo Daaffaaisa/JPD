@@ -19,6 +19,7 @@ from idm_gui.dialogs import (
     OptionsDialog,
 )
 from idm_gui.settings import settings
+from idm_gui.i18n import tr, get_current_lang
 from idm_gui.theme import (
     THEME,
     setup_global_ttk_theme,
@@ -381,6 +382,10 @@ class SidebarNavItem(tk.Frame):
         if self.is_compact:
             self._draw_phone_badge()
 
+    def set_label(self, new_text: str):
+        self.raw_text = new_text
+        self.lbl_text.configure(text=new_text)
+
     def _on_enter(self):
         if not self.is_active:
             hover_bg = "#192231"
@@ -403,7 +408,7 @@ class SidebarNavItem(tk.Frame):
 class IDMGUIApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("JustPressDownload (JPD)")
+        self.root.title("Just Press Download (JPD)")
         self.root.geometry("1040x620")
         self.root.minsize(820, 480)
         self.root.configure(bg=THEME["bg_dark"])
@@ -867,9 +872,16 @@ class IDMGUIApp:
 
         view_menu.add_separator()
         lang_menu = tk.Menu(view_menu, tearoff=0)
-        lang_menu.add_command(label="✔ Bahasa Indonesia (Aktif)")
-        lang_menu.add_command(label="English")
-        view_menu.add_cascade(label="Bahasa (Language)", menu=lang_menu)
+        is_id = self.settings.get_language() == "id"
+        lang_menu.add_command(
+            label="✔ Bahasa Indonesia" if is_id else "  Bahasa Indonesia",
+            command=lambda: self.set_language("id"),
+        )
+        lang_menu.add_command(
+            label="✔ English" if not is_id else "  English",
+            command=lambda: self.set_language("en"),
+        )
+        view_menu.add_cascade(label=tr("menu_language"), menu=lang_menu)
 
         self.menubar.add_cascade(label="Lihat (View)", menu=view_menu)
 
@@ -878,7 +890,7 @@ class IDMGUIApp:
         help_menu.add_command(label="Tip Hari Ini... (Tip of the Day)", command=self.show_tip_of_the_day)
         help_menu.add_command(label="Periksa Pembaruan... (Check for Updates)", command=self.check_for_updates)
         help_menu.add_separator()
-        help_menu.add_command(label="Tentang JustPressDownload (About)", command=self.show_about)
+        help_menu.add_command(label="Tentang Just Press Download (About)", command=self.show_about)
         self.menubar.add_cascade(label="Bantuan (Help)", menu=help_menu)
 
         self.root.config(menu=self.menubar)
@@ -2397,6 +2409,53 @@ class IDMGUIApp:
                 self.paned.sash_place(0, target_w, 0)
             except Exception:
                 pass
+
+    def set_language(self, lang: str):
+        """Sets the application language ('id' or 'en') and dynamically updates UI strings."""
+        self.settings.set_language(lang)
+        self.root.title(tr("app_name"))
+
+        # 1. Update menu
+        self._build_menu()
+
+        # 2. Update sidebar headers
+        try:
+            self.lbl_sidebar_title.config(text=tr("nav_title"))
+            self.lbl_sec_pustaka.config(text=tr("sec_library"))
+            self.lbl_sec_kategori.config(text=tr("sec_categories"))
+            self.storage_card.lbl_title.config(text=tr("sec_storage"))
+        except Exception:
+            pass
+
+        # 3. Update sidebar items
+        key_map = {
+            "all": "nav_all",
+            "downloading": "nav_downloading",
+            "finished": "nav_finished",
+            "video": "cat_video",
+            "music": "cat_music",
+            "pictures": "cat_pictures",
+            "programs": "cat_programs",
+            "documents": "cat_documents",
+            "compressed": "cat_compressed",
+        }
+        for k, tr_k in key_map.items():
+            if k in self.sidebar_items:
+                self.sidebar_items[k].set_label(tr(tr_k))
+
+        # 4. Update table headings
+        try:
+            self.tree.heading("name", text=tr("col_name"))
+            self.tree.heading("size", text=tr("col_size"))
+            self.tree.heading("status", text=tr("col_status"))
+            self.tree.heading("progress", text=tr("col_progress"))
+            self.tree.heading("speed", text=tr("col_speed"))
+            self.tree.heading("url", text=tr("col_url"))
+        except Exception:
+            pass
+
+        # 5. Re-render UI table rows and telemetry
+        self._tick_ui()
 
     def sort_by_column(self, col: str):
         col_map = {"name": 0, "size": 1, "status": 2, "speed": 4}

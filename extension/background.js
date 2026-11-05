@@ -260,7 +260,7 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
     if (resp.ok) {
       const data = await resp.json();
       console.log("[JustPressDownload] Successfully dispatched to desktop app:", data);
-      showNotification("JustPressDownload (JPD)", `Unduhan dimulai: ${title || url.slice(0, 40)}`);
+      showNotification("Just Press Download (JPD)", `Unduhan dimulai: ${title || url.slice(0, 40)}`);
       reply({ status: "ok", taskId: data.taskId });
       return;
     }
@@ -283,7 +283,7 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
           if (onFail) onFail();
         } else {
           clearTimeout(timer);
-          showNotification("JustPressDownload (JPD)", `Membuka aplikasi & menyiapkan: ${title || "berkas"}`);
+          showNotification("Just Press Download (JPD)", `Membuka aplikasi & menyiapkan: ${title || "berkas"}`);
           reply(response || { status: "ok" });
         }
       });
@@ -296,7 +296,7 @@ async function sendDownloadToHost(url, title, autoStart = false, referer = "", c
     tryNative(FALLBACK_NATIVE_HOST, () => {
       // Step 2: Protocol Fallback (100% reliable system launch)
       clearTimeout(timer);
-      showNotification("JustPressDownload (JPD)", `Membuka aplikasi JustPressDownload...`);
+      showNotification("Just Press Download (JPD)", `Membuka aplikasi Just Press Download...`);
       reply({ status: "ok", action: "launch_protocol", uri: customUri });
     });
   });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>JustPressDownload (JPD) Integration</title>
+  <title>JPD Integration Module</title>
   <style>
     :root {
       --bg-dark: #0f131d;
@@ -239,9 +239,12 @@
   <div class="header">
     <div class="header-brand">
       <img src="images/icon32.png" width="24" height="24" style="border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);" alt="Logo" />
-      <span class="header-title">JustPressDownload (JPD)</span>
+      <span class="header-title">JPD Integration Module</span>
     </div>
-    <span class="header-version">v2.0</span>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <button id="langToggleBtn" style="width: auto; padding: 2px 8px; font-size: 10px; font-weight: bold; background: rgba(255,255,255,0.08); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); cursor: pointer;">ID / EN</button>
+      <span class="header-version">v2.0</span>
+    </div>
   </div>
 
   <div id="status" class="status-badge">
@@ -250,17 +253,17 @@
   </div>
 
   <div class="form-group">
-    <label for="urlInput">Unduh Tautan Langsung:</label>
+    <label id="lblUrl" for="urlInput">Unduh Tautan Langsung:</label>
     <div class="input-wrapper">
-      <input type="text" id="urlInput" placeholder="https://example.com/berkas.zip" spellcheck="false" />
+      <input type="text" id="urlInput" placeholder="https://example.com/file.zip" spellcheck="false" />
     </div>
   </div>
 
   <button id="downloadBtn">
-    <span>+ Kirim ke JustPressDownload</span>
+    <span id="downloadBtnText">+ Kirim ke Just Press Download</span>
   </button>
 
-  <p class="hint-text">Otomatis mencegat unduhan dari Chromium &amp; Firefox</p>
+  <p id="hintText" class="hint-text">Otomatis mencegat unduhan dari Chromium &amp; Firefox</p>
 
   <script src="popup.js"></script>
 </body>

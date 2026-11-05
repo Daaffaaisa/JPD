@@ -9,11 +9,12 @@ uv run pyinstaller -y --noconsole --onedir --name "JustPressDownload" --icon "ic
 uv run pyinstaller -y --onedir --name "JustPressDownloadHost" --icon "icon.ico" host_app.py
 if %ERRORLEVEL% EQU 0 (
     robocopy "dist\JustPressDownload\_internal" "_internal" /E /NFL /NDL /NJH /NJS /nc /ns /np >nul
+    copy /Y "dist\JustPressDownload\JustPressDownload.exe" "Just Press Download.exe" >nul
     copy /Y "dist\JustPressDownload\JustPressDownload.exe" "JustPressDownload.exe" >nul
     copy /Y "dist\JustPressDownloadHost\JustPressDownloadHost.exe" "JustPressDownloadHost.exe" >nul
     echo.
     echo =================================================================
-    echo SUCCESS: JustPressDownload.exe & JustPressDownloadHost.exe created (ONEDIR INSTANT LAUNCH)
+    echo SUCCESS: "Just Press Download.exe" & JustPressDownloadHost.exe created (ONEDIR INSTANT LAUNCH)
     echo =================================================================
 ) else (
     echo.

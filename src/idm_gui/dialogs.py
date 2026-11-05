@@ -6,6 +6,7 @@ from tkinter import ttk, filedialog
 from typing import Callable, Optional
 
 from idm_gui.settings import settings
+from idm_gui.i18n import tr, get_current_lang
 from idm_gui.theme import (
     THEME,
     FONT_TITLE,
@@ -108,7 +109,7 @@ class DownloadInfoDialog:
             pass
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
-        self.top.title("Info Unduh Berkas")
+        self.top.title(tr("dlg_info_title"))
         self.top.geometry("580x300")
         self.top.minsize(540, 290)
         self.top.resizable(True, True)
@@ -163,7 +164,7 @@ class DownloadInfoDialog:
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # 1. URL Row
-        tk.Label(main_frame, text="URL:", bg=BG_COLOR, fg=FG_COLOR, font=("Segoe UI", 9, "bold")).grid(
+        tk.Label(main_frame, text=tr("dlg_info_url"), bg=BG_COLOR, fg=FG_COLOR, font=("Segoe UI", 9, "bold")).grid(
             row=0, column=0, sticky=tk.W, pady=3
         )
         self.url_var = tk.StringVar(master=self.top, value=self.url)
@@ -180,7 +181,7 @@ class DownloadInfoDialog:
         url_entry.grid(row=0, column=1, columnspan=2, sticky=tk.EW, padx=(6, 0), pady=3)
 
         # 2. Kategori Row
-        tk.Label(main_frame, text="Kategori:", bg=BG_COLOR, fg=FG_COLOR, font=("Segoe UI", 9)).grid(
+        tk.Label(main_frame, text=tr("dlg_info_category"), bg=BG_COLOR, fg=FG_COLOR, font=("Segoe UI", 9)).grid(
             row=1, column=0, sticky=tk.W, pady=3
         )
         cat_frame = tk.Frame(main_frame, bg=BG_COLOR)
@@ -211,7 +212,7 @@ class DownloadInfoDialog:
         self.btn_add_cat.pack(side=tk.LEFT, padx=(4, 0))
 
         # 3. Simpan Sebagai Row
-        tk.Label(main_frame, text="Simpan Sebagai:", bg=BG_COLOR, fg=FG_COLOR, font=("Segoe UI", 9, "bold")).grid(
+        tk.Label(main_frame, text=tr("dlg_info_save_as"), bg=BG_COLOR, fg=FG_COLOR, font=("Segoe UI", 9, "bold")).grid(
             row=2, column=0, sticky=tk.W, pady=3
         )
         save_frame = tk.Frame(main_frame, bg=BG_COLOR)
@@ -260,7 +261,7 @@ class DownloadInfoDialog:
         self.remember_var = tk.BooleanVar(master=self.top, value=False)
         self.cb_remember = tk.Checkbutton(
             main_frame,
-            text=f'Ingat jalur ini untuk kategori "{self.category}"',
+            text=tr("dlg_info_remember", cat=self.category),
             variable=self.remember_var,
             bg=BG_COLOR,
             fg=FG_COLOR,
@@ -317,7 +318,7 @@ class DownloadInfoDialog:
         desc_box = tk.Frame(self.info_frame, bg=CARD_BG)
         desc_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        tk.Label(desc_box, text="Deskripsi:", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8)).pack(anchor=tk.W)
+        tk.Label(desc_box, text=tr("dlg_info_desc"), bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8)).pack(anchor=tk.W)
         self.desc_entry = tk.Entry(
             desc_box,
             bg=ENTRY_BG,
@@ -332,9 +333,9 @@ class DownloadInfoDialog:
         # Parallel Connections indicator
         active_conns = settings.get_max_connections()
         if is_stream:
-            conn_text = "⚡ Akselerasi: Mode Ekstraksi Stream Video Cepat (yt-dlp High Speed)"
+            conn_text = tr("dlg_info_accel_stream")
         else:
-            conn_text = f"⚡ Akselerasi: {active_conns} Koneksi Paralel HTTP Range"
+            conn_text = tr("dlg_info_accel_parallel", conns=active_conns)
 
         self.conn_label = tk.Label(
             desc_box,
@@ -349,14 +350,14 @@ class DownloadInfoDialog:
         self.btn_frame = tk.Frame(main_frame, bg=BG_COLOR)
         self.btn_frame.grid(row=6, column=0, columnspan=3, sticky=tk.E, pady=(4, 2))
 
-        btn_later = create_modern_button(self.btn_frame, "Unduh Nanti", self._on_later, kind="secondary", padx=12, pady=4, radius=7)
+        btn_later = create_modern_button(self.btn_frame, tr("dlg_info_download_later"), self._on_later, kind="secondary", padx=12, pady=4, radius=7)
         btn_later.pack(side=tk.LEFT, padx=4)
 
-        btn_start = create_modern_button(self.btn_frame, "Mulai Unduh", self._on_start, kind="primary", padx=16, pady=4, radius=7)
+        btn_start = create_modern_button(self.btn_frame, tr("dlg_info_start_download"), self._on_start, kind="primary", padx=16, pady=4, radius=7)
         btn_start.pack(side=tk.LEFT, padx=4)
         btn_start.focus_set()  # Default button (Enter key triggers Mulai Unduh)
 
-        btn_cancel = create_modern_button(self.btn_frame, "Batal", self._on_cancel, kind="secondary", padx=12, pady=4, radius=7)
+        btn_cancel = create_modern_button(self.btn_frame, tr("dlg_info_cancel"), self._on_cancel, kind="secondary", padx=12, pady=4, radius=7)
         btn_cancel.pack(side=tk.LEFT, padx=4)
 
         self.top.bind("<Return>", lambda e: self._on_start())
@@ -1137,7 +1138,7 @@ class OptionsDialog:
 
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
-        self.top.title("Opsi Konfigurasi JustPressDownload (JPD)")
+        self.top.title("Opsi Konfigurasi Just Press Download (JPD)")
         self.top.geometry("620x590")
         self.top.minsize(580, 520)
         self.top.resizable(True, True)
@@ -1233,10 +1234,33 @@ class OptionsDialog:
         browsers_frame.columnconfigure(0, weight=1)
         browsers_frame.columnconfigure(1, weight=1)
 
+        # Language selection row
+        lang_frame = tk.Frame(tab_general, bg=BG)
+        lang_frame.pack(fill=tk.X, pady=(2, 8))
+        tk.Label(
+            lang_frame,
+            text=tr("lbl_language"),
+            bg=BG,
+            fg=FG,
+            font=("Segoe UI", 9, "bold"),
+            width=22,
+            anchor=tk.W,
+        ).pack(side=tk.LEFT)
+        cur_lang = "English" if self.sm.get_language() == "en" else "Bahasa Indonesia"
+        self.lang_var = tk.StringVar(value=cur_lang)
+        self.lang_combo = ttk.Combobox(
+            lang_frame,
+            textvariable=self.lang_var,
+            values=["Bahasa Indonesia", "English"],
+            state="readonly",
+            width=18,
+        )
+        self.lang_combo.pack(side=tk.LEFT, padx=4)
+
         self.cb_startup_var = tk.BooleanVar(value=self.sm.get_autorun_startup())
         tk.Checkbutton(
             tab_general,
-            text="Jalankan JustPressDownload (JPD) saat Windows dinyalakan",
+            text=tr("chk_autorun"),
             variable=self.cb_startup_var,
             bg=BG,
             fg=FG,
@@ -1495,6 +1519,8 @@ class OptionsDialog:
 
         # Save browser integration, autorun, tray and system settings
         try:
+            chosen_l = self.lang_var.get().strip().lower()
+            self.sm.set_language("en" if "english" in chosen_l else "id")
             self.sm.data["browser_integration"] = {
                 "chrome": bool(self.cb_chrome_var.get()),
                 "edge": bool(self.cb_edge_var.get()),

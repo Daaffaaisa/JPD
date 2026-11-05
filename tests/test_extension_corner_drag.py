@@ -37,6 +37,8 @@ def test_content_js_corner_persistence_and_drag():
     assert "/shorts/" in code
     assert "syncPanelPosition" in code
     assert "Download dengan JPD" in code
+    assert "Download with JPD" in code
+    assert "jpd_language" in code
     assert "tiktok.com" in code
     assert "getTikTokVideoUrl" in code
     assert "getTikTokVideoTitle" in code

@@ -133,4 +133,26 @@ def test_options_dialog_modern_theme_and_buttons():
     root.destroy()
 
 
+def test_options_dialog_language_selection():
+    from idm_gui.dialogs import OptionsDialog
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cfg = os.path.join(tmpdir, "test_settings.json")
+        sm = SettingsManager(config_path=cfg)
+
+        root = tk.Tk()
+        root.withdraw()
+
+        dlg = OptionsDialog(parent=root, settings_manager=sm)
+        assert hasattr(dlg, "lang_combo")
+        assert dlg.lang_var.get() in ("Bahasa Indonesia", "English")
+
+        # Switch to English
+        dlg.lang_var.set("English")
+        dlg._on_save()
+
+        assert sm.get_language() == "en"
+        root.destroy()
+
+
 

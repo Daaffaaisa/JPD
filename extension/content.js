@@ -15,6 +15,36 @@
   // Synchronously initialize preferredPos & preferredCorner from localStorage to prevent any 1ms default flash
   let preferredPos = { relX: 1.0, relY: 0.0 };
   let preferredCorner = "top-right";
+  let currentLang = "id";
+
+  try {
+    const cachedLang = localStorage.getItem("jpd_language");
+    if (cachedLang) currentLang = cachedLang;
+  } catch (e) {}
+
+  const STRINGS = {
+    id: {
+      btn_download: "Download dengan JPD",
+      toast_dragging: "Lepas untuk menyimpan posisi",
+      toast_saved: "✔ Posisi tombol disimpan",
+      drag_tooltip: "Tahan dan geser untuk memindahkan posisi tombol secara bebas ke mana saja",
+      sending: "✔ Mengirim ke JPD...",
+      error: "✕ Gagal membuka JPD"
+    },
+    en: {
+      btn_download: "Download with JPD",
+      toast_dragging: "Release to save position",
+      toast_saved: "✔ Button position saved",
+      drag_tooltip: "Click and drag to move download button freely anywhere",
+      sending: "✔ Sending to JPD...",
+      error: "✕ Failed to open JPD"
+    }
+  };
+
+  function tr(key) {
+    const tbl = STRINGS[currentLang] || STRINGS.id;
+    return tbl[key] || STRINGS.id[key] || key;
+  }
 
   function cornerToPos(corner) {
     switch (corner) {
@@ -51,7 +81,11 @@
 
   // Asynchronously sync across browser tabs/domains via chrome.storage.local
   if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.get({ jpd_panel_position: null, jpd_panel_corner: preferredCorner }, (items) => {
+    chrome.storage.local.get({ jpd_panel_position: null, jpd_panel_corner: preferredCorner, jpd_language: currentLang }, (items) => {
+      if (items && items.jpd_language) {
+        currentLang = items.jpd_language;
+        try { localStorage.setItem("jpd_language", currentLang); } catch (e) {}
+      }
       if (items && items.jpd_panel_position) {
         preferredPos = items.jpd_panel_position;
         try {
@@ -169,7 +203,7 @@
         backdrop-filter: blur(8px) !important;
         overflow: hidden !important;
       ">
-        <div id="jpd-drag-handle" title="Tahan dan geser untuk memindahkan posisi tombol secara bebas ke mana saja" style="
+        <div id="jpd-drag-handle" title="${tr("drag_tooltip")}" style="
           display: inline-flex !important;
           align-items: center !important;
           justify-content: center !important;
@@ -205,7 +239,7 @@
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
-          <span id="idm-dl-btn-text">Download dengan JPD</span>
+          <span id="idm-dl-btn-text">${tr("btn_download")}</span>
         </div>
       </div>
       <div id="jpd-pos-toast" style="
@@ -263,7 +297,7 @@
 
       if (posToast) {
         posToast.style.display = "block";
-        posToast.textContent = "Lepas untuk menyimpan posisi";
+        posToast.textContent = tr("toast_dragging");
       }
     });
 
@@ -318,7 +352,7 @@
         // Show brief confirmation toast
         if (posToast) {
           posToast.style.display = "block";
-          posToast.textContent = "✔ Posisi tombol disimpan";
+          posToast.textContent = tr("toast_saved");
           setTimeout(() => {
             if (posToast) posToast.style.display = "none";
           }, 1500);
@@ -362,10 +396,10 @@
       const oldBg = btn.style.background;
       btn.style.background = "#10b981";
       const btnSpan = btn.querySelector("#idm-dl-btn-text");
-      const oldText = btnSpan ? btnSpan.textContent : "Download dengan JPD";
-      if (btnSpan) btnSpan.textContent = "✔ Mengirim ke JPD...";
+      const oldText = btnSpan ? btnSpan.textContent : tr("btn_download");
+      if (btnSpan) btnSpan.textContent = tr("sending");
 
-      // Directly dispatch download task to JustPressDownload desktop app (NO double popups!)
+      // Directly dispatch download task to Just Press Download desktop app (NO double popups!)
       chrome.runtime.sendMessage(
         {
           action: "download",
@@ -384,7 +418,7 @@
           }
           if (resp && resp.status === "error") {
             btn.style.background = "#ef4444";
-            if (btnSpan) btnSpan.textContent = "✕ Gagal membuka JPD";
+            if (btnSpan) btnSpan.textContent = tr("error");
           }
           setTimeout(() => {
             btn.style.background = oldBg || "#2563eb";
@@ -462,7 +496,7 @@
     const p = getOrCreatePanel();
     const btnText = p.querySelector("#idm-dl-btn-text");
     if (btnText) {
-      btnText.textContent = labelText || "Download dengan JPD";
+      btnText.textContent = labelText || tr("btn_download");
     }
 
     if (!isDragging) {

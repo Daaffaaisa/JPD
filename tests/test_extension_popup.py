@@ -33,3 +33,18 @@ def test_popup_js_syntax():
     # Validate JavaScript syntax with node -c
     res = subprocess.run(["node", "-c", js_path], capture_output=True, text=True)
     assert res.returncode == 0, f"JS Syntax error: {res.stderr}"
+
+    with open(js_path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    assert "STRINGS" in code
+    assert "jpd_language" in code
+    assert "langToggleBtn" in code
+
+
+def test_manifest_extension_name_and_locales():
+    import json
+    manifest_path = os.path.abspath("extension/manifest.json")
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["name"] == "JPD Integration Module"
