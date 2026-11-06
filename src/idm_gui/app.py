@@ -266,15 +266,6 @@ class SidebarNavItem(tk.Frame):
         # Phone-style round notification badge overlay for compact mode (top-right of icon)
         self.badge_canvas = tk.Canvas(self.icon_box, width=14, height=14, bg=THEME["surface_alt"], highlightthickness=0)
 
-        self.lbl_text = tk.Label(
-            self.content,
-            text=text,
-            bg=THEME["surface_alt"],
-            fg=THEME["text_secondary"],
-            font=(FONT_FAMILY, 9),
-        )
-        self.lbl_text.pack(side=tk.LEFT)
-
         self.lbl_badge = tk.Label(
             self.content,
             text="0",
@@ -284,7 +275,16 @@ class SidebarNavItem(tk.Frame):
             padx=6,
             pady=1,
         )
-        self.lbl_badge.pack(side=tk.RIGHT)
+        self.lbl_badge.pack(side=tk.RIGHT, padx=(4, 4))
+
+        self.lbl_text = tk.Label(
+            self.content,
+            text=text,
+            bg=THEME["surface_alt"],
+            fg=THEME["text_secondary"],
+            font=(FONT_FAMILY, 9),
+        )
+        self.lbl_text.pack(side=tk.LEFT)
 
         for w in (self, self.content, self.icon_box, self.lbl_icon, self.lbl_text, self.lbl_badge, self.badge_canvas):
             w.bind("<Button-1>", lambda e: self._handle_click())
@@ -334,8 +334,8 @@ class SidebarNavItem(tk.Frame):
             self.content.pack_configure(padx=(2, 8), pady=1)
             self.icon_box.pack_configure(padx=(2, 6))
             self.lbl_icon.place_configure(relx=0.45, rely=0.5)
+            self.lbl_badge.pack(side=tk.RIGHT, padx=(4, 4))
             self.lbl_text.pack(side=tk.LEFT)
-            self.lbl_badge.pack(side=tk.RIGHT)
 
     def set_text_fade(self, alpha: float):
         """Fade text and badge labels smoothly between background color and target foreground color."""
@@ -343,10 +343,11 @@ class SidebarNavItem(tk.Frame):
         target_fg = "#ffffff" if self.is_active else THEME["text_secondary"]
         target_badge_fg = "#60a5fa" if self.is_active else THEME["text_tertiary"]
         blended_fg = interpolate_color(bg_col, target_fg, alpha)
-        blended_badge = interpolate_color(THEME["input_bg"], target_badge_fg, alpha)
+        blended_badge_fg = interpolate_color(bg_col, target_badge_fg, alpha)
+        blended_badge_bg = interpolate_color(bg_col, THEME["input_bg"], alpha)
         try:
             self.lbl_text.configure(fg=blended_fg)
-            self.lbl_badge.configure(fg=blended_badge)
+            self.lbl_badge.configure(bg=blended_badge_bg, fg=blended_badge_fg)
         except Exception:
             pass
 
@@ -501,8 +502,18 @@ class IDMGUIApp:
             except Exception:
                 pass
 
-        # Start periodic UI update timer
+        # Start periodic UI update timer and ensure initial 230px sash
+        self.root.after(30, self._apply_initial_sash)
         self.root.after(300, self._tick_ui)
+
+    def _apply_initial_sash(self):
+        try:
+            target = 56 if getattr(self, "sidebar_compact", False) else 230
+            self.paned.paneconfig(self.sidebar_frame, minsize=target)
+            self.paned.sash_place(0, target, 0)
+            self.sidebar_frame.configure(width=target)
+        except Exception:
+            pass
 
     def _detect_category(self, url: str, title: str) -> str:
         lower = (url + " " + title).lower()
@@ -1140,7 +1151,7 @@ class IDMGUIApp:
         self.paned.pack(fill=tk.BOTH, expand=True)
 
         # Left Sidebar: Modern Apple/Linear Navigation Bar
-        self.sidebar_frame = tk.Frame(self.paned, width=205, bg=THEME["surface_alt"])
+        self.sidebar_frame = tk.Frame(self.paned, width=230, bg=THEME["surface_alt"])
         self.sidebar_visible = True
         self.sidebar_compact = False
 
@@ -1157,7 +1168,7 @@ class IDMGUIApp:
             padx=8,
             pady=6,
             radius=6,
-            tooltip="Buka Folder Unduhan Utama",
+            tooltip=tr("tb_open_folder"),
         )
 
         # Sidebar Header with Hamburger (Garis Tiga ☰) Toggle Button
@@ -1172,7 +1183,7 @@ class IDMGUIApp:
             padx=8,
             pady=3,
             radius=6,
-            tooltip="Sembunyikan / Tampilkan Label Menu (Garis Tiga)",
+            tooltip=None,
         )
         self.btn_hamburger.pack(side=tk.LEFT)
 
@@ -2256,61 +2267,30 @@ class IDMGUIApp:
 
         self._animating_sidebar = True
         collapse = self.sidebar_compact
-        start_w = 205 if collapse else 56
-        end_w = 56 if collapse else 205
-        steps = 9
+        expanded_w = 230
+        compact_w = 56
         delay = 14
 
-        if not collapse:
-            # Preparing expanding: unpack compact dividers and restore labels at alpha 0.0 (fade-in)
-            self.div_sec_kategori.pack_forget()
-            self.btn_compact_folder.pack_forget()
-            self.btn_hamburger.pack_configure(side=tk.LEFT)
-            self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(8, 0))
+        if collapse:
+            # COLLAPSING:
+            # Phase 1: Fade out text (4 frames, ~56ms)
+            # Phase 2: Switch to compact mode & slide sash shut to 56px (6 frames, ~84ms)
+            fade_steps = 4
+            slide_steps = 6
 
-            if "all" in self.sidebar_items:
-                self.lbl_sec_pustaka.pack(before=self.sidebar_items["all"], fill=tk.X, pady=(6, 4))
-            if "video" in self.sidebar_items:
-                self.lbl_sec_kategori.pack(before=self.sidebar_items["video"], fill=tk.X, pady=(12, 4))
-            self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
-
-            for it in self.sidebar_items.values():
-                it.set_compact(False)
-                it.set_text_fade(0.0)
-
-            bg_col = THEME["surface_alt"]
-            self.lbl_sidebar_title.configure(fg=bg_col)
-            self.lbl_sec_pustaka.configure(fg=bg_col)
-            self.lbl_sec_kategori.configure(fg=bg_col)
-
-        unpacked_collapse = False
-
-        def _step(idx: int):
-            nonlocal unpacked_collapse
-            t = idx / steps
-            # Smooth ease-out cubic curve
-            progress = 1.0 - (1.0 - t) ** 3
-            cur_w = int(start_w + (end_w - start_w) * progress)
-
-            try:
-                self.paned.paneconfig(self.sidebar_frame, minsize=min(start_w, end_w))
-                self.paned.sash_place(0, cur_w, 0)
-                self.sidebar_frame.configure(width=cur_w)
-            except Exception:
-                pass
-
-            if collapse:
-                # Fading out in first half of transition
-                fade_progress = max(0.0, 1.0 - (t / 0.55))
+            def _fade_out_step(f_idx: int):
+                alpha = max(0.0, 1.0 - (f_idx / fade_steps))
                 for it in self.sidebar_items.values():
-                    it.set_text_fade(fade_progress)
+                    it.set_text_fade(alpha)
                 bg_col = THEME["surface_alt"]
-                self.lbl_sidebar_title.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], fade_progress))
-                self.lbl_sec_pustaka.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], fade_progress))
-                self.lbl_sec_kategori.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], fade_progress))
+                self.lbl_sidebar_title.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
+                self.lbl_sec_pustaka.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
+                self.lbl_sec_kategori.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
 
-                if t >= 0.55 and not unpacked_collapse:
-                    unpacked_collapse = True
+                if f_idx < fade_steps:
+                    self.root.after(delay, lambda: _fade_out_step(f_idx + 1))
+                else:
+                    # Switch to compact layout before sliding
                     self.lbl_sidebar_title.pack_forget()
                     self.btn_hamburger.pack_configure(side=tk.TOP)
                     self.lbl_sec_pustaka.pack_forget()
@@ -2321,33 +2301,105 @@ class IDMGUIApp:
                     self.btn_compact_folder.pack(side=tk.BOTTOM, pady=8)
                     for it in self.sidebar_items.values():
                         it.set_compact(True)
-            else:
-                # Fading in across entire transition
-                for it in self.sidebar_items.values():
-                    it.set_text_fade(progress)
-                bg_col = THEME["surface_alt"]
-                self.lbl_sidebar_title.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], progress))
-                self.lbl_sec_pustaka.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], progress))
-                self.lbl_sec_kategori.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], progress))
+                    # Begin slide shut
+                    _slide_collapse_step(1)
 
-            if idx < steps:
-                self.root.after(delay, lambda: _step(idx + 1))
-            else:
-                self._animating_sidebar = False
+            def _slide_collapse_step(s_idx: int):
+                t = s_idx / slide_steps
+                progress = 1.0 - (1.0 - t) ** 3
+                cur_w = int(expanded_w + (compact_w - expanded_w) * progress)
                 try:
-                    self.paned.paneconfig(self.sidebar_frame, minsize=end_w)
-                    self.paned.sash_place(0, end_w, 0)
-                    self.sidebar_frame.configure(width=end_w)
+                    self.paned.paneconfig(self.sidebar_frame, minsize=compact_w)
+                    self.paned.sash_place(0, cur_w, 0)
+                    self.sidebar_frame.configure(width=cur_w)
                 except Exception:
                     pass
-                if not collapse:
+
+                if s_idx < slide_steps:
+                    self.root.after(delay, lambda: _slide_collapse_step(s_idx + 1))
+                else:
+                    self._animating_sidebar = False
+                    try:
+                        self.paned.paneconfig(self.sidebar_frame, minsize=compact_w)
+                        self.paned.sash_place(0, compact_w, 0)
+                        self.sidebar_frame.configure(width=compact_w)
+                    except Exception:
+                        pass
+
+            _fade_out_step(1)
+
+        else:
+            # EXPANDING:
+            # Phase 1: Slide sash open to 230px while remaining in clean compact mode (6 frames, ~84ms)
+            # Phase 2: Unpack labels & storage card at alpha 0.0, then fade in to 1.0 (4 frames, ~56ms)
+            slide_steps = 6
+            fade_steps = 4
+
+            def _slide_expand_step(s_idx: int):
+                t = s_idx / slide_steps
+                progress = 1.0 - (1.0 - t) ** 3
+                cur_w = int(compact_w + (expanded_w - compact_w) * progress)
+                try:
+                    self.paned.paneconfig(self.sidebar_frame, minsize=compact_w)
+                    self.paned.sash_place(0, cur_w, 0)
+                    self.sidebar_frame.configure(width=cur_w)
+                except Exception:
+                    pass
+
+                if s_idx < slide_steps:
+                    self.root.after(delay, lambda: _slide_expand_step(s_idx + 1))
+                else:
+                    try:
+                        self.paned.paneconfig(self.sidebar_frame, minsize=expanded_w)
+                        self.paned.sash_place(0, expanded_w, 0)
+                        self.sidebar_frame.configure(width=expanded_w)
+                    except Exception:
+                        pass
+
+                    # Unpack expanded widgets at alpha 0.0
+                    self.div_sec_kategori.pack_forget()
+                    self.btn_compact_folder.pack_forget()
+                    self.btn_hamburger.pack_configure(side=tk.LEFT)
+                    self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(8, 0))
+
+                    if "all" in self.sidebar_items:
+                        self.lbl_sec_pustaka.pack(before=self.sidebar_items["all"], fill=tk.X, pady=(6, 4))
+                    if "video" in self.sidebar_items:
+                        self.lbl_sec_kategori.pack(before=self.sidebar_items["video"], fill=tk.X, pady=(12, 4))
+                    self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
+
+                    for it in self.sidebar_items.values():
+                        it.set_compact(False)
+                        it.set_text_fade(0.0)
+
+                    bg_col = THEME["surface_alt"]
+                    self.lbl_sidebar_title.configure(fg=bg_col)
+                    self.lbl_sec_pustaka.configure(fg=bg_col)
+                    self.lbl_sec_kategori.configure(fg=bg_col)
+
+                    # Begin fade in
+                    _fade_in_step(1)
+
+            def _fade_in_step(f_idx: int):
+                alpha = min(1.0, f_idx / fade_steps)
+                for it in self.sidebar_items.values():
+                    it.set_text_fade(alpha)
+                bg_col = THEME["surface_alt"]
+                self.lbl_sidebar_title.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
+                self.lbl_sec_pustaka.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
+                self.lbl_sec_kategori.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
+
+                if f_idx < fade_steps:
+                    self.root.after(delay, lambda: _fade_in_step(f_idx + 1))
+                else:
+                    self._animating_sidebar = False
                     for it in self.sidebar_items.values():
                         it.set_text_fade(1.0)
                     self.lbl_sidebar_title.configure(fg=THEME["text_tertiary"])
                     self.lbl_sec_pustaka.configure(fg=THEME["text_tertiary"])
                     self.lbl_sec_kategori.configure(fg=THEME["text_tertiary"])
 
-        _step(1)
+            _slide_expand_step(1)
 
     def _apply_sidebar_compact_immediate(self):
         if self.sidebar_compact:
@@ -2385,10 +2437,10 @@ class IDMGUIApp:
                 item.set_compact(False)
                 item.set_text_fade(1.0)
 
-            self.sidebar_frame.configure(width=205)
+            self.sidebar_frame.configure(width=230)
             try:
-                self.paned.paneconfig(self.sidebar_frame, minsize=160)
-                self.paned.sash_place(0, 205, 0)
+                self.paned.paneconfig(self.sidebar_frame, minsize=230)
+                self.paned.sash_place(0, 230, 0)
             except Exception:
                 pass
 
@@ -2398,13 +2450,13 @@ class IDMGUIApp:
             self.sidebar_visible = False
         else:
             panes = self.paned.panes()
-            min_s = 56 if self.sidebar_compact else 160
+            min_s = 56 if self.sidebar_compact else 230
             if panes:
                 self.paned.add(self.sidebar_frame, before=panes[0], minsize=min_s)
             else:
                 self.paned.add(self.sidebar_frame, minsize=min_s)
             self.sidebar_visible = True
-            target_w = 56 if self.sidebar_compact else 205
+            target_w = 56 if self.sidebar_compact else 230
             try:
                 self.paned.sash_place(0, target_w, 0)
             except Exception:
