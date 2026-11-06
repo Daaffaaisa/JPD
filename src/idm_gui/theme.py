@@ -22,11 +22,11 @@ THEME = {
     "border": "#2d374d",           # Slate-700 hairline border
     "border_light": "#3e4c68",     # Muted slate divider
     "focus_ring": "#3b82f6",       # Luminous sapphire focus ring
-    # Typography (Cool Slate Ramp)
-    "text_primary": "#f1f5f9",     # Slate-50: Luminous crisp text (no halation)
-    "text_secondary": "#94a3b8",   # Slate-400: High-contrast cool secondary labels (WCAG AAA)
-    "text_tertiary": "#7d8da1",    # Slate-400/500: Captions & metadata (5.48:1 WCAG AA)
-    "text_disabled": "#526075",    # Slate-600: Disabled / coming soon text
+    # Typography (Cool Slate Ramp - High Contrast HD)
+    "text_primary": "#ffffff",     # Pure crisp high-contrast white
+    "text_secondary": "#cbd5e1",   # Slate-300: High-contrast cool secondary labels (WCAG AAA)
+    "text_tertiary": "#94a3b8",    # Slate-400: Captions & metadata (5.48:1 WCAG AA)
+    "text_disabled": "#64748b",    # Slate-500: Disabled text
     # Semantic Colors (Single Brand Accent + Status)
     "accent_primary": "#2563eb",   # Sapphire Blue: 5.17:1 with white (WCAG AA)
     "accent_hover": "#1d4ed8",     # Deep Royal: 6.70:1 with white
@@ -40,23 +40,24 @@ THEME = {
     "danger_text": "#fb7185",      # Rose-400: High-contrast warning on card (5.92:1)
     # Component specifics
     "tree_bg": "#0b0e15",
-    "tree_fg": "#f1f5f9",
+    "tree_fg": "#f8fafc",
     "tree_select": "#2563eb",
     "tree_heading_bg": "#1b2230",
-    "tree_heading_fg": "#f1f5f9",
+    "tree_heading_fg": "#ffffff",
     "progress_bg": "#0f131d",
     "progress_fill": "#2563eb",
     "progress_stripe": "#60a5fa",
     "part_divider": "#e11d48",
 }
 
-FONT_DISPLAY = "SF Pro Display"
-FONT_FAMILY = "SF Pro Text"
-FONT_TITLE = (FONT_DISPLAY, 11, "bold")
-FONT_HEADING = (FONT_DISPLAY, 9, "bold")
-FONT_BODY = (FONT_FAMILY, 9)
-FONT_SMALL = (FONT_FAMILY, 8)
-FONT_CODE = ("Consolas", 9)
+# Typography selection with native Windows ClearType subpixel hinting
+FONT_DISPLAY = "Segoe UI" if sys.platform == "win32" else "SF Pro Display"
+FONT_FAMILY = "Segoe UI" if sys.platform == "win32" else "SF Pro Text"
+FONT_TITLE = (FONT_DISPLAY, 12, "bold")
+FONT_HEADING = (FONT_DISPLAY, 10, "bold")
+FONT_BODY = (FONT_FAMILY, 10)
+FONT_SMALL = (FONT_FAMILY, 9)
+FONT_CODE = ("Consolas", 10)
 
 
 def get_app_icon_path() -> Optional[str]:
@@ -232,6 +233,74 @@ def draw_round_rectangle(canvas: tk.Canvas, x1: int, y1: int, x2: int, y2: int, 
     return canvas.create_polygon(points, fill=fill, outline=outline, width=width, smooth=True, **kwargs)
 
 
+_HD_PIL_CACHE: dict[tuple[str, int], Any] = {}
+
+
+def get_hd_icon_image(name: str, size: int = 15) -> Optional[Any]:
+    """Generates and caches an anti-aliased, 4x supersampled vector HD PIL image."""
+    if not name:
+        return None
+    key = (name, size)
+    if key in _HD_PIL_CACHE:
+        return _HD_PIL_CACHE[key]
+
+    try:
+        from PIL import Image, ImageDraw
+        scale = 4
+        s = size * scale
+        im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+
+        if name == "resume":  # Sleek filled play triangle in vibrant emerald
+            d.polygon([(s * 0.22, s * 0.16), (s * 0.84, s * 0.50), (s * 0.22, s * 0.84)], fill="#10b981")
+            d.line([(s * 0.22, s * 0.16), (s * 0.84, s * 0.50)], fill="#6ee7b7", width=max(1, int(s * 0.05)))
+        elif name == "pause":  # Two rounded vertical pause bars in amber gold
+            w_bar = s * 0.22
+            gap = s * 0.16
+            r = s * 0.06
+            x1 = (s - (w_bar * 2 + gap)) / 2
+            d.rounded_rectangle([x1, s * 0.16, x1 + w_bar, s * 0.84], radius=r, fill="#f59e0b")
+            d.line([x1 + 1, s * 0.16, x1 + w_bar - 1, s * 0.16], fill="#fde68a", width=max(1, int(s * 0.04)))
+            x2 = x1 + w_bar + gap
+            d.rounded_rectangle([x2, s * 0.16, x2 + w_bar, s * 0.84], radius=r, fill="#f59e0b")
+            d.line([x2 + 1, s * 0.16, x2 + w_bar - 1, s * 0.16], fill="#fde68a", width=max(1, int(s * 0.04)))
+        elif name == "add":  # Plus badge in white
+            lw = max(2, int(s * 0.14))
+            d.line([(s * 0.5, s * 0.16), (s * 0.5, s * 0.84)], fill="#ffffff", width=lw)
+            d.line([(s * 0.16, s * 0.5), (s * 0.84, s * 0.5)], fill="#ffffff", width=lw)
+        elif name == "stop":  # Rounded square in crimson/rose
+            d.rounded_rectangle([s * 0.18, s * 0.18, s * 0.82, s * 0.82], radius=s * 0.10, fill="#f43f5e")
+            d.line([(s * 0.20, s * 0.18), (s * 0.80, s * 0.18)], fill="#fda4af", width=max(1, int(s * 0.05)))
+        elif name == "delete":  # Modern diagonal cross in crimson/rose
+            lw = max(2, int(s * 0.14))
+            d.line([(s * 0.22, s * 0.22), (s * 0.78, s * 0.78)], fill="#ffffff" if False else "#f43f5e", width=lw)
+            d.line([(s * 0.22, s * 0.78), (s * 0.78, s * 0.22)], fill="#ffffff" if False else "#f43f5e", width=lw)
+        elif name == "clear":  # Crisp checkmark in emerald
+            lw = max(2, int(s * 0.14))
+            d.line([(s * 0.16, s * 0.50), (s * 0.40, s * 0.76)], fill="#10b981", width=lw)
+            d.line([(s * 0.40, s * 0.76), (s * 0.84, s * 0.24)], fill="#10b981", width=lw)
+        elif name == "folder":  # Folder icon in sky blue
+            d.rounded_rectangle([s * 0.14, s * 0.30, s * 0.86, s * 0.82], radius=s * 0.08, fill="#38bdf8")
+            d.polygon([(s * 0.14, s * 0.30), (s * 0.44, s * 0.30), (s * 0.52, s * 0.42), (s * 0.14, s * 0.42)], fill="#7dd3fc")
+        elif name == "settings":  # Gear cogwheel in steel slate
+            d.ellipse([s * 0.24, s * 0.24, s * 0.76, s * 0.76], outline="#94a3b8", width=max(2, int(s * 0.12)))
+            d.ellipse([s * 0.38, s * 0.38, s * 0.62, s * 0.62], fill="#1e293b")
+            d.rectangle([s * 0.44, s * 0.10, s * 0.56, s * 0.26], fill="#94a3b8")
+            d.rectangle([s * 0.44, s * 0.74, s * 0.56, s * 0.90], fill="#94a3b8")
+            d.rectangle([s * 0.10, s * 0.44, s * 0.26, s * 0.56], fill="#94a3b8")
+            d.rectangle([s * 0.74, s * 0.44, s * 0.90, s * 0.56], fill="#94a3b8")
+        elif name == "more":  # Double chevron
+            lw = max(2, int(s * 0.12))
+            d.line([(s * 0.28, s * 0.25), (s * 0.52, s * 0.50), (s * 0.28, s * 0.75)], fill="#cbd5e1", width=lw)
+            d.line([(s * 0.48, s * 0.25), (s * 0.72, s * 0.50), (s * 0.48, s * 0.75)], fill="#cbd5e1", width=lw)
+
+        res = im.resize((size, size), Image.Resampling.LANCZOS)
+        _HD_PIL_CACHE[key] = res
+        return res
+    except Exception:
+        return None
+
+
 class RoundedButton(tk.Canvas):
     """Tactile rounded button built on Tkinter Canvas with 3D elevation and smooth hover transitions."""
 
@@ -246,6 +315,7 @@ class RoundedButton(tk.Canvas):
         pady: int = 5,
         radius: int = 7,
         tooltip: Optional[str] = None,
+        icon: Optional[str] = None,
     ):
         self.parent = parent
         self.text = text
@@ -256,6 +326,8 @@ class RoundedButton(tk.Canvas):
         self.pady = pady
         self.state = "normal"
         self.custom_width = width
+        self.icon = icon
+        self._icon_ref: Optional[Any] = None
 
         # Resolve parent background so canvas blends seamlessly
         if hasattr(parent, "cget"):
@@ -305,13 +377,15 @@ class RoundedButton(tk.Canvas):
 
         try:
             font_obj = tkfont.Font(font=self.font)
-            self.text_w = font_obj.measure(self.text)
+            self.text_w = font_obj.measure(self.text) if self.text else 0
             self.text_h = font_obj.metrics("linespace")
         except Exception:
-            self.text_w = max(40, len(self.text) * 8)
+            self.text_w = max(40, len(self.text) * 8) if self.text else 0
             self.text_h = 18
-        self.total_w = self.custom_width if self.custom_width else (self.text_w + (self.padx * 2))
-        self.total_h = self.text_h + (self.pady * 2)
+
+        icon_space = 22 if self.icon else 0
+        self.total_w = self.custom_width if self.custom_width else (self.text_w + icon_space + (self.padx * 2))
+        self.total_h = max(28, self.text_h + (self.pady * 2))
 
         super().__init__(
             parent,
@@ -332,15 +406,34 @@ class RoundedButton(tk.Canvas):
         if tooltip:
             Tooltip(self, tooltip)
 
+    def _get_icon_photo(self, icon_name: Optional[str], size: int = 15) -> Optional[Any]:
+        if not icon_name:
+            return None
+        if not hasattr(self, "_icon_photos"):
+            self._icon_photos = {}
+        key = (icon_name, size)
+        if key in self._icon_photos:
+            return self._icon_photos[key]
+        try:
+            from PIL import ImageTk
+            pil_img = get_hd_icon_image(icon_name, size)
+            if pil_img:
+                photo = ImageTk.PhotoImage(pil_img, master=self)
+                self._icon_photos[key] = photo
+                return photo
+        except Exception:
+            pass
+        return None
+
     def _draw(self, fill_color, is_pressed: bool = False):
         self.delete("all")
         w, h = self.total_w, self.total_h
         r = self.radius
+        y_offset = 1 if is_pressed else 0
 
         if is_pressed:
             # Pressed state: sinks down slightly, darker inner border
             draw_round_rectangle(self, 1, 2, w - 1, h, r=r, fill=fill_color, outline=self.bot_shadow, width=1)
-            self.create_text(w // 2, (h // 2) + 1, text=self.text, fill=self.fg, font=self.font)
         else:
             # 1. Subtle drop shadow for 3D elevation
             draw_round_rectangle(self, 1, 2, w - 1, h, r=r, fill=self.bot_shadow, outline="")
@@ -349,8 +442,21 @@ class RoundedButton(tk.Canvas):
             # 3. Overhead specular highlight line across the top edge
             if w > 2 * r and h > 10:
                 self.create_line(r + 2, 2, w - r - 2, 2, fill=self.top_highlight, width=1.5)
-            # 4. Text
-            self.create_text(w // 2, h // 2, text=self.text, fill=self.fg, font=self.font)
+
+        # 4. Icon and Text rendering
+        icon_photo = self._get_icon_photo(self.icon, size=15) if self.icon else None
+
+        if icon_photo and self.text:
+            content_w = 15 + 6 + self.text_w
+            x_start = max(self.padx, (w - content_w) // 2)
+            self.create_image(x_start + 7, (h // 2) + y_offset, image=icon_photo)
+            self.create_text(x_start + 15 + 6, (h // 2) + y_offset, text=self.text, fill=self.fg, font=self.font, anchor=tk.W)
+            self._icon_ref = icon_photo
+        elif icon_photo and not self.text:
+            self.create_image(w // 2, (h // 2) + y_offset, image=icon_photo)
+            self._icon_ref = icon_photo
+        else:
+            self.create_text(w // 2, (h // 2) + y_offset, text=self.text, fill=self.fg, font=self.font, anchor=tk.CENTER)
 
     def _on_enter(self, e):
         if self.state != "disabled":
@@ -371,14 +477,18 @@ class RoundedButton(tk.Canvas):
                 self.command()
 
     def config(self, **kwargs):
-        if "text" in kwargs:
-            self.text = kwargs["text"]
+        if "text" in kwargs or "icon" in kwargs:
+            if "text" in kwargs:
+                self.text = kwargs["text"]
+            if "icon" in kwargs:
+                self.icon = kwargs["icon"]
             try:
                 font_obj = tkfont.Font(font=self.font)
-                self.text_w = font_obj.measure(self.text)
+                self.text_w = font_obj.measure(self.text) if self.text else 0
             except Exception:
-                self.text_w = max(40, len(self.text) * 8)
-            self.total_w = self.custom_width if self.custom_width else (self.text_w + (self.padx * 2))
+                self.text_w = max(40, len(self.text) * 8) if self.text else 0
+            icon_space = 22 if self.icon else 0
+            self.total_w = self.custom_width if self.custom_width else (self.text_w + icon_space + (self.padx * 2))
             super().config(width=self.total_w)
             self._draw(self.bg_normal)
         if "state" in kwargs:
@@ -386,7 +496,7 @@ class RoundedButton(tk.Canvas):
             self.config(cursor="hand2" if self.state != "disabled" else "arrow")
         if "command" in kwargs:
             self.command = kwargs["command"]
-        canvas_kwargs = {k: v for k, v in kwargs.items() if k not in ("text", "state", "command")}
+        canvas_kwargs = {k: v for k, v in kwargs.items() if k not in ("text", "state", "command", "icon")}
         if canvas_kwargs:
             super().config(**canvas_kwargs)
 
@@ -397,6 +507,8 @@ class RoundedButton(tk.Canvas):
             return self.state
         if key == "command":
             return self.command
+        if key == "icon":
+            return self.icon
         return super().cget(key)
 
 
@@ -410,6 +522,7 @@ def create_modern_button(
     pady: int = 4,
     tooltip: Optional[str] = None,
     radius: int = 7,
+    icon: Optional[str] = None,
 ) -> RoundedButton:
     """Creates a tactile, beautifully styled rounded button with active hover animations."""
     return RoundedButton(
@@ -422,6 +535,7 @@ def create_modern_button(
         pady=pady,
         radius=radius,
         tooltip=tooltip,
+        icon=icon,
     )
 
 

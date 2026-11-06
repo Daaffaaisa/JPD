@@ -964,12 +964,13 @@ class IDMGUIApp:
         self.toolbar_border = tk.Frame(self.root, bg="#162032", height=1)
         self.toolbar_border.pack(side=tk.TOP, fill=tk.X)
 
-        # 1. Hero Primary Action Button: + Tambah URL
+        # 1. Hero Primary Action Button: Tambah URL
         self.btn_add = create_modern_button(
             self.toolbar_frame,
             text=tr("tb_add_url"),
             command=self.open_add_url_dialog,
             kind="primary",
+            icon="add",
             padx=12,
             pady=5,
             radius=8,
@@ -977,7 +978,7 @@ class IDMGUIApp:
         )
         self.btn_add.pack(side=tk.LEFT, padx=(0, 10))
 
-        # 2. Segmented Control Group 1: Transfer Controls (▷ Lanjutkan | ❚❚ Jeda | ✕ Hapus)
+        # 2. Segmented Control Group 1: Transfer Controls (Lanjutkan | Jeda | Hapus)
         self.grp_transfer = tk.Frame(self.toolbar_frame, bg=THEME["surface"], padx=0, pady=0)
         self.grp_transfer.pack(side=tk.LEFT, padx=(0, 6))
 
@@ -986,6 +987,7 @@ class IDMGUIApp:
             text=tr("tb_resume"),
             command=self.resume_selected,
             kind="toolbar",
+            icon="resume",
             padx=9,
             pady=4,
             radius=7,
@@ -998,6 +1000,7 @@ class IDMGUIApp:
             text=tr("tb_pause"),
             command=self.pause_selected,
             kind="toolbar",
+            icon="pause",
             padx=9,
             pady=4,
             radius=7,
@@ -1010,6 +1013,7 @@ class IDMGUIApp:
             text=tr("tb_delete"),
             command=self.delete_selected,
             kind="danger",
+            icon="delete",
             padx=9,
             pady=4,
             radius=7,
@@ -1017,7 +1021,7 @@ class IDMGUIApp:
         )
         self.btn_delete.pack(side=tk.LEFT, padx=2)
 
-        # 3. Segmented Control Group 2: Secondary Tools (■ Hentikan | ✓ Bersihkan | ↗ Buka Folder | ⋯ Pengaturan)
+        # 3. Segmented Control Group 2: Secondary Tools (Hentikan | Bersihkan | Buka Folder | Pengaturan)
         self.secondary_group = tk.Frame(self.toolbar_frame, bg=THEME["surface"], padx=0, pady=0)
         self.secondary_group.pack(side=tk.LEFT, padx=(0, 6))
 
@@ -1026,6 +1030,7 @@ class IDMGUIApp:
             text=tr("tb_stop"),
             command=self.stop_all,
             kind="toolbar",
+            icon="stop",
             padx=8,
             pady=4,
             radius=7,
@@ -1038,6 +1043,7 @@ class IDMGUIApp:
             text=tr("tb_clear"),
             command=self.delete_completed,
             kind="toolbar",
+            icon="clear",
             padx=8,
             pady=4,
             radius=7,
@@ -1050,6 +1056,7 @@ class IDMGUIApp:
             text=tr("tb_open_folder"),
             command=self.open_selected_folder,
             kind="toolbar",
+            icon="folder",
             padx=8,
             pady=4,
             radius=7,
@@ -1062,6 +1069,7 @@ class IDMGUIApp:
             text=tr("tb_settings"),
             command=self.open_options_dialog,
             kind="toolbar",
+            icon="settings",
             padx=8,
             pady=4,
             radius=7,
@@ -1103,6 +1111,7 @@ class IDMGUIApp:
             text=tr("tb_more"),
             command=self._show_overflow_menu,
             kind="toolbar",
+            icon="more",
             padx=10,
             pady=4,
             radius=7,
