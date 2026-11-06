@@ -437,7 +437,7 @@ class SidebarNavItem(tk.Frame):
 class IDMGUIApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Just Press Download (JPD)")
+        self.root.title(tr("app_name"))
         self.root.geometry("1040x620")
         self.root.minsize(820, 480)
         self.root.configure(bg=THEME["bg_dark"])

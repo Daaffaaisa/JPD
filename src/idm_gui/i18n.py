@@ -8,7 +8,7 @@ from idm_gui.settings import settings
 
 STRINGS = {
     "id": {
-        "app_name": "Just Press Download (JPD)",
+        "app_name": "Just Press Download",
         "nav_title": "NAVIGASI",
         "sec_library": "PUSTAKA",
         "sec_categories": "KATEGORI BERKAS",
@@ -135,7 +135,7 @@ STRINGS = {
         "complete_done": "Selesai",
     },
     "en": {
-        "app_name": "Just Press Download (JPD)",
+        "app_name": "Just Press Download",
         "nav_title": "NAVIGATION",
         "sec_library": "LIBRARY",
         "sec_categories": "FILE CATEGORIES",

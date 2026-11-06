@@ -66,8 +66,11 @@ def get_app_icon_path() -> Optional[str]:
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         candidates.append(os.path.join(meipass, "icon.ico"))
+        candidates.append(os.path.join(meipass, "..", "icon.ico"))
     if getattr(sys, "frozen", False):
-        candidates.append(os.path.join(os.path.dirname(sys.executable), "icon.ico"))
+        exe_dir = os.path.dirname(sys.executable)
+        candidates.append(os.path.join(exe_dir, "icon.ico"))
+        candidates.append(os.path.join(exe_dir, "_internal", "icon.ico"))
     candidates.extend([
         os.path.abspath("icon.ico"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "icon.ico"),
@@ -85,8 +88,11 @@ def get_app_png_path() -> Optional[str]:
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         candidates.append(os.path.join(meipass, "icon.png"))
+        candidates.append(os.path.join(meipass, "..", "icon.png"))
     if getattr(sys, "frozen", False):
-        candidates.append(os.path.join(os.path.dirname(sys.executable), "icon.png"))
+        exe_dir = os.path.dirname(sys.executable)
+        candidates.append(os.path.join(exe_dir, "icon.png"))
+        candidates.append(os.path.join(exe_dir, "_internal", "icon.png"))
     candidates.extend([
         os.path.abspath("icon.png"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "icon.png"),
@@ -101,6 +107,25 @@ def get_app_png_path() -> Optional[str]:
 def apply_window_icon(window: Any):
     """Sets the custom 3D icon.ico and icon.png for the given window (Tk or Toplevel)."""
     ico = get_app_icon_path()
+    png = get_app_png_path()
+
+    # 1. Tkinter standard iconphoto with multiple resolutions (16x16, 24x24, 32x32, 48x48)
+    if png and os.path.exists(png):
+        try:
+            from PIL import Image, ImageTk
+            img = Image.open(png)
+            master_w = window if isinstance(window, (tk.Tk, tk.Toplevel)) else None
+            p16 = ImageTk.PhotoImage(img.resize((16, 16), Image.Resampling.LANCZOS), master=master_w)
+            p24 = ImageTk.PhotoImage(img.resize((24, 24), Image.Resampling.LANCZOS), master=master_w)
+            p32 = ImageTk.PhotoImage(img.resize((32, 32), Image.Resampling.LANCZOS), master=master_w)
+            p48 = ImageTk.PhotoImage(img.resize((48, 48), Image.Resampling.LANCZOS), master=master_w)
+            window.iconphoto(True, p16, p24, p32, p48)  # type: ignore[arg-type]
+            setattr(window, "_app_icon_photo", p32)
+            setattr(window, "_app_icon_photos", (p16, p24, p32, p48))
+        except Exception:
+            pass
+
+    # 2. Windows native title bar icon via iconbitmap and direct WM_SETICON
     if ico and os.path.exists(ico):
         try:
             if isinstance(window, tk.Tk):
@@ -113,17 +138,28 @@ def apply_window_icon(window: Any):
         except Exception:
             pass
 
-    png = get_app_png_path()
-    if png and os.path.exists(png):
-        try:
-            from PIL import Image, ImageTk
-            img = Image.open(png)
-            master_w = window if isinstance(window, (tk.Tk, tk.Toplevel)) else None
-            photo = ImageTk.PhotoImage(img.resize((32, 32), Image.Resampling.LANCZOS), master=master_w)
-            window.iconphoto(True, photo)
-            setattr(window, "_app_icon_photo", photo)
-        except Exception:
-            pass
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                hwnd = window.winfo_id()
+                parent_hwnd = user32.GetParent(hwnd)
+                target_hwnd = parent_hwnd if parent_hwnd else hwnd
+
+                IMAGE_ICON = 1
+                LR_LOADFROMFILE = 0x00000010
+                WM_SETICON = 0x0080
+                ICON_SMALL = 0
+                ICON_BIG = 1
+
+                h_small = user32.LoadImageW(None, ico, IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
+                h_big = user32.LoadImageW(None, ico, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
+                if h_small:
+                    user32.SendMessageW(target_hwnd, WM_SETICON, ICON_SMALL, h_small)
+                if h_big:
+                    user32.SendMessageW(target_hwnd, WM_SETICON, ICON_BIG, h_big)
+            except Exception:
+                pass
 
 
 def apply_theme_to_toplevel(top: tk.Toplevel, width: int, height: int, title: str):

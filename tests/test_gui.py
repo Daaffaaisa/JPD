@@ -21,5 +21,5 @@ def test_gui_app_initialization(mock_style, mock_tk):
     assert app.root == mock_root
     assert app.queue is not None
     assert app.engine is not None
-    mock_root.title.assert_called_with("Just Press Download (JPD)")
+    mock_root.title.assert_called_with("Just Press Download")
     mock_root.after.assert_called()
