@@ -447,6 +447,18 @@ class IDMGUIApp:
         self.root.geometry("1040x620")
         self.root.minsize(820, 480)
         self.root.configure(bg=THEME["bg_dark"])
+
+        # Ensure scaling matches monitor DPI for razor-sharp HD rendering on 1080p, 2K, 4K
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                hwnd = self.root.winfo_id()
+                dpi = ctypes.windll.user32.GetDpiForWindow(hwnd)
+                if dpi > 0:
+                    self.root.tk.call("tk", "scaling", dpi / 72.0)
+            except Exception:
+                pass
+
         apply_window_icon(self.root)
 
         self.engine = DownloadEngine()
@@ -2629,6 +2641,21 @@ class IDMGUIApp:
 
 
 def main():
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        except Exception:
+            try:
+                import ctypes
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except Exception:
+                try:
+                    import ctypes
+                    ctypes.windll.user32.SetProcessDPIAware()
+                except Exception:
+                    pass
+
     root = tk.Tk()
     app = IDMGUIApp(root)
     root.mainloop()

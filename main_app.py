@@ -23,6 +23,21 @@ src_dir = os.path.join(app_dir, "src")
 if os.path.exists(src_dir) and src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
+# Enable Per-Monitor V2 High-DPI Awareness on Windows so fonts, icons, and borders render razor-sharp in HD (no blur)
+if sys.platform == "win32":
+    import ctypes
+    try:
+        # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+    except Exception:
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
+
 from idm_gui.app import main
 
 
