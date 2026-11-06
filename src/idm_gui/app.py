@@ -831,44 +831,44 @@ class IDMGUIApp:
 
         # 1. Menu Tugas (Tasks)
         tasks_menu = tk.Menu(self.menubar, tearoff=0)
-        tasks_menu.add_command(label="Tambahkan unduhan baru... (Add URL)", accelerator="Ctrl+N", command=self.open_add_url_dialog)
+        tasks_menu.add_command(label=tr("menu_add_url"), accelerator="Ctrl+N", command=self.open_add_url_dialog)
         tasks_menu.add_separator()
-        tasks_menu.add_command(label="Ekspor ke berkas teks...", command=self.export_to_text_file)
-        tasks_menu.add_command(label="Impor dari berkas teks...", command=self.import_from_text_file)
+        tasks_menu.add_command(label=tr("menu_export"), command=self.export_to_text_file)
+        tasks_menu.add_command(label=tr("menu_import"), command=self.import_from_text_file)
         tasks_menu.add_separator()
-        tasks_menu.add_command(label="Keluar (Exit)", accelerator="Alt+F4", command=self.quit_app)
-        self.menubar.add_cascade(label="Tugas (Tasks)", menu=tasks_menu)
+        tasks_menu.add_command(label=tr("menu_exit"), accelerator="Alt+F4", command=self.quit_app)
+        self.menubar.add_cascade(label=tr("menu_tasks"), menu=tasks_menu)
 
         # 2. Menu Berkas (File)
         file_menu = tk.Menu(self.menubar, tearoff=0)
-        file_menu.add_command(label="Hentikan Unduh (Pause)", command=self.pause_selected)
-        file_menu.add_command(label="Lanjutkan Unduh (Resume)", command=self.resume_selected)
-        file_menu.add_command(label="Hapus Unduhan (Remove)", accelerator="Del", command=self.delete_selected)
+        file_menu.add_command(label=tr("menu_pause"), command=self.pause_selected)
+        file_menu.add_command(label=tr("menu_resume"), command=self.resume_selected)
+        file_menu.add_command(label=tr("menu_delete"), accelerator="Del", command=self.delete_selected)
         file_menu.add_separator()
-        file_menu.add_command(label="Buka Berkas (Open File)", command=self.open_selected_file)
-        file_menu.add_command(label="Buka Folder Penyimpanan (Open Folder)", command=self.open_selected_folder)
-        self.menubar.add_cascade(label="Berkas (File)", menu=file_menu)
+        file_menu.add_command(label=tr("menu_open_file"), command=self.open_selected_file)
+        file_menu.add_command(label=tr("menu_open_folder"), command=self.open_selected_folder)
+        self.menubar.add_cascade(label=tr("menu_file"), menu=file_menu)
 
         # 3. Menu Unduh (Downloads)
         downloads_menu = tk.Menu(self.menubar, tearoff=0)
-        downloads_menu.add_command(label="Jeda Semua (Pause All)", command=self.pause_all)
-        downloads_menu.add_command(label="Lanjutkan Semua (Resume All)", command=self.resume_all)
-        downloads_menu.add_command(label="Hentikan Semua (Stop All)", command=self.stop_all)
-        downloads_menu.add_command(label="Hapus Semua Yang Selesai (Delete Completed)", command=self.delete_completed)
+        downloads_menu.add_command(label=tr("menu_pause_all"), command=self.pause_all)
+        downloads_menu.add_command(label=tr("menu_resume_all"), command=self.resume_all)
+        downloads_menu.add_command(label=tr("menu_stop_all"), command=self.stop_all)
+        downloads_menu.add_command(label=tr("menu_delete_completed"), command=self.delete_completed)
         downloads_menu.add_separator()
-        downloads_menu.add_command(label="⚙ Opsi / Pengaturan... (Options)", command=self.open_options_dialog)
-        self.menubar.add_cascade(label="Unduh (Downloads)", menu=downloads_menu)
+        downloads_menu.add_command(label=tr("menu_options"), command=self.open_options_dialog)
+        self.menubar.add_cascade(label=tr("menu_downloads"), menu=downloads_menu)
 
         # 4. Menu Lihat (View)
         view_menu = tk.Menu(self.menubar, tearoff=0)
-        view_menu.add_command(label="Sembunyikan/Tampilkan Kategori", command=self.toggle_sidebar)
+        view_menu.add_command(label=tr("menu_toggle_sidebar"), command=self.toggle_sidebar)
         
         arrange_menu = tk.Menu(view_menu, tearoff=0)
-        arrange_menu.add_command(label="Berdasarkan Nama Berkas", command=lambda: self.sort_by_column("name"))
-        arrange_menu.add_command(label="Berdasarkan Ukuran", command=lambda: self.sort_by_column("size"))
-        arrange_menu.add_command(label="Berdasarkan Status", command=lambda: self.sort_by_column("status"))
-        arrange_menu.add_command(label="Berdasarkan Kecepatan", command=lambda: self.sort_by_column("speed"))
-        view_menu.add_cascade(label="Atur Berkas (Arrange Files)", menu=arrange_menu)
+        arrange_menu.add_command(label=tr("sort_name"), command=lambda: self.sort_by_column("name"))
+        arrange_menu.add_command(label=tr("sort_size"), command=lambda: self.sort_by_column("size"))
+        arrange_menu.add_command(label=tr("sort_status"), command=lambda: self.sort_by_column("status"))
+        arrange_menu.add_command(label=tr("sort_speed"), command=lambda: self.sort_by_column("speed"))
+        view_menu.add_cascade(label=tr("menu_arrange"), menu=arrange_menu)
 
         view_menu.add_separator()
         lang_menu = tk.Menu(view_menu, tearoff=0)
@@ -883,15 +883,15 @@ class IDMGUIApp:
         )
         view_menu.add_cascade(label=tr("menu_language"), menu=lang_menu)
 
-        self.menubar.add_cascade(label="Lihat (View)", menu=view_menu)
+        self.menubar.add_cascade(label=tr("menu_view"), menu=view_menu)
 
         # 5. Menu Bantuan (Help)
         help_menu = tk.Menu(self.menubar, tearoff=0)
-        help_menu.add_command(label="Tip Hari Ini... (Tip of the Day)", command=self.show_tip_of_the_day)
-        help_menu.add_command(label="Periksa Pembaruan... (Check for Updates)", command=self.check_for_updates)
+        help_menu.add_command(label=tr("menu_tip"), command=self.show_tip_of_the_day)
+        help_menu.add_command(label=tr("menu_updates"), command=self.check_for_updates)
         help_menu.add_separator()
-        help_menu.add_command(label="Tentang Just Press Download (About)", command=self.show_about)
-        self.menubar.add_cascade(label="Bantuan (Help)", menu=help_menu)
+        help_menu.add_command(label=tr("menu_about"), command=self.show_about)
+        self.menubar.add_cascade(label=tr("menu_help"), menu=help_menu)
 
         self.root.config(menu=self.menubar)
 
@@ -910,13 +910,13 @@ class IDMGUIApp:
         # 1. Hero Primary Action Button: + Tambah URL
         self.btn_add = create_modern_button(
             self.toolbar_frame,
-            text="+ Tambah URL",
+            text=tr("tb_add_url"),
             command=self.open_add_url_dialog,
             kind="primary",
             padx=12,
             pady=5,
             radius=8,
-            tooltip="Tambah URL Baru (Ctrl+N)",
+            tooltip=tr("tip_add"),
         )
         self.btn_add.pack(side=tk.LEFT, padx=(0, 10))
 
@@ -924,105 +924,105 @@ class IDMGUIApp:
         self.grp_transfer = tk.Frame(self.toolbar_frame, bg=THEME["surface"], padx=0, pady=0)
         self.grp_transfer.pack(side=tk.LEFT, padx=(0, 6))
 
-        btn_resume = create_modern_button(
+        self.btn_resume = create_modern_button(
             self.grp_transfer,
-            text="▷ Lanjutkan",
+            text=tr("tb_resume"),
             command=self.resume_selected,
             kind="toolbar",
             padx=9,
             pady=4,
             radius=7,
-            tooltip="Lanjutkan Unduhan Terpilih",
+            tooltip=tr("tip_resume"),
         )
-        btn_resume.pack(side=tk.LEFT, padx=2)
+        self.btn_resume.pack(side=tk.LEFT, padx=2)
 
-        btn_pause = create_modern_button(
+        self.btn_pause = create_modern_button(
             self.grp_transfer,
-            text="❚❚ Jeda",
+            text=tr("tb_pause"),
             command=self.pause_selected,
             kind="toolbar",
             padx=9,
             pady=4,
             radius=7,
-            tooltip="Jeda Unduhan Terpilih",
+            tooltip=tr("tip_pause"),
         )
-        btn_pause.pack(side=tk.LEFT, padx=2)
+        self.btn_pause.pack(side=tk.LEFT, padx=2)
 
-        btn_delete = create_modern_button(
+        self.btn_delete = create_modern_button(
             self.grp_transfer,
-            text="✕ Hapus",
+            text=tr("tb_delete"),
             command=self.delete_selected,
             kind="danger",
             padx=9,
             pady=4,
             radius=7,
-            tooltip="Hapus Unduhan Terpilih (Del)",
+            tooltip=tr("tip_delete"),
         )
-        btn_delete.pack(side=tk.LEFT, padx=2)
+        self.btn_delete.pack(side=tk.LEFT, padx=2)
 
         # 3. Segmented Control Group 2: Secondary Tools (■ Hentikan | ✓ Bersihkan | ↗ Buka Folder | ⋯ Pengaturan)
         self.secondary_group = tk.Frame(self.toolbar_frame, bg=THEME["surface"], padx=0, pady=0)
         self.secondary_group.pack(side=tk.LEFT, padx=(0, 6))
 
-        btn_stop = create_modern_button(
+        self.btn_stop = create_modern_button(
             self.secondary_group,
-            text="■ Hentikan",
+            text=tr("tb_stop"),
             command=self.stop_all,
             kind="toolbar",
             padx=8,
             pady=4,
             radius=7,
-            tooltip="Hentikan Semua Unduhan",
+            tooltip=tr("tip_stop"),
         )
-        btn_stop.pack(side=tk.LEFT, padx=2)
+        self.btn_stop.pack(side=tk.LEFT, padx=2)
 
-        btn_clean = create_modern_button(
+        self.btn_clean = create_modern_button(
             self.secondary_group,
-            text="✓ Bersihkan",
+            text=tr("tb_clear"),
             command=self.delete_completed,
             kind="toolbar",
             padx=8,
             pady=4,
             radius=7,
-            tooltip="Bersihkan Seluruh Unduhan Selesai",
+            tooltip=tr("tip_clear"),
         )
-        btn_clean.pack(side=tk.LEFT, padx=2)
+        self.btn_clean.pack(side=tk.LEFT, padx=2)
 
-        btn_folder = create_modern_button(
+        self.btn_folder = create_modern_button(
             self.secondary_group,
-            text="↗ Buka Folder",
+            text=tr("tb_open_folder"),
             command=self.open_selected_folder,
             kind="toolbar",
             padx=8,
             pady=4,
             radius=7,
-            tooltip="Buka Folder Berkas Terpilih",
+            tooltip=tr("tip_folder"),
         )
-        btn_folder.pack(side=tk.LEFT, padx=2)
+        self.btn_folder.pack(side=tk.LEFT, padx=2)
 
-        btn_opts = create_modern_button(
+        self.btn_opts = create_modern_button(
             self.secondary_group,
-            text="⋯ Pengaturan",
+            text=tr("tb_settings"),
             command=self.open_options_dialog,
             kind="toolbar",
             padx=8,
             pady=4,
             radius=7,
-            tooltip="Opsi Konfigurasi JustPressDownload (JPD)",
+            tooltip=tr("tip_settings"),
         )
-        btn_opts.pack(side=tk.LEFT, padx=2)
+        self.btn_opts.pack(side=tk.LEFT, padx=2)
 
         self.toolbar_buttons = [
-            (self.btn_add, "Tambah URL Baru (Ctrl+N)"),
-            (btn_resume, "Lanjutkan Unduhan Terpilih"),
-            (btn_pause, "Jeda Unduhan Terpilih"),
-            (btn_delete, "Hapus Unduhan Terpilih (Del)"),
-            (btn_stop, "Hentikan Semua Unduhan"),
-            (btn_clean, "Bersihkan Seluruh Unduhan Selesai"),
-            (btn_folder, "Buka Folder Berkas Terpilih"),
-            (btn_opts, "Opsi Konfigurasi JustPressDownload (JPD)"),
+            (self.btn_add, tr("tip_add")),
+            (self.btn_resume, tr("tip_resume")),
+            (self.btn_pause, tr("tip_pause")),
+            (self.btn_delete, tr("tip_delete")),
+            (self.btn_stop, tr("tip_stop")),
+            (self.btn_clean, tr("tip_clear")),
+            (self.btn_folder, tr("tip_folder")),
+            (self.btn_opts, tr("tip_settings")),
         ]
-        self.secondary_buttons = [btn_stop, btn_clean, btn_folder, btn_opts]
+        self.secondary_buttons = [self.btn_stop, self.btn_clean, self.btn_folder, self.btn_opts]
 
         # Overflow menu & button for responsive compact width (<760px)
         self.overflow_menu = tk.Menu(
@@ -1035,21 +1035,21 @@ class IDMGUIApp:
             bd=1,
             relief=tk.FLAT,
         )
-        self.overflow_menu.add_command(label="■ Hentikan Semua Unduhan", command=self.stop_all)
-        self.overflow_menu.add_command(label="✓ Bersihkan Selesai", command=self.delete_completed)
-        self.overflow_menu.add_command(label="↗ Buka Folder Penyimpanan", command=self.open_selected_folder)
+        self.overflow_menu.add_command(label=f"■ {tr('tb_stop')}", command=self.stop_all)
+        self.overflow_menu.add_command(label=f"✓ {tr('tb_clear')}", command=self.delete_completed)
+        self.overflow_menu.add_command(label=f"↗ {tr('tb_open_folder')}", command=self.open_selected_folder)
         self.overflow_menu.add_separator()
-        self.overflow_menu.add_command(label="⋯ Pengaturan...", command=self.open_options_dialog)
+        self.overflow_menu.add_command(label=f"⋯ {tr('tb_settings')}", command=self.open_options_dialog)
 
         self.btn_overflow = create_modern_button(
             self.toolbar_frame,
-            text="» Lainnya",
+            text=tr("tb_more"),
             command=self._show_overflow_menu,
             kind="toolbar",
             padx=10,
             pady=4,
             radius=7,
-            tooltip="Aksi Tambahan...",
+            tooltip=tr("tb_more"),
         )
 
         # Search pill bar on the right side of toolbar with SF Pro font and 3D elevation
@@ -1078,17 +1078,17 @@ class IDMGUIApp:
         if self.search_var:
             entry_kwargs["textvariable"] = self.search_var
         self.search_entry = tk.Entry(self.search_canvas, **entry_kwargs)
-        self.search_entry.insert(0, "Cari unduhan...")
+        self.search_entry.insert(0, tr("tb_search_placeholder"))
         self.search_canvas.create_window(110, 16, window=self.search_entry, width=150)
 
         def _on_search_focus_in(e):
-            if self.search_entry.get() == "Cari unduhan...":
+            if self.search_entry.get() in ("Cari unduhan...", "Search downloads..."):
                 self.search_entry.delete(0, tk.END)
                 self.search_entry.config(fg=THEME["text_primary"])
 
         def _on_search_focus_out(e):
             if not self.search_entry.get().strip():
-                self.search_entry.insert(0, "Cari unduhan...")
+                self.search_entry.insert(0, tr("tb_search_placeholder"))
                 self.search_entry.config(fg=THEME["text_secondary"])
 
         self.search_entry.bind("<FocusIn>", _on_search_focus_in)
@@ -1265,19 +1265,19 @@ class IDMGUIApp:
         self.stat_bar.pack(side=tk.TOP, fill=tk.X)
 
         # Card 1: Live Speed (3D Tactile Card)
-        card_speed = TactileCard(self.stat_bar, "⚡ KECEPATAN AKTIF", "0 B/detik", val_fg=THEME["accent_primary"], r=12)
-        card_speed.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
-        self.lbl_stat_speed = card_speed.lbl_val
+        self.card_speed = TactileCard(self.stat_bar, tr("stat_speed"), "0 B/s", val_fg=THEME["accent_primary"], r=12)
+        self.card_speed.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        self.lbl_stat_speed = self.card_speed.lbl_val
 
         # Card 2: Active / Queued Tasks (3D Tactile Card)
-        card_active = TactileCard(self.stat_bar, "⏳ TUGAS BERJALAN", "0 Berjalan • 0 Mengantri", val_fg=THEME["text_primary"], r=12)
-        card_active.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
-        self.lbl_stat_active = card_active.lbl_val
+        self.card_active = TactileCard(self.stat_bar, tr("stat_active"), "0", val_fg=THEME["text_primary"], r=12)
+        self.card_active.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        self.lbl_stat_active = self.card_active.lbl_val
 
         # Card 3: Library Stats (3D Tactile Card)
-        card_total = TactileCard(self.stat_bar, "💾 TOTAL BERKAS", "0 Berkas (0 B)", val_fg=THEME["text_primary"], r=12)
-        card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
-        self.lbl_stat_total = card_total.lbl_val
+        self.card_total = TactileCard(self.stat_bar, tr("stat_files"), "0", val_fg=THEME["text_primary"], r=12)
+        self.card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        self.lbl_stat_total = self.card_total.lbl_val
 
         # 2. Downloads Table Frame inside 3D tactile rounded card container
         self.table_container = TactileTableContainer(right_container, r=14)
@@ -1287,12 +1287,12 @@ class IDMGUIApp:
         cols = ("name", "size", "status", "progress", "speed", "url")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", selectmode="extended")
 
-        self.tree.heading("name", text="Nama Berkas")
-        self.tree.heading("size", text="Ukuran")
-        self.tree.heading("status", text="Status")
-        self.tree.heading("progress", text="Progres")
-        self.tree.heading("speed", text="Kecepatan")
-        self.tree.heading("url", text="URL Unduhan")
+        self.tree.heading("name", text=tr("col_name"))
+        self.tree.heading("size", text=tr("col_size"))
+        self.tree.heading("status", text=tr("col_status"))
+        self.tree.heading("progress", text=tr("col_progress"))
+        self.tree.heading("speed", text=tr("col_speed"))
+        self.tree.heading("url", text=tr("col_url"))
 
         self.tree.column("name", width=210, minwidth=130)
         self.tree.column("size", width=75, anchor=tk.E, minwidth=65)
@@ -2006,7 +2006,7 @@ class IDMGUIApp:
         # Filter by search query if active
         if hasattr(self, "search_var") and self.search_var:
             query = self.search_var.get().strip().lower()
-            if query and query != "cari unduhan...":
+            if query and query not in ("cari unduhan...", "search downloads..."):
                 tasks = [t for t in tasks if query in os.path.basename(t.output_path).lower() or query in (t.url or "").lower()]
 
         total_speed = 0.0
@@ -2038,22 +2038,22 @@ class IDMGUIApp:
             # Format status with localized label and modern color tag
             status_tag = "normal"
             if task.status == TaskStatus.DOWNLOADING:
-                status_label = "⚡ Mengunduh"
+                status_label = tr("status_downloading")
                 status_tag = "downloading"
             elif task.status == TaskStatus.COMPLETED:
-                status_label = "✓ Selesai"
+                status_label = tr("status_completed")
                 status_tag = "completed"
             elif task.status == TaskStatus.PAUSED:
-                status_label = "⏸ Dijeda"
+                status_label = tr("status_paused")
                 status_tag = "paused"
             elif task.status == TaskStatus.QUEUED:
-                status_label = "⏳ Mengantri"
+                status_label = tr("status_queued")
                 status_tag = "queued"
             elif task.status == TaskStatus.FAILED:
-                status_label = "✕ Gagal"
+                status_label = tr("status_failed")
                 status_tag = "failed"
             elif task.status == TaskStatus.CANCELLED:
-                status_label = "✕ Dibatalkan"
+                status_label = tr("status_failed")
                 status_tag = "cancelled"
             else:
                 status_label = task.status.value
@@ -2116,13 +2116,13 @@ class IDMGUIApp:
             )
         if hasattr(self, "lbl_stat_active") and self.lbl_stat_active:
             queued_count = sum(1 for t in tasks if t.status == TaskStatus.QUEUED)
-            self.lbl_stat_active.config(text=f"{active_count} Berjalan • {queued_count} Mengantri")
+            self.lbl_stat_active.config(text=tr("stat_running_queued", running=active_count, queued=queued_count))
         if hasattr(self, "lbl_stat_total") and self.lbl_stat_total:
             total_bytes_dl = sum(t.bytes_downloaded for t in tasks)
-            self.lbl_stat_total.config(text=f"{len(tasks)} Berkas ({format_bytes(total_bytes_dl)})")
+            self.lbl_stat_total.config(text=tr("stat_files_summary", count=len(tasks), size=format_bytes(total_bytes_dl)))
 
         self.statusbar.config(
-            text=f"Total: {len(tasks)} unduhan  |  Aktif: {active_count}  |  Total Kecepatan: {format_bytes(int(total_speed))}/s"
+            text=tr("statusbar_summary", total=len(tasks), active=active_count, speed=f"{format_bytes(int(total_speed))}/s")
         )
         self.root.after(300, self._tick_ui)
 
@@ -2418,16 +2418,46 @@ class IDMGUIApp:
         # 1. Update menu
         self._build_menu()
 
-        # 2. Update sidebar headers
+        # 2. Update toolbar buttons
+        try:
+            self.btn_add.config(text=tr("tb_add_url"))
+            self.btn_resume.config(text=tr("tb_resume"))
+            self.btn_pause.config(text=tr("tb_pause"))
+            self.btn_delete.config(text=tr("tb_delete"))
+            self.btn_stop.config(text=tr("tb_stop"))
+            self.btn_clean.config(text=tr("tb_clear"))
+            self.btn_folder.config(text=tr("tb_open_folder"))
+            self.btn_opts.config(text=tr("tb_settings"))
+            if self.btn_overflow:
+                self.btn_overflow.config(text=tr("tb_more"))
+            if hasattr(self, "search_entry") and self.search_entry:
+                cur_s = self.search_entry.get().strip()
+                if cur_s in ("Cari unduhan...", "Search downloads...", ""):
+                    self.search_entry.delete(0, tk.END)
+                    self.search_entry.insert(0, tr("tb_search_placeholder"))
+                    self.search_entry.config(fg=THEME["text_secondary"])
+        except Exception:
+            pass
+
+        # 3. Update telemetry card titles
+        try:
+            self.card_speed.lbl_title.config(text=tr("stat_speed"))
+            self.card_active.lbl_title.config(text=tr("stat_active"))
+            self.card_total.lbl_title.config(text=tr("stat_files"))
+        except Exception:
+            pass
+
+        # 4. Update sidebar headers & card
         try:
             self.lbl_sidebar_title.config(text=tr("nav_title"))
             self.lbl_sec_pustaka.config(text=tr("sec_library"))
             self.lbl_sec_kategori.config(text=tr("sec_categories"))
             self.storage_card.lbl_title.config(text=tr("sec_storage"))
+            self.storage_card.btn_open.config(text=tr("tb_open_folder"))
         except Exception:
             pass
 
-        # 3. Update sidebar items
+        # 5. Update sidebar items
         key_map = {
             "all": "nav_all",
             "downloading": "nav_downloading",
@@ -2443,7 +2473,7 @@ class IDMGUIApp:
             if k in self.sidebar_items:
                 self.sidebar_items[k].set_label(tr(tr_k))
 
-        # 4. Update table headings
+        # 6. Update table headings
         try:
             self.tree.heading("name", text=tr("col_name"))
             self.tree.heading("size", text=tr("col_size"))
@@ -2454,7 +2484,7 @@ class IDMGUIApp:
         except Exception:
             pass
 
-        # 5. Re-render UI table rows and telemetry
+        # 7. Re-render UI table rows, status bar, and telemetry
         self._tick_ui()
 
     def sort_by_column(self, col: str):

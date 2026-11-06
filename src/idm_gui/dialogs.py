@@ -1025,7 +1025,7 @@ class DownloadCompleteDialog:
     def _build_ui(self):
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
-        self.top.title("Unduhan Selesai")
+        self.top.title(tr("complete_title"))
         self.top.geometry("560x260")
         self.top.minsize(500, 230)
         self.top.resizable(True, False)
@@ -1067,7 +1067,7 @@ class DownloadCompleteDialog:
 
         tk.Label(
             hdr_frame,
-            text="Unduhan Berhasil Selesai!",
+            text=tr("complete_header"),
             bg=BG,
             fg=THEME["text_primary"],
             font=("Segoe UI", 12, "bold"),
@@ -1076,21 +1076,21 @@ class DownloadCompleteDialog:
         det_box = tk.Frame(content, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=14, pady=10)
         det_box.pack(fill=tk.X, pady=(0, 14))
 
-        tk.Label(det_box, text=f"Berkas: {self.title}", bg=CARD_BG, fg=FG, font=("Segoe UI", 9, "bold"), anchor=tk.W).pack(fill=tk.X)
-        tk.Label(det_box, text=f"Ukuran: {format_size_id(self.total_bytes)}", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8), anchor=tk.W).pack(fill=tk.X, pady=(2, 0))
-        tk.Label(det_box, text=f"Lokasi: {self.output_path}", bg=CARD_BG, fg=THEME["text_tertiary"], font=("Segoe UI", 8), anchor=tk.W).pack(fill=tk.X, pady=(2, 0))
+        tk.Label(det_box, text=f"{tr('col_name')}: {self.title}", bg=CARD_BG, fg=FG, font=("Segoe UI", 9, "bold"), anchor=tk.W).pack(fill=tk.X)
+        tk.Label(det_box, text=f"{tr('col_size')}: {format_size_id(self.total_bytes)}", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8), anchor=tk.W).pack(fill=tk.X, pady=(2, 0))
+        tk.Label(det_box, text=f"{tr('tab_save_to')}: {self.output_path}", bg=CARD_BG, fg=THEME["text_tertiary"], font=("Segoe UI", 8), anchor=tk.W).pack(fill=tk.X, pady=(2, 0))
 
         btn_box = tk.Frame(content, bg=BG)
         btn_box.pack(fill=tk.X)
 
-        self.btn_open = create_modern_button(btn_box, "Buka Berkas", self._on_open, kind="primary", padx=14, pady=4, radius=7)
+        self.btn_open = create_modern_button(btn_box, tr("complete_open_file"), self._on_open, kind="primary", padx=14, pady=4, radius=7)
         self.btn_open.pack(side=tk.RIGHT, padx=4)
         self.btn_open.focus_set()
 
-        self.btn_folder = create_modern_button(btn_box, "Buka Folder", self._on_open_folder, kind="secondary", padx=12, pady=4, radius=7)
+        self.btn_folder = create_modern_button(btn_box, tr("complete_open_folder"), self._on_open_folder, kind="secondary", padx=12, pady=4, radius=7)
         self.btn_folder.pack(side=tk.RIGHT, padx=4)
 
-        self.btn_done = create_modern_button(btn_box, "Selesai", self.close, kind="secondary", padx=12, pady=4, radius=7)
+        self.btn_done = create_modern_button(btn_box, tr("complete_done"), self.close, kind="secondary", padx=12, pady=4, radius=7)
         self.btn_done.pack(side=tk.RIGHT, padx=4)
 
         self.top.bind("<Return>", lambda e: self._on_open())

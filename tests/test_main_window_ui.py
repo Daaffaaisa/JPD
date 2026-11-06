@@ -241,5 +241,33 @@ def test_main_window_context_menu_and_url_clipboard(tk_root):
         pass  # Clipboard may be restricted in headless X11/CI environments
 
 
+def test_main_window_language_switching_toolbar_and_menus(tk_root):
+    app = IDMGUIApp(tk_root)
+
+    # 1. Switch to English
+    app.set_language("en")
+    assert app.btn_add.cget("text") == "+ Add URL"
+    assert app.btn_resume.cget("text") == "▷ Resume"
+    assert app.btn_pause.cget("text") == "❚❚ Pause"
+    assert app.btn_delete.cget("text") == "✕ Delete"
+    assert app.btn_stop.cget("text") == "■ Stop"
+    assert app.btn_clean.cget("text") == "✓ Clear"
+    assert app.card_speed.lbl_title.cget("text") == "⚡ ACTIVE SPEED"
+    assert app.tree.heading("name", "text") == "File Name"
+    assert app.tree.heading("speed", "text") == "Speed"
+
+    # 2. Switch back to Indonesian
+    app.set_language("id")
+    assert app.btn_add.cget("text") == "+ Tambah URL"
+    assert app.btn_resume.cget("text") == "▷ Lanjutkan"
+    assert app.btn_pause.cget("text") == "❚❚ Jeda"
+    assert app.btn_delete.cget("text") == "✕ Hapus"
+    assert app.btn_stop.cget("text") == "■ Hentikan"
+    assert app.btn_clean.cget("text") == "✓ Bersihkan"
+    assert app.card_speed.lbl_title.cget("text") == "⚡ KECEPATAN AKTIF"
+    assert app.tree.heading("name", "text") == "Nama Berkas"
+    assert app.tree.heading("speed", "text") == "Kecepatan"
+
+
 
 
