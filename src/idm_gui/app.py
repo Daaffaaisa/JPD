@@ -68,6 +68,33 @@ def get_file_type_glyph(category: str, filename: str = "") -> str:
     return "📄"
 
 
+class _CanvasTextAdapter:
+    """Lightweight adapter mimicking a tk.Label interface for pure Canvas text items."""
+
+    def __init__(self, canvas: tk.Canvas, item_id: int):
+        self.canvas = canvas
+        self.item_id = item_id
+
+    def config(self, **kwargs):
+        self.configure(**kwargs)
+
+    def configure(self, **kwargs):
+        for k, v in kwargs.items():
+            if k == "text":
+                self.canvas.itemconfigure(self.item_id, text=v)
+            elif k in ("fg", "foreground", "val_fg"):
+                self.canvas.itemconfigure(self.item_id, fill=v)
+            elif k == "font":
+                self.canvas.itemconfigure(self.item_id, font=v)
+
+    def cget(self, key: str):
+        if key == "text":
+            return self.canvas.itemcget(self.item_id, "text")
+        elif key in ("fg", "foreground"):
+            return self.canvas.itemcget(self.item_id, "fill")
+        return ""
+
+
 class TactileCard(tk.Canvas):
     """Modern 3D elevated tactile card with smooth rounded corners, specular highlight, and ambient shadow."""
 
@@ -86,22 +113,28 @@ class TactileCard(tk.Canvas):
         self.title_text = title
         self.val_fg = val_fg
 
-        self.lbl_title = tk.Label(
-            self,
+        # Use pure canvas vector text items instead of embedded tk.Label windows
+        # to eliminate Win32 GDI child clipping artifacts / black horizontal slicing
+        self.item_title = self.create_text(
+            16,
+            21,
             text=title,
-            bg="#1e2a3c",
-            fg=THEME["text_secondary"],
+            fill=THEME["text_secondary"],
             font=(FONT_DISPLAY, 8, "bold"),
+            anchor=tk.W,
+            tags="card_text",
         )
-        self.lbl_val = tk.Label(
-            self,
+        self.item_val = self.create_text(
+            16,
+            48,
             text=initial_val,
-            bg="#131b26",
-            fg=val_fg,
+            fill=val_fg,
             font=(FONT_DISPLAY, 12, "bold"),
+            anchor=tk.W,
+            tags="card_text",
         )
-        self.win_t = self.create_window(16, 21, window=self.lbl_title, anchor=tk.W)
-        self.win_v = self.create_window(16, 48, window=self.lbl_val, anchor=tk.W)
+        self.lbl_title = _CanvasTextAdapter(self, self.item_title)
+        self.lbl_val = _CanvasTextAdapter(self, self.item_val)
 
         self.bind("<Configure>", self._redraw)
 
@@ -402,6 +435,7 @@ class SidebarNavItem(tk.Frame):
             self.content.configure(bg=bg_col)
             self.icon_box.configure(bg=bg_col)
             self.badge_canvas.configure(bg=bg_col)
+            self.lbl_text.configure(bg=bg_col)
             self.lbl_icon.configure(bg=bg_col)
             self.lbl_text.configure(bg=bg_col)
 
