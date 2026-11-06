@@ -276,14 +276,14 @@ class SidebarNavItem(tk.Frame):
         self.indicator = tk.Frame(self, width=3, bg=THEME["surface_alt"])
         self.indicator.pack(side=tk.LEFT, fill=tk.Y, pady=2)
 
-        # Content container
-        self.content = tk.Frame(self, bg=THEME["surface_alt"], padx=8, pady=5)
-        self.content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(2, 8), pady=1)
+        # Content container (identical padding in both compact & expanded modes to prevent jumping)
+        self.content = tk.Frame(self, bg=THEME["surface_alt"], padx=0, pady=2)
+        self.content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6), pady=1)
 
-        # Fixed-width 32px container for icon
-        self.icon_box = tk.Frame(self.content, bg=THEME["surface_alt"], width=32, height=24)
+        # Fixed-width 36px container for icon (centered on 28px rail axis: 3px indicator + 7px pad = 10px start + 18px = 28px center)
+        self.icon_box = tk.Frame(self.content, bg=THEME["surface_alt"], width=36, height=28)
         self.icon_box.pack_propagate(False)
-        self.icon_box.pack(side=tk.LEFT, padx=(2, 6))
+        self.icon_box.pack(side=tk.LEFT, padx=(7, 6))
 
         clean_icon = icon.replace("\ufe0f", "")
         self.lbl_icon = tk.Label(
@@ -294,7 +294,7 @@ class SidebarNavItem(tk.Frame):
             font=(FONT_DISPLAY, 10),
             anchor=tk.CENTER,
         )
-        self.lbl_icon.place(relx=0.45, rely=0.5, anchor=tk.CENTER)
+        self.lbl_icon.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
         # Phone-style round notification badge overlay for compact mode (top-right of icon)
         self.badge_canvas = tk.Canvas(self.icon_box, width=14, height=14, bg=THEME["surface_alt"], highlightthickness=0)
@@ -315,7 +315,7 @@ class SidebarNavItem(tk.Frame):
             text=text,
             bg=THEME["surface_alt"],
             fg=THEME["text_secondary"],
-            font=(FONT_FAMILY, 9),
+            font=(FONT_FAMILY, 10),
         )
         self.lbl_text.pack(side=tk.LEFT)
 
@@ -358,15 +358,9 @@ class SidebarNavItem(tk.Frame):
         if compact:
             self.lbl_text.pack_forget()
             self.lbl_badge.pack_forget()
-            self.content.pack_configure(padx=0, pady=3)
-            self.icon_box.pack_configure(padx=0)
-            self.lbl_icon.place_configure(relx=0.45, rely=0.55)
             self._draw_phone_badge()
         else:
             self.badge_canvas.place_forget()
-            self.content.pack_configure(padx=(2, 8), pady=1)
-            self.icon_box.pack_configure(padx=(2, 6))
-            self.lbl_icon.place_configure(relx=0.45, rely=0.5)
             self.lbl_badge.pack(side=tk.RIGHT, padx=(4, 4))
             self.lbl_text.pack(side=tk.LEFT)
 
@@ -1220,48 +1214,54 @@ class IDMGUIApp:
             text="📁",
             command=self.open_selected_folder,
             kind="secondary",
-            padx=8,
-            pady=6,
+            width=32,
+            padx=4,
+            pady=4,
             radius=6,
             tooltip=tr("tb_open_folder"),
         )
 
-        # Sidebar Header with Hamburger (Garis Tiga ☰) Toggle Button
-        self.sidebar_header = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=36)
-        self.sidebar_header.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(8, 2))
+        # Sidebar Header with Hamburger (Garis Tiga ☰) Toggle Button (fixed 40px height to prevent vertical jump)
+        self.sidebar_header = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=40)
+        self.sidebar_header.pack_propagate(False)
+        self.sidebar_header.pack(side=tk.TOP, fill=tk.X, pady=(6, 2))
 
         self.btn_hamburger = create_modern_button(
             self.sidebar_header,
             text="☰",
             command=self.toggle_sidebar_compact,
             kind="secondary",
-            padx=8,
+            width=32,
+            padx=4,
             pady=3,
             radius=6,
             tooltip=None,
         )
-        self.btn_hamburger.pack(side=tk.LEFT)
+        self.btn_hamburger.pack(side=tk.LEFT, padx=(12, 6))
 
         self.lbl_sidebar_title = tk.Label(
             self.sidebar_header,
-            text="NAVIGASI",
+            text=tr("nav_title"),
             bg=THEME["surface_alt"],
             fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 8, "bold"),
+            font=(FONT_DISPLAY, 9, "bold"),
         )
-        self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(8, 0))
+        self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(4, 0))
 
-        # Section 1: PUSTAKA
+        # Section 1 Container (fixed 22px height: keeps Row 1 locked at exact same vertical coordinate in both modes)
+        self.frame_sec_pustaka = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=22)
+        self.frame_sec_pustaka.pack_propagate(False)
+        self.frame_sec_pustaka.pack(fill=tk.X)
+
         self.lbl_sec_pustaka = tk.Label(
-            self.sidebar_frame,
-            text="PUSTAKA",
+            self.frame_sec_pustaka,
+            text=tr("sec_library"),
             bg=THEME["surface_alt"],
             fg=THEME["text_tertiary"],
             font=(FONT_DISPLAY, 8, "bold"),
             anchor=tk.W,
-            padx=14,
         )
-        self.lbl_sec_pustaka.pack(fill=tk.X, pady=(6, 4))
+        self.lbl_sec_pustaka.pack(side=tk.LEFT, padx=(16, 0), pady=(4, 0))
 
         pustaka_specs = [
             ("all", "📥", "Semua Unduhan"),
@@ -1280,20 +1280,24 @@ class IDMGUIApp:
             item.pack(fill=tk.X)
             self.sidebar_items[key] = item
 
-        # Subtle divider between sections in compact mode
-        self.div_sec_kategori = tk.Frame(self.sidebar_frame, height=1, bg=THEME["border"])
+        # Section 2 Container (fixed 26px height: keeps Category rows locked at exact same vertical coordinate in both modes)
+        self.frame_sec_kategori = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=26)
+        self.frame_sec_kategori.pack_propagate(False)
+        self.frame_sec_kategori.pack(fill=tk.X, pady=(6, 2))
 
-        # Section 2: KATEGORI BERKAS
+        # 1px subtle divider between sections
+        self.div_sec_kategori = tk.Frame(self.frame_sec_kategori, height=1, bg=THEME["border"])
+        self.div_sec_kategori.pack(fill=tk.X, padx=10, pady=(2, 2))
+
         self.lbl_sec_kategori = tk.Label(
-            self.sidebar_frame,
-            text="KATEGORI BERKAS",
+            self.frame_sec_kategori,
+            text=tr("sec_categories"),
             bg=THEME["surface_alt"],
             fg=THEME["text_tertiary"],
             font=(FONT_DISPLAY, 8, "bold"),
             anchor=tk.W,
-            padx=14,
         )
-        self.lbl_sec_kategori.pack(fill=tk.X, pady=(12, 4))
+        self.lbl_sec_kategori.pack(side=tk.LEFT, padx=(16, 0))
 
         cat_specs = [
             ("video", "🎬", "Video"),
@@ -2345,13 +2349,10 @@ class IDMGUIApp:
                 if f_idx < fade_steps:
                     self.root.after(delay, lambda: _fade_out_step(f_idx + 1))
                 else:
-                    # Switch to compact layout before sliding
+                    # Switch to compact layout: hide text labels without moving hamburger or section containers
                     self.lbl_sidebar_title.pack_forget()
-                    self.btn_hamburger.pack_configure(side=tk.TOP)
                     self.lbl_sec_pustaka.pack_forget()
                     self.lbl_sec_kategori.pack_forget()
-                    if "video" in self.sidebar_items:
-                        self.div_sec_kategori.pack(before=self.sidebar_items["video"], fill=tk.X, padx=10, pady=8)
                     self.storage_card.pack_forget()
                     self.btn_compact_folder.pack(side=tk.BOTTOM, pady=8)
                     for it in self.sidebar_items.values():
@@ -2411,16 +2412,11 @@ class IDMGUIApp:
                     except Exception:
                         pass
 
-                    # Unpack expanded widgets at alpha 0.0
-                    self.div_sec_kategori.pack_forget()
+                    # Restore expanded labels without shifting coordinates
                     self.btn_compact_folder.pack_forget()
-                    self.btn_hamburger.pack_configure(side=tk.LEFT)
-                    self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(8, 0))
-
-                    if "all" in self.sidebar_items:
-                        self.lbl_sec_pustaka.pack(before=self.sidebar_items["all"], fill=tk.X, pady=(6, 4))
-                    if "video" in self.sidebar_items:
-                        self.lbl_sec_kategori.pack(before=self.sidebar_items["video"], fill=tk.X, pady=(12, 4))
+                    self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(4, 0))
+                    self.lbl_sec_pustaka.pack(side=tk.LEFT, padx=(16, 0), pady=(4, 0))
+                    self.lbl_sec_kategori.pack(side=tk.LEFT, padx=(16, 0))
                     self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
 
                     for it in self.sidebar_items.values():
@@ -2459,11 +2455,8 @@ class IDMGUIApp:
     def _apply_sidebar_compact_immediate(self):
         if self.sidebar_compact:
             self.lbl_sidebar_title.pack_forget()
-            self.btn_hamburger.pack_configure(side=tk.TOP)
             self.lbl_sec_pustaka.pack_forget()
             self.lbl_sec_kategori.pack_forget()
-            if "video" in self.sidebar_items:
-                self.div_sec_kategori.pack(before=self.sidebar_items["video"], fill=tk.X, padx=10, pady=8)
             self.storage_card.pack_forget()
             self.btn_compact_folder.pack(side=tk.BOTTOM, pady=8)
 
@@ -2477,15 +2470,10 @@ class IDMGUIApp:
             except Exception:
                 pass
         else:
-            self.div_sec_kategori.pack_forget()
             self.btn_compact_folder.pack_forget()
-            self.btn_hamburger.pack_configure(side=tk.LEFT)
-            self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(8, 0))
-
-            if "all" in self.sidebar_items:
-                self.lbl_sec_pustaka.pack(before=self.sidebar_items["all"], fill=tk.X, pady=(6, 4))
-            if "video" in self.sidebar_items:
-                self.lbl_sec_kategori.pack(before=self.sidebar_items["video"], fill=tk.X, pady=(12, 4))
+            self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(4, 0))
+            self.lbl_sec_pustaka.pack(side=tk.LEFT, padx=(16, 0), pady=(4, 0))
+            self.lbl_sec_kategori.pack(side=tk.LEFT, padx=(16, 0))
             self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
 
             for item in self.sidebar_items.values():
