@@ -17,6 +17,111 @@
   let preferredCorner = "top-right";
   let currentLang = "id";
 
+  // Exclusion & Blacklist State
+  let blockedDomains = [];
+  let blockedPages = [];
+
+  function cleanUrlForCompare(rawUrl) {
+    if (!rawUrl) return "";
+    try {
+      const u = new URL(rawUrl);
+      return u.origin + u.pathname;
+    } catch (e) {
+      return rawUrl.split("#")[0].split("?")[0];
+    }
+  }
+
+  function isSiteOrPageBlocked() {
+    // 1. Per-tab session dismissal via sessionStorage
+    try {
+      if (sessionStorage.getItem("jpd_session_dismissed") === "true") {
+        return true;
+      }
+    } catch (e) {}
+
+    const host = window.location.hostname.toLowerCase();
+    const currentClean = cleanUrlForCompare(window.location.href).toLowerCase();
+
+    // 2. Check domain blacklist
+    if (blockedDomains && blockedDomains.length > 0) {
+      for (let d of blockedDomains) {
+        if (!d) continue;
+        const dom = d.toLowerCase().trim();
+        if (host === dom || host.endsWith("." + dom)) {
+          return true;
+        }
+      }
+    }
+
+    // 3. Check page blacklist
+    if (blockedPages && blockedPages.length > 0) {
+      for (let p of blockedPages) {
+        if (!p) continue;
+        if (currentClean === cleanUrlForCompare(p).toLowerCase()) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  try {
+    const cachedDomains = localStorage.getItem("jpd_blacklist_domains");
+    if (cachedDomains) blockedDomains = JSON.parse(cachedDomains);
+  } catch (e) {}
+  try {
+    const cachedPages = localStorage.getItem("jpd_blacklist_pages");
+    if (cachedPages) blockedPages = JSON.parse(cachedPages);
+  } catch (e) {}
+
+  if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(["jpd_blacklist_domains", "jpd_blacklist_pages"], (res) => {
+      if (res && res.jpd_blacklist_domains) {
+        blockedDomains = res.jpd_blacklist_domains;
+        try { localStorage.setItem("jpd_blacklist_domains", JSON.stringify(blockedDomains)); } catch (e) {}
+      }
+      if (res && res.jpd_blacklist_pages) {
+        blockedPages = res.jpd_blacklist_pages;
+        try { localStorage.setItem("jpd_blacklist_pages", JSON.stringify(blockedPages)); } catch (e) {}
+      }
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local") {
+        if (changes.jpd_blacklist_domains) {
+          blockedDomains = changes.jpd_blacklist_domains.newValue || [];
+          try { localStorage.setItem("jpd_blacklist_domains", JSON.stringify(blockedDomains)); } catch (e) {}
+        }
+        if (changes.jpd_blacklist_pages) {
+          blockedPages = changes.jpd_blacklist_pages.newValue || [];
+          try { localStorage.setItem("jpd_blacklist_pages", JSON.stringify(blockedPages)); } catch (e) {}
+        }
+      }
+    });
+  }
+
+  // Live Unblock & Re-appearance Message Listener from Popup
+  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (msg && msg.action === "jpd_unblock_and_show") {
+        try {
+          sessionStorage.removeItem("jpd_session_dismissed");
+        } catch (e) {}
+
+        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get(["jpd_blacklist_domains", "jpd_blacklist_pages"], (res) => {
+            if (res && res.jpd_blacklist_domains) blockedDomains = res.jpd_blacklist_domains;
+            if (res && res.jpd_blacklist_pages) blockedPages = res.jpd_blacklist_pages;
+            checkShortsAndVideos();
+          });
+        } else {
+          checkShortsAndVideos();
+        }
+        if (sendResponse) sendResponse({ status: "ok" });
+      }
+    });
+  }
+
   try {
     const cachedLang = localStorage.getItem("jpd_language");
     if (cachedLang) currentLang = cachedLang;
@@ -29,7 +134,14 @@
       toast_saved: "✔ Posisi tombol disimpan",
       drag_tooltip: "Tahan dan geser untuk memindahkan posisi tombol secara bebas ke mana saja",
       sending: "✔ Mengirim ke JPD...",
-      error: "✕ Gagal membuka JPD"
+      error: "✕ Gagal membuka JPD",
+      dismiss_title: "Opsi Sembunyikan Tombol",
+      dismiss_session: "Sembunyikan kali ini saja",
+      dismiss_page: "Jangan tampilkan di halaman ini",
+      dismiss_domain: "Jangan tampilkan di seluruh website",
+      toast_dismissed_session: "✔ Tombol disembunyikan untuk sesi ini",
+      toast_dismissed_page: "✔ Tombol dinonaktifkan di halaman ini",
+      toast_dismissed_domain: "✔ Tombol dinonaktifkan untuk "
     },
     en: {
       btn_download: "Download with JPD",
@@ -37,7 +149,14 @@
       toast_saved: "✔ Button position saved",
       drag_tooltip: "Click and drag to move download button freely anywhere",
       sending: "✔ Sending to JPD...",
-      error: "✕ Failed to open JPD"
+      error: "✕ Failed to open JPD",
+      dismiss_title: "Hide Button Options",
+      dismiss_session: "Hide for this session",
+      dismiss_page: "Never show on this page",
+      dismiss_domain: "Never show on this website",
+      toast_dismissed_session: "✔ Button hidden for this session",
+      toast_dismissed_page: "✔ Button disabled on this page",
+      toast_dismissed_domain: "✔ Button disabled for "
     }
   };
 
@@ -241,6 +360,80 @@
           </svg>
           <span id="idm-dl-btn-text">${tr("btn_download")}</span>
         </div>
+        <div id="jpd-close-btn" class="jpd-close-btn" title="${tr("dismiss_title")}" style="
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 6px 7px !important;
+          background: rgba(255, 255, 255, 0.08) !important;
+          cursor: pointer !important;
+          color: #cbd5e1 !important;
+          border-left: 1px solid rgba(255, 255, 255, 0.12) !important;
+          transition: background 0.15s ease, color 0.15s ease !important;
+        ">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </div>
+      </div>
+      <div id="jpd-dismiss-popover" class="jpd-dismiss-popover" style="
+        display: none;
+        position: absolute !important;
+        top: calc(100% + 6px) !important;
+        right: 0 !important;
+        min-width: 220px !important;
+        background: #0f131d !important;
+        border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7) !important;
+        backdrop-filter: blur(10px) !important;
+        padding: 5px !important;
+        z-index: 2147483647 !important;
+        font-size: 11px !important;
+      ">
+        <div style="padding: 4px 8px 6px; font-weight: 700; color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 4px;">
+          ${tr("dismiss_title")}
+        </div>
+        <div id="jpd-opt-session" class="jpd-popover-item" style="
+          display: flex !important;
+          align-items: center !important;
+          gap: 7px !important;
+          padding: 6px 8px !important;
+          color: #f1f5f9 !important;
+          border-radius: 5px !important;
+          cursor: pointer !important;
+          transition: background 0.15s ease !important;
+        ">
+          <span style="color: #38bdf8;">⏳</span>
+          <span>${tr("dismiss_session")}</span>
+        </div>
+        <div id="jpd-opt-page" class="jpd-popover-item" style="
+          display: flex !important;
+          align-items: center !important;
+          gap: 7px !important;
+          padding: 6px 8px !important;
+          color: #f1f5f9 !important;
+          border-radius: 5px !important;
+          cursor: pointer !important;
+          transition: background 0.15s ease !important;
+        ">
+          <span style="color: #f59e0b;">📄</span>
+          <span>${tr("dismiss_page")}</span>
+        </div>
+        <div id="jpd-opt-domain" class="jpd-popover-item" style="
+          display: flex !important;
+          align-items: center !important;
+          gap: 7px !important;
+          padding: 6px 8px !important;
+          color: #f1f5f9 !important;
+          border-radius: 5px !important;
+          cursor: pointer !important;
+          transition: background 0.15s ease !important;
+        ">
+          <span style="color: #ef4444;">🌐</span>
+          <span>${tr("dismiss_domain")}</span>
+        </div>
       </div>
       <div id="jpd-pos-toast" style="
         display: none;
@@ -428,6 +621,152 @@
       );
     });
 
+    const closeBtn = panel.querySelector("#jpd-close-btn");
+    const dismissPopover = panel.querySelector("#jpd-dismiss-popover");
+
+    function showToast(msg) {
+      let t = document.getElementById("jpd-toast-pill");
+      if (!t) {
+        t = document.createElement("div");
+        t.id = "jpd-toast-pill";
+        t.className = "jpd-toast-pill";
+        t.style.cssText = `
+          position: fixed !important;
+          bottom: 24px !important;
+          right: 24px !important;
+          z-index: 2147483647 !important;
+          background: rgba(15, 19, 29, 0.95) !important;
+          color: #f1f5f9 !important;
+          border: 1px solid #2563eb !important;
+          border-radius: 8px !important;
+          padding: 8px 14px !important;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          font-size: 11px !important;
+          font-weight: 600 !important;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+          backdrop-filter: blur(8px) !important;
+          pointer-events: none !important;
+          transition: opacity 0.25s ease !important;
+          opacity: 0;
+        `;
+        document.documentElement.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.display = "block";
+      requestAnimationFrame(() => {
+        t.style.opacity = "1";
+      });
+      setTimeout(() => {
+        t.style.opacity = "0";
+        setTimeout(() => {
+          if (t && t.parentNode) t.parentNode.removeChild(t);
+        }, 250);
+      }, 1500);
+    }
+
+    function dismissWithAnimation(toastMessage) {
+      if (dismissPopover) dismissPopover.style.display = "none";
+      if (panel) {
+        panel.style.transition = "opacity 0.22s ease";
+        panel.style.opacity = "0";
+        setTimeout(() => {
+          panel.style.display = "none";
+        }, 230);
+      }
+      if (toastMessage) {
+        showToast(toastMessage);
+      }
+    }
+
+    if (closeBtn && dismissPopover) {
+      closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const isOpen = dismissPopover.style.display === "block";
+        dismissPopover.style.display = isOpen ? "none" : "block";
+      });
+
+      // Hover styles on close button
+      closeBtn.addEventListener("mouseenter", () => {
+        closeBtn.style.background = "rgba(239, 68, 68, 0.25)";
+        closeBtn.style.color = "#f87171";
+      });
+      closeBtn.addEventListener("mouseleave", () => {
+        closeBtn.style.background = "rgba(255, 255, 255, 0.08)";
+        closeBtn.style.color = "#cbd5e1";
+      });
+
+      // Option 1: Sembunyikan kali ini saja (Session per-tab)
+      const optSession = panel.querySelector("#jpd-opt-session");
+      if (optSession) {
+        optSession.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          try {
+            sessionStorage.setItem("jpd_session_dismissed", "true");
+          } catch (err) {}
+          dismissWithAnimation(tr("toast_dismissed_session"));
+        });
+        optSession.addEventListener("mouseenter", () => { optSession.style.background = "rgba(56, 189, 248, 0.15)"; });
+        optSession.addEventListener("mouseleave", () => { optSession.style.background = "transparent"; });
+      }
+
+      // Option 2: Jangan tampilkan di halaman ini (Page URL)
+      const optPage = panel.querySelector("#jpd-opt-page");
+      if (optPage) {
+        optPage.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const cleanUrl = cleanUrlForCompare(window.location.href);
+          if (!blockedPages.includes(cleanUrl)) {
+            blockedPages.push(cleanUrl);
+            try { localStorage.setItem("jpd_blacklist_pages", JSON.stringify(blockedPages)); } catch (err) {}
+            if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+              chrome.storage.local.set({ jpd_blacklist_pages: blockedPages });
+            }
+          }
+          try {
+            sessionStorage.setItem("jpd_session_dismissed", "true");
+          } catch (err) {}
+          dismissWithAnimation(tr("toast_dismissed_page"));
+        });
+        optPage.addEventListener("mouseenter", () => { optPage.style.background = "rgba(245, 158, 11, 0.15)"; });
+        optPage.addEventListener("mouseleave", () => { optPage.style.background = "transparent"; });
+      }
+
+      // Option 3: Jangan tampilkan di seluruh website (Hostname/domain)
+      const optDomain = panel.querySelector("#jpd-opt-domain");
+      if (optDomain) {
+        optDomain.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const dom = window.location.hostname.toLowerCase();
+          if (!blockedDomains.includes(dom)) {
+            blockedDomains.push(dom);
+            try { localStorage.setItem("jpd_blacklist_domains", JSON.stringify(blockedDomains)); } catch (err) {}
+            if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+              chrome.storage.local.set({ jpd_blacklist_domains: blockedDomains });
+            }
+          }
+          try {
+            sessionStorage.setItem("jpd_session_dismissed", "true");
+          } catch (err) {}
+          dismissWithAnimation(tr("toast_dismissed_domain") + dom);
+        });
+        optDomain.addEventListener("mouseenter", () => { optDomain.style.background = "rgba(239, 68, 68, 0.15)"; });
+        optDomain.addEventListener("mouseleave", () => { optDomain.style.background = "transparent"; });
+      }
+
+      // Close popover when clicking anywhere else
+      document.addEventListener("click", (e) => {
+        if (dismissPopover && dismissPopover.style.display === "block") {
+          if (!dismissPopover.contains(e.target) && !closeBtn.contains(e.target)) {
+            dismissPopover.style.display = "none";
+          }
+        }
+      });
+    }
+
     document.documentElement.appendChild(panel);
     return panel;
   }
@@ -485,6 +824,10 @@
 
   function positionPanelOnElement(el, labelText, url, title) {
     if (!el) return;
+    if (isSiteOrPageBlocked()) {
+      if (panel) panel.style.display = "none";
+      return;
+    }
     const rect = el.getBoundingClientRect();
     if (rect.width < 100 || rect.height < 60) return;
     if (rect.bottom < 0 || rect.top > window.innerHeight) return;
