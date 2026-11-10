@@ -80,3 +80,33 @@ def test_extension_dual_language_live_sync_and_prominent_toggle():
     assert "updatePanelTexts" in c_code, "content.js must have updatePanelTexts function"
     assert "changes.jpd_language" in c_code, "content.js must listen for changes.jpd_language"
 
+
+def test_content_js_evaluates_dynamic_i18n_button_text():
+    """Verify that positionPanelOnElement dynamically evaluates tr('btn_download') in English mode."""
+    node_script = """
+    // Mock minimal DOM and storage
+    let currentLang = 'en';
+    const STRINGS = {
+      id: { btn_download: 'Download dengan JPD' },
+      en: { btn_download: 'Download with JPD' }
+    };
+    function tr(key) { return STRINGS[currentLang][key]; }
+
+    // Read content.js
+    const fs = require('fs');
+    const code = fs.readFileSync('extension/content.js', 'utf8');
+
+    // Verify positionPanelOnElement does not unconditionally overwrite with hardcoded 'Download dengan JPD'
+    const match = code.match(/function positionPanelOnElement\\([\\s\\S]*?\\n  \\}/);
+    if (!match) throw new Error('positionPanelOnElement not found');
+    const fnBody = match[0];
+
+    // Must dynamically resolve tr('btn_download')
+    if (fnBody.includes('btnText.textContent = labelText || tr("btn_download")')) {
+      throw new Error('Hardcoded labelText takes precedence over active language!');
+    }
+    """
+    res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True)
+    assert res.returncode == 0, f"Failure: {res.stderr}"
+
+

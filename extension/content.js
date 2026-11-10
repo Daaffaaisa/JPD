@@ -208,6 +208,7 @@
     if (btnId) btnId.style.background = currentLang === "id" ? "#2563eb" : "rgba(255,255,255,0.08)";
     if (btnEn) btnEn.style.background = currentLang === "en" ? "#2563eb" : "rgba(255,255,255,0.08)";
   }
+  const updatePanelLanguage = updatePanelTexts;
 
   function cornerToPos(corner) {
     switch (corner) {
@@ -918,7 +919,11 @@
     const p = getOrCreatePanel();
     const btnText = p.querySelector("#idm-dl-btn-text");
     if (btnText) {
-      btnText.textContent = labelText || tr("btn_download");
+      if (!labelText || labelText === "Download dengan JPD" || labelText === "Download with JPD") {
+        btnText.textContent = tr("btn_download");
+      } else {
+        btnText.textContent = labelText;
+      }
     }
 
     if (!isDragging) {
@@ -1334,7 +1339,7 @@
       if (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be")) {
         if (el.tagName === "VIDEO" || (el.closest && el.closest("#movie_player, .html5-video-player"))) {
           const player = el.closest("#movie_player, .html5-video-player") || el;
-          positionPanelOnElement(player, "Download dengan JPD", window.location.href, document.title);
+          positionPanelOnElement(player, null, window.location.href, document.title);
           return;
         }
       }
@@ -1351,7 +1356,7 @@
           if (video) {
             const targetUrl = getTikTokVideoUrl(video, tiktokContainer);
             const title = getTikTokVideoTitle(tiktokContainer);
-            positionPanelOnElement(video, "Download dengan JPD", targetUrl, title);
+            positionPanelOnElement(video, null, targetUrl, title);
             return;
           }
         }
@@ -1366,22 +1371,22 @@
             const targetUrl = (window.location.hostname.includes("tiktok.com"))
               ? getTikTokVideoUrl(video, videoWrapper)
               : (video.currentSrc || video.src || window.location.href);
-            positionPanelOnElement(video, "Download dengan JPD", targetUrl, document.title);
+            positionPanelOnElement(video, null, targetUrl, document.title);
             return;
           }
         }
       }
 
       if (el.tagName === "VIDEO") {
-        positionPanelOnElement(el, "Download dengan JPD", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, null, el.currentSrc || el.src, document.title);
       } else if (el.closest && el.closest("#movie_player, .html5-video-player")) {
         const player = el.closest("#movie_player, .html5-video-player");
         const video = player.querySelector("video");
         if (video) {
-          positionPanelOnElement(player, "Download dengan JPD", window.location.href, document.title);
+          positionPanelOnElement(player, null, window.location.href, document.title);
         }
       } else if (el.tagName === "AUDIO") {
-        positionPanelOnElement(el, "Download dengan JPD", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, null, el.currentSrc || el.src, document.title);
       } else if (el.tagName === "IMG") {
         const rect = el.getBoundingClientRect();
         if (rect.width >= 160 && rect.height >= 120) {
@@ -1396,7 +1401,7 @@
               } catch (err) {}
             }
             if (!imgTitle) imgTitle = "gambar";
-            positionPanelOnElement(el, "Download dengan JPD", imgSrc, imgTitle);
+            positionPanelOnElement(el, null, imgSrc, imgTitle);
           }
         }
       }
@@ -1430,9 +1435,9 @@
         const targetUrl = (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be"))
           ? window.location.href
           : (el.currentSrc || el.src);
-        positionPanelOnElement(el, "Download dengan JPD", targetUrl, document.title);
+        positionPanelOnElement(el, null, targetUrl, document.title);
       } else if (el && el.tagName === "AUDIO") {
-        positionPanelOnElement(el, "Download dengan JPD", el.currentSrc || el.src, document.title);
+        positionPanelOnElement(el, null, el.currentSrc || el.src, document.title);
       }
     },
     true
@@ -1443,7 +1448,7 @@
     if (msg.action === "media_detected" && msg.url) {
       const v = document.querySelector("video");
       if (v && v.getBoundingClientRect().width > 120) {
-        positionPanelOnElement(v, "Download dengan JPD", msg.url, document.title);
+        positionPanelOnElement(v, null, msg.url, document.title);
       }
       sendResponse({ status: "ok" });
     }
@@ -1467,7 +1472,7 @@
           ) || activeTiktok.parentElement;
         const targetUrl = getTikTokVideoUrl(activeTiktok, container);
         const title = getTikTokVideoTitle(container);
-        positionPanelOnElement(activeTiktok, "Download dengan JPD", targetUrl, title);
+        positionPanelOnElement(activeTiktok, null, targetUrl, title);
         return;
       }
     }
@@ -1482,7 +1487,7 @@
       if (video) {
         const rect = video.getBoundingClientRect();
         if (rect.width > 80 && rect.height > 80 && rect.bottom > 0 && rect.top < window.innerHeight) {
-          positionPanelOnElement(video, "Download dengan JPD", window.location.href, document.title);
+          positionPanelOnElement(video, null, window.location.href, document.title);
           return;
         }
       }
@@ -1495,7 +1500,7 @@
       if (video && !video.paused) {
         const rect = player.getBoundingClientRect();
         if (rect.width > 100 && rect.height > 100 && rect.bottom > 0 && rect.top < window.innerHeight) {
-          positionPanelOnElement(player, "Download dengan JPD", window.location.href, document.title);
+          positionPanelOnElement(player, null, window.location.href, document.title);
           return;
         }
       }
@@ -1508,7 +1513,7 @@
       const rect = playingVideo.getBoundingClientRect();
       if (rect.width > 120 && rect.height > 80 && rect.bottom > 0 && rect.top < window.innerHeight) {
         const targetUrl = playingVideo.currentSrc || playingVideo.src || window.location.href;
-        positionPanelOnElement(playingVideo, "Download dengan JPD", targetUrl, document.title);
+        positionPanelOnElement(playingVideo, null, targetUrl, document.title);
       }
     }
   }
