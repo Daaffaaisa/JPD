@@ -447,6 +447,72 @@
       background: rgba(225, 29, 72, 0.2);
       color: #f43f5e;
     }
+    /* Language Selector Card */
+    .lang-selector-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+    }
+
+    .lang-selector-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .lang-selector-icon {
+      font-size: 13px;
+    }
+
+    .lang-selector-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* Segmented Language Switcher */
+    .lang-segmented-control {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .lang-segment {
+      border: none !important;
+      background: transparent !important;
+      color: var(--text-tertiary) !important;
+      font-size: 10px !important;
+      font-weight: 700 !important;
+      padding: 3px 8px !important;
+      border-radius: 10px !important;
+      cursor: pointer !important;
+      width: auto !important;
+      box-shadow: none !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .lang-segment:hover {
+      color: var(--text-primary) !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    .lang-segment.active {
+      background: var(--accent) !important;
+      color: #ffffff !important;
+      box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4) !important;
+    }
   </style>
 </head>
 <body>
@@ -455,15 +521,24 @@
       <img src="images/icon32.png" width="24" height="24" style="border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);" alt="Logo" />
       <span class="header-title">JPD Integration Module</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 6px;">
-      <button id="langToggleBtn" style="width: auto; padding: 2px 8px; font-size: 10px; font-weight: bold; background: rgba(255,255,255,0.08); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); cursor: pointer;">ID / EN</button>
-      <span class="header-version">v2.0</span>
-    </div>
+    <span class="header-version">v2.0</span>
   </div>
 
   <div id="status" class="status-badge">
     <div class="status-dot"></div>
     <span id="status-text">Memeriksa koneksi host...</span>
+  </div>
+
+  <!-- Language Selector Card -->
+  <div class="lang-selector-card">
+    <div class="lang-selector-info">
+      <span class="lang-selector-icon">🌐</span>
+      <span id="lblLanguage" class="lang-selector-label">Bahasa / Language:</span>
+    </div>
+    <div class="lang-segmented-control" id="langSwitchContainer">
+      <button type="button" class="lang-segment active" id="langBtnId" data-lang="id">ID 🇮🇩</button>
+      <button type="button" class="lang-segment" id="langBtnEn" data-lang="en">EN 🇬🇧</button>
+    </div>
   </div>
 
   <!-- Active Site Quick Toggle Card -->

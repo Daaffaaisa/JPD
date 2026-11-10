@@ -8,6 +8,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const lblUrl = document.getElementById("lblUrl");
   const hintText = document.getElementById("hintText");
   const langToggleBtn = document.getElementById("langToggleBtn");
+  const lblLanguage = document.getElementById("lblLanguage");
+  const langBtnId = document.getElementById("langBtnId");
+  const langBtnEn = document.getElementById("langBtnEn");
 
   // Site Exclusion DOM Elements
   const siteToggleSection = document.getElementById("siteToggleSection");
@@ -54,6 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
       exclusion_badge_site: "Situs",
       exclusion_badge_page: "Halaman",
       exclusion_delete_tip: "Hapus dan aktifkan kembali tombol",
+      label_language: "Bahasa / Language:",
     },
     en: {
       status_checking: "Checking host connection...",
@@ -75,6 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
       exclusion_badge_site: "Site",
       exclusion_badge_page: "Page",
       exclusion_delete_tip: "Remove and re-enable button",
+      label_language: "Language / Bahasa:",
     }
   };
 
@@ -87,12 +92,46 @@ document.addEventListener("DOMContentLoaded", () => {
     if (lblUrl) lblUrl.textContent = tr("label_url");
     if (downloadBtnText) downloadBtnText.textContent = tr("btn_send");
     if (hintText) hintText.textContent = tr("hint");
+    if (lblLanguage) lblLanguage.textContent = tr("label_language");
     if (langToggleBtn) langToggleBtn.textContent = tr("lang_btn");
+    if (langBtnId) langBtnId.classList.toggle("active", currentLang === "id");
+    if (langBtnEn) langBtnEn.classList.toggle("active", currentLang === "en");
     if (exclusionAccordionTitle) exclusionAccordionTitle.textContent = tr("exclusion_title");
     if (exclusionEmptyText) exclusionEmptyText.textContent = tr("exclusion_empty");
     updateSiteToggleUI();
     renderExclusionList();
-    checkStatus();
+  }
+
+  function setLanguage(lang, syncServer = true) {
+    currentLang = (lang === "en") ? "en" : "id";
+    try { localStorage.setItem("jpd_language", currentLang); } catch (e) {}
+    try { localStorage.setItem("jpd_language_manual", "true"); } catch (e) {}
+
+    if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set({ jpd_language: currentLang });
+    }
+
+    if (syncServer) {
+      fetch("http://127.0.0.1:19900/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: currentLang }),
+      }).catch(() => {});
+    }
+
+    if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.query) {
+      chrome.tabs.query({}, (tabs) => {
+        if (tabs) {
+          tabs.forEach((t) => {
+            if (t && t.id) {
+              chrome.tabs.sendMessage(t.id, { action: "jpd_set_language", language: currentLang }).catch(() => {});
+            }
+          });
+        }
+      });
+    }
+
+    applyLanguage();
   }
 
   function isCurrentSiteBlocked() {
@@ -293,15 +332,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  if (langBtnId) {
+    langBtnId.addEventListener("click", () => setLanguage("id"));
+  }
+  if (langBtnEn) {
+    langBtnEn.addEventListener("click", () => setLanguage("en"));
+  }
   if (langToggleBtn) {
-    langToggleBtn.addEventListener("click", () => {
-      currentLang = (currentLang === "id") ? "en" : "id";
-      try { localStorage.setItem("jpd_language", currentLang); } catch (e) {}
-      if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.set({ jpd_language: currentLang });
-      }
-      applyLanguage();
-    });
+    langToggleBtn.addEventListener("click", () => setLanguage(currentLang === "id" ? "en" : "id"));
   }
 
   function setStatus(online, text) {
@@ -322,7 +360,10 @@ document.addEventListener("DOMContentLoaded", () => {
       .then((data) => {
         if (data && data.status === "ok") {
           setStatus(true, tr("status_connected_http"));
-          if (data.language && data.language !== currentLang) {
+          // Only adopt server language if user hasn't manually set a language in extension
+          let hasManual = false;
+          try { hasManual = localStorage.getItem("jpd_language_manual") === "true"; } catch (e) {}
+          if (!hasManual && data.language && data.language !== currentLang) {
             currentLang = data.language;
             try { localStorage.setItem("jpd_language", currentLang); } catch (e) {}
             if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {

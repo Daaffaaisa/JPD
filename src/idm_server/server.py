@@ -124,6 +124,27 @@ class LocalServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"status": "ok", "taskId": task_id}).encode("utf-8"))
             return
 
+        if path == "/api/settings":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8")
+            try:
+                payload = json.loads(body)
+            except Exception:
+                payload = {}
+            if "language" in payload:
+                new_lang = payload["language"]
+                try:
+                    from idm_gui.settings import settings
+                    settings.set_language(new_lang)
+                except Exception:
+                    pass
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
+            return
+
         self.send_response(404)
         self._send_cors_headers()
         self.end_headers()

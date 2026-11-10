@@ -96,6 +96,11 @@
           blockedPages = changes.jpd_blacklist_pages.newValue || [];
           try { localStorage.setItem("jpd_blacklist_pages", JSON.stringify(blockedPages)); } catch (e) {}
         }
+        if (changes.jpd_language) {
+          currentLang = changes.jpd_language.newValue || "id";
+          try { localStorage.setItem("jpd_language", currentLang); } catch (e) {}
+          updatePanelTexts();
+        }
       }
     });
   }
@@ -117,6 +122,13 @@
         } else {
           checkShortsAndVideos();
         }
+        if (sendResponse) sendResponse({ status: "ok" });
+      }
+
+      if (msg && msg.action === "jpd_set_language" && msg.language) {
+        currentLang = msg.language;
+        try { localStorage.setItem("jpd_language", currentLang); } catch (e) {}
+        updatePanelTexts();
         if (sendResponse) sendResponse({ status: "ok" });
       }
     });
@@ -163,6 +175,38 @@
   function tr(key) {
     const tbl = STRINGS[currentLang] || STRINGS.id;
     return tbl[key] || STRINGS.id[key] || key;
+  }
+
+  function updatePanelTexts() {
+    if (!panel) return;
+    const btnText = panel.querySelector("#idm-dl-btn-text");
+    if (btnText) {
+      btnText.textContent = tr("btn_download");
+    }
+    const dragHandle = panel.querySelector("#jpd-drag-handle");
+    if (dragHandle) dragHandle.title = tr("drag_tooltip");
+    const closeBtn = panel.querySelector("#jpd-close-btn");
+    if (closeBtn) closeBtn.title = tr("dismiss_title");
+
+    const popHeader = panel.querySelector("#jpd-popover-header-title");
+    if (popHeader) popHeader.textContent = tr("dismiss_title");
+
+    const optSession = panel.querySelector("#jpd-opt-session span:last-child");
+    if (optSession) optSession.textContent = tr("dismiss_session");
+
+    const optPage = panel.querySelector("#jpd-opt-page span:last-child");
+    if (optPage) optPage.textContent = tr("dismiss_page");
+
+    const optDomain = panel.querySelector("#jpd-opt-domain span:last-child");
+    if (optDomain) {
+      const h = window.location.hostname;
+      optDomain.textContent = tr("dismiss_domain") + (h ? ` (${h})` : "");
+    }
+
+    const btnId = panel.querySelector("#jpd-popover-lang-id");
+    const btnEn = panel.querySelector("#jpd-popover-lang-en");
+    if (btnId) btnId.style.background = currentLang === "id" ? "#2563eb" : "rgba(255,255,255,0.08)";
+    if (btnEn) btnEn.style.background = currentLang === "en" ? "#2563eb" : "rgba(255,255,255,0.08)";
   }
 
   function cornerToPos(corner) {
@@ -392,7 +436,7 @@
         z-index: 2147483647 !important;
         font-size: 11px !important;
       ">
-        <div style="padding: 4px 8px 6px; font-weight: 700; color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 4px;">
+        <div id="jpd-popover-header-title" style="padding: 4px 8px 6px; font-weight: 700; color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 4px;">
           ${tr("dismiss_title")}
         </div>
         <div id="jpd-opt-session" class="jpd-popover-item" style="
@@ -433,6 +477,13 @@
         ">
           <span style="color: #ef4444;">🌐</span>
           <span>${tr("dismiss_domain")}</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 3px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 5px;">
+          <span style="font-size: 10px; color: #94a3b8; font-weight: 600;">🌐 Bahasa / Lang:</span>
+          <div style="display: inline-flex; gap: 4px;">
+            <button type="button" id="jpd-popover-lang-id" class="jpd-popover-lang-btn" style="background: ${currentLang === 'id' ? '#2563eb' : 'rgba(255,255,255,0.08)'}; color: #ffffff; border: none; border-radius: 4px; padding: 2px 7px; font-size: 9px; font-weight: bold; cursor: pointer;">ID 🇮🇩</button>
+            <button type="button" id="jpd-popover-lang-en" class="jpd-popover-lang-btn" style="background: ${currentLang === 'en' ? '#2563eb' : 'rgba(255,255,255,0.08)'}; color: #ffffff; border: none; border-radius: 4px; padding: 2px 7px; font-size: 9px; font-weight: bold; cursor: pointer;">EN 🇬🇧</button>
+          </div>
         </div>
       </div>
       <div id="jpd-pos-toast" style="
@@ -755,6 +806,34 @@
         });
         optDomain.addEventListener("mouseenter", () => { optDomain.style.background = "rgba(239, 68, 68, 0.15)"; });
         optDomain.addEventListener("mouseleave", () => { optDomain.style.background = "transparent"; });
+      }
+
+      // Popover Quick Language Toggle Buttons (ID / EN)
+      const popLangId = panel.querySelector("#jpd-popover-lang-id");
+      const popLangEn = panel.querySelector("#jpd-popover-lang-en");
+      if (popLangId) {
+        popLangId.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          currentLang = "id";
+          try { localStorage.setItem("jpd_language", "id"); } catch (err) {}
+          if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ jpd_language: "id" });
+          }
+          updatePanelTexts();
+        });
+      }
+      if (popLangEn) {
+        popLangEn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          currentLang = "en";
+          try { localStorage.setItem("jpd_language", "en"); } catch (err) {}
+          if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ jpd_language: "en" });
+          }
+          updatePanelTexts();
+        });
       }
 
       // Close popover when clicking anywhere else
