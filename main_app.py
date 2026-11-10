@@ -149,7 +149,9 @@ if __name__ == "__main__":
 
             # Manual double-click launch: restore main dashboard window
             user32 = ctypes.windll.user32
-            hwnd = user32.FindWindowW(None, "JustPressDownload (JPD)")
+            hwnd = user32.FindWindowW(None, "Just Press Download")
+            if not hwnd:
+                hwnd = user32.FindWindowW(None, "JustPressDownload (JPD)")
             if hwnd:
                 user32.ShowWindow(hwnd, 9)  # SW_RESTORE
                 user32.SetForegroundWindow(hwnd)

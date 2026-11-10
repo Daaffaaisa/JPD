@@ -791,7 +791,7 @@ class IDMGUIApp:
                 tray_img = Image.new("RGBA", (32, 32), color="#2563eb")
 
             tray_menu = pystray.Menu(
-                pystray.MenuItem("Buka JustPressDownload (JPD)", self.restore_from_tray, default=True),
+                pystray.MenuItem("Buka Just Press Download", self.restore_from_tray, default=True),
                 pystray.MenuItem("Tambah URL Baru...", lambda icon, item: self.root.after(0, self.open_add_url_dialog)),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Lanjutkan Semua Unduhan", lambda icon, item: self.root.after(0, self.resume_all)),
@@ -804,7 +804,7 @@ class IDMGUIApp:
             self.tray_icon = pystray.Icon(
                 "JustPressDownload",
                 tray_img,
-                "JustPressDownload (JPD)",
+                "Just Press Download",
                 tray_menu,
             )
             th = threading.Thread(target=self.tray_icon.run, daemon=True)
@@ -820,6 +820,8 @@ class IDMGUIApp:
                 self.root.lift()
                 self.root.focus_force()
                 self.root.state("normal")
+                self.root.update_idletasks()
+                apply_window_icon(self.root)
             except Exception:
                 pass
         self.root.after(0, _restore)
@@ -830,7 +832,7 @@ class IDMGUIApp:
             self.root.withdraw()
             if hasattr(self, "tray_icon") and self.tray_icon and hasattr(self.tray_icon, "notify"):
                 try:
-                    self.tray_icon.notify("Aplikasi diminimalkan ke System Tray", "JustPressDownload (JPD)")
+                    self.tray_icon.notify("Aplikasi diminimalkan ke System Tray", "Just Press Download")
                 except Exception:
                     pass
         except Exception:
@@ -2010,7 +2012,7 @@ class IDMGUIApp:
             # Notify system tray if running
             if hasattr(self, "tray_icon") and self.tray_icon and hasattr(self.tray_icon, "notify"):
                 try:
-                    self.tray_icon.notify(f"Unduhan Selesai: {fname}", "JustPressDownload (JPD)")
+                    self.tray_icon.notify(f"Unduhan Selesai: {fname}", "Just Press Download")
                 except Exception:
                     pass
 
@@ -2244,8 +2246,8 @@ class IDMGUIApp:
 
     def show_about(self):
         messagebox.showinfo(
-            "Tentang JustPressDownload (JPD)",
-            "JustPressDownload (JPD)\n"
+            "Tentang Just Press Download",
+            "Just Press Download\n"
             "High-Performance Parallel Download Accelerator\n"
             "Developed with Python, Tkinter, and TDD.\n"
             "Features: Parallel Range Download, Streaming Muxer, Browser Native Host."
@@ -2623,17 +2625,17 @@ class IDMGUIApp:
 
     def show_tip_of_the_day(self):
         messagebox.showinfo(
-            "Tip Hari Ini - JustPressDownload (JPD)",
+            "Tip Hari Ini - Just Press Download",
             "💡 Tip Cepat:\n\n"
-            "1. Anda dapat menyalin tautan berkas di browser, dan JustPressDownload (JPD) otomatis menangkapnya.\n"
+            "1. Anda dapat menyalin tautan berkas di browser, dan Just Press Download otomatis menangkapnya.\n"
             "2. Gunakan tombol '⚙ Opsi' di menu atas untuk mengubah jumlah koneksi paralel hingga 32 jalur.\n"
             "3. Klik dua kali baris unduhan untuk langsung membuka berkas yang telah selesai diunduh.",
         )
 
     def check_for_updates(self):
         messagebox.showinfo(
-            "Periksa Pembaruan - JustPressDownload (JPD)",
-            "✔ Anda telah menggunakan versi terbaru JustPressDownload (JPD) (v1.1.0 High-Performance Release)!\n\nSemua komponen sistem mutakhir dan terintegrasi.",
+            "Periksa Pembaruan - Just Press Download",
+            "✔ Anda telah menggunakan versi terbaru Just Press Download (v1.1.0 High-Performance Release)!\n\nSemua komponen sistem mutakhir dan terintegrasi.",
         )
 
 

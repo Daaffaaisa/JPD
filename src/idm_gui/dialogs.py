@@ -1138,7 +1138,7 @@ class OptionsDialog:
 
         self.top = tk.Toplevel(self.parent)
         apply_window_icon(self.top)
-        self.top.title("Opsi Konfigurasi Just Press Download (JPD)")
+        self.top.title(tr("dlg_opts_title"))
         self.top.geometry("620x590")
         self.top.minsize(580, 520)
         self.top.resizable(True, True)
@@ -1468,7 +1468,7 @@ class OptionsDialog:
 
         tk.Label(
             tab_conn,
-            text="* JustPressDownload (JPD) menggunakan akselerasi multi-koneksi paralel bertahap (kelipatan 8)",
+            text="* Just Press Download menggunakan akselerasi multi-koneksi paralel bertahap (kelipatan 8)",
             bg=BG,
             fg=THEME["text_tertiary"],
             font=("Segoe UI", 8),
