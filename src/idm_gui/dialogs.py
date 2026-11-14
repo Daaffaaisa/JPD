@@ -6,7 +6,15 @@ from tkinter import ttk, filedialog
 from typing import Callable, Optional
 
 from idm_gui.settings import settings
-from idm_gui.i18n import tr, get_current_lang
+from idm_gui.i18n import (
+    tr,
+    get_current_lang,
+    format_size_id,
+    format_time_left,
+    get_category_display_name,
+    get_canonical_category_key,
+    CATEGORY_KEYS,
+)
 from idm_gui.theme import (
     THEME,
     FONT_TITLE,
@@ -26,51 +34,8 @@ class DialogAction(str, Enum):
     CANCEL = "CANCEL"
 
 
-def format_size_id(num_bytes: int) -> str:
-    """Formats bytes in Indonesian style (e.g. 337,84 MB)."""
-    if num_bytes <= 0:
-        return "Tidak diketahui"
-    elif num_bytes < 1024:
-        return f"{num_bytes} B"
-    elif num_bytes < 1024 * 1024:
-        val = num_bytes / 1024
-        return f"{val:.2f} KB".replace(".", ",")
-    elif num_bytes < 1024 * 1024 * 1024:
-        val = num_bytes / (1024 * 1024)
-        return f"{val:.2f} MB".replace(".", ",")
-    else:
-        val = num_bytes / (1024 * 1024 * 1024)
-        return f"{val:.2f} GB".replace(".", ",")
-
-
-def format_time_left(seconds: float) -> str:
-    """Formats remaining time in Indonesian style (e.g. 13 menit 58 detik)."""
-    if seconds <= 0:
-        return "Selesai"
-    s = int(seconds)
-    if s < 60:
-        return f"{s} detik"
-    elif s < 3600:
-        m = s // 60
-        rem_s = s % 60
-        return f"{m} menit {rem_s} detik" if rem_s > 0 else f"{m} menit"
-    else:
-        h = s // 3600
-        rem_m = (s % 3600) // 60
-        return f"{h} jam {rem_m} menit" if rem_m > 0 else f"{h} jam"
-
-
 class DownloadInfoDialog:
     """Replicates the classic IDM 'Informasi Berkas Unduhan' (Download File Info) dialog."""
-
-    CATEGORIES = {
-        "Video": "Video",
-        "Musik": "Music",
-        "Program": "Programs",
-        "Dokumen": "Documents",
-        "Berkas Terkompresi": "Compressed",
-        "Umum": "General",
-    }
 
     def __init__(
         self,
@@ -89,7 +54,7 @@ class DownloadInfoDialog:
         self.url = url
         self.title = title or "download.bin"
         self.probed_size = probed_size
-        self.category = category
+        self.category = get_canonical_category_key(category)
         self.action = DialogAction.CANCEL
         self.on_action = on_action
         self.is_suspicious = is_suspicious
@@ -187,11 +152,13 @@ class DownloadInfoDialog:
         cat_frame = tk.Frame(main_frame, bg=BG_COLOR)
         cat_frame.grid(row=1, column=1, columnspan=2, sticky=tk.EW, padx=(6, 0), pady=3)
 
-        self.cat_var = tk.StringVar(master=self.top, value=self.category)
+        display_categories = [get_category_display_name(k) for k in CATEGORY_KEYS]
+        current_display = get_category_display_name(self.category)
+        self.cat_var = tk.StringVar(master=self.top, value=current_display)
         self.cat_cb = ttk.Combobox(
             cat_frame,
             textvariable=self.cat_var,
-            values=list(self.CATEGORIES.keys()),
+            values=display_categories,
             state="readonly",
             font=("Segoe UI", 9),
             width=22,
@@ -207,7 +174,7 @@ class DownloadInfoDialog:
             padx=8,
             pady=2,
             radius=6,
-            tooltip="Tambah Kategori Baru...",
+            tooltip=tr("dlg_info_tip_add_cat"),
         )
         self.btn_add_cat.pack(side=tk.LEFT, padx=(4, 0))
 
@@ -253,7 +220,7 @@ class DownloadInfoDialog:
             padx=8,
             pady=2,
             radius=6,
-            tooltip="Pilih Folder Penyimpanan...",
+            tooltip=tr("dlg_info_tip_browse"),
         )
         self.btn_browse.pack(side=tk.RIGHT, padx=(4, 0))
 
@@ -261,7 +228,7 @@ class DownloadInfoDialog:
         self.remember_var = tk.BooleanVar(master=self.top, value=False)
         self.cb_remember = tk.Checkbutton(
             main_frame,
-            text=tr("dlg_info_remember", cat=self.category),
+            text=tr("dlg_info_remember", cat=current_display),
             variable=self.remember_var,
             bg=BG_COLOR,
             fg=FG_COLOR,
@@ -388,6 +355,8 @@ class DownloadInfoDialog:
                     self.lbl_size.config(text=format_size_id(size))
                 elif is_stream:
                     self.lbl_size.config(text="Stream HD (1080p MP4)")
+                elif self.is_probing and self.probed_size <= 0:
+                    self.lbl_size.config(text=tr("dlg_info_probing"))
                 else:
                     self.lbl_size.config(text=format_size_id(size))
                 try:
@@ -402,7 +371,7 @@ class DownloadInfoDialog:
     def _on_add_category(self):
         try:
             from tkinter import simpledialog
-            new_cat = simpledialog.askstring("Tambah Kategori Baru", "Masukkan nama kategori baru:", parent=self.top)
+            new_cat = simpledialog.askstring(tr("dlg_info_add_cat_title"), tr("dlg_info_add_cat_prompt"), parent=self.top)
             if new_cat and new_cat.strip():
                 new_cat = new_cat.strip()
                 cur_vals = list(self.cat_cb["values"])
@@ -415,15 +384,15 @@ class DownloadInfoDialog:
             pass
 
     def _on_cat_change(self, event=None):
-        cat = self.cat_var.get()
-        self.category = cat
+        cat_disp = self.cat_var.get()
+        self.category = get_canonical_category_key(cat_disp)
         cur_file = os.path.basename(self.path_var.get())
-        self.cat_folder = settings.get_category_path(cat)
+        self.cat_folder = settings.get_category_path(self.category)
         new_path = os.path.join(self.cat_folder, cur_file)
         self.path_var.set(new_path)
         self._update_app_icon(cur_file)
         if hasattr(self, "cb_remember") and self.cb_remember:
-            self.cb_remember.config(text=f'Ingat jalur ini untuk kategori "{cat}"')
+            self.cb_remember.config(text=tr("dlg_info_remember", cat=cat_disp))
         if hasattr(self, "lbl_sub_folder") and self.lbl_sub_folder:
             self.lbl_sub_folder.config(text=self.cat_folder)
         self.remember_var.set(False)
@@ -445,7 +414,7 @@ class DownloadInfoDialog:
         chosen_dir = filedialog.askdirectory(
             parent=self.top,
             initialdir=initial_dir,
-            title="Pilih Folder Penyimpanan untuk Kategori",
+            title=tr("dlg_info_browse_title"),
         )
 
         # Restore modal grab and lift to foreground
@@ -585,7 +554,7 @@ class DownloadProgressDialog:
 
         self.lbl_tab1 = tk.Label(
             tab_frame,
-            text="Status unduhan",
+            text=tr("prog_tab_status"),
             bg=THEME["surface"],
             fg=FG,
             font=("Segoe UI", 9, "bold"),
@@ -600,7 +569,7 @@ class DownloadProgressDialog:
 
         self.lbl_tab2 = tk.Label(
             tab_frame,
-            text="Pembatas Kecepatan",
+            text=tr("prog_tab_limiter"),
             bg=THEME["surface_alt"],
             fg=THEME["text_secondary"],
             font=("Segoe UI", 9),
@@ -613,7 +582,7 @@ class DownloadProgressDialog:
 
         self.lbl_tab3 = tk.Label(
             tab_frame,
-            text="Opsi saat selesai",
+            text=tr("prog_tab_options"),
             bg=THEME["surface_alt"],
             fg=THEME["text_secondary"],
             font=("Segoe UI", 9),
@@ -638,7 +607,7 @@ class DownloadProgressDialog:
 
         cb_enable_limit = tk.Checkbutton(
             t2_card,
-            text="Aktifkan Pembatas Kecepatan untuk Unduhan Ini",
+            text=tr("prog_limiter_enable"),
             variable=self.speed_limit_enabled_var,
             command=self._apply_speed_limit,
             bg=CARD_BG,
@@ -653,7 +622,7 @@ class DownloadProgressDialog:
         rate_box = tk.Frame(t2_card, bg=CARD_BG)
         rate_box.pack(fill=tk.X, pady=(0, 10))
 
-        tk.Label(rate_box, text="Batas Kecepatan Maksimum:", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Label(rate_box, text=tr("prog_limiter_max"), bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 8))
         self.entry_speed_limit = tk.Entry(
             rate_box,
             textvariable=self.speed_limit_val_var,
@@ -667,10 +636,10 @@ class DownloadProgressDialog:
         )
         self.entry_speed_limit.pack(side=tk.LEFT, padx=(0, 6))
         self.entry_speed_limit.bind("<KeyRelease>", lambda e: self._apply_speed_limit())
-        tk.Label(rate_box, text="KB/detik", bg=CARD_BG, fg=FG, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        tk.Label(rate_box, text=tr("prog_unit_kbs"), bg=CARD_BG, fg=FG, font=("Segoe UI", 9)).pack(side=tk.LEFT)
 
         # Presets
-        tk.Label(t2_card, text="Pilih Preset Cepat:", bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8)).pack(anchor=tk.W, pady=(0, 4))
+        tk.Label(t2_card, text=tr("prog_limiter_presets"), bg=CARD_BG, fg=THEME["text_secondary"], font=("Segoe UI", 8)).pack(anchor=tk.W, pady=(0, 4))
         presets_row = tk.Frame(t2_card, bg=CARD_BG)
         presets_row.pack(fill=tk.X, pady=(0, 10))
         for preset_kb, label_text in [(256, "256 KB/s"), (512, "512 KB/s"), (1024, "1 MB/s"), (2048, "2 MB/s"), (5120, "5 MB/s")]:
@@ -679,7 +648,7 @@ class DownloadProgressDialog:
 
         self.lbl_speed_limit_status = tk.Label(
             self.tab2_frame,
-            text="Status: Pembatas Kecepatan Dinonaktifkan (Kecepatan Penuh)",
+            text=tr("prog_limiter_status_off"),
             bg=BG,
             fg=THEME["text_secondary"],
             font=("Segoe UI", 8, "italic"),
@@ -691,11 +660,11 @@ class DownloadProgressDialog:
         t3_card = tk.Frame(self.tab3_frame, bg=CARD_BG, relief=tk.SOLID, bd=1, padx=14, pady=14)
         t3_card.pack(fill=tk.X, pady=(0, 14))
 
-        tk.Label(t3_card, text="Tindakan Otomatis Pasca-Unduh:", bg=CARD_BG, fg=FG, font=("Segoe UI", 10, "bold")).pack(anchor=tk.W, pady=(0, 8))
+        tk.Label(t3_card, text=tr("prog_auto_actions"), bg=CARD_BG, fg=FG, font=("Segoe UI", 10, "bold")).pack(anchor=tk.W, pady=(0, 8))
 
         tk.Checkbutton(
             t3_card,
-            text="Tutup jendela dialog progres ini saat pengunduhan selesai",
+            text=tr("prog_auto_close"),
             variable=self.cb_auto_close_var,
             bg=CARD_BG,
             fg=FG,
@@ -707,7 +676,7 @@ class DownloadProgressDialog:
 
         tk.Checkbutton(
             t3_card,
-            text="Putuskan sambungan internet / modem setelah berkas selesai diunduh",
+            text=tr("prog_disconnect"),
             variable=self.cb_disconnect_var,
             bg=CARD_BG,
             fg=FG,
@@ -719,7 +688,7 @@ class DownloadProgressDialog:
 
         tk.Checkbutton(
             t3_card,
-            text="Matikan komputer (Shutdown) secara otomatis saat selesai mengunduh",
+            text=tr("prog_shutdown"),
             variable=self.cb_shutdown_var,
             bg=CARD_BG,
             fg=FG,
@@ -731,7 +700,7 @@ class DownloadProgressDialog:
 
         tk.Label(
             self.tab3_frame,
-            text="* Catatan: Aksi penutupan atau shutdown aman hanya akan dieksekusi setelah seluruh bagian berkas diverifikasi utuh.",
+            text=tr("prog_note_safe_shutdown"),
             bg=BG,
             fg=THEME["text_tertiary"],
             font=("Segoe UI", 8, "italic"),
@@ -753,13 +722,13 @@ class DownloadProgressDialog:
             return val_lbl
 
         disp_url = self.url if len(self.url) < 65 else self.url[:62] + "..."
-        add_info_row(0, "URL Unduhan:", disp_url)
-        self.lbl_status = add_info_row(1, "Status:", "Menerima data...")
-        self.lbl_file_size = add_info_row(2, "Ukuran berkas:", format_size_id(self.total_bytes))
-        self.lbl_downloaded = add_info_row(3, "Diunduh:", "0 B ( 0 % )")
-        self.lbl_speed = add_info_row(4, "Tingkat transfer:", "0 B/detik")
-        self.lbl_eta = add_info_row(5, "Waktu tersisa:", "Menghitung...")
-        add_info_row(6, "Kemampuan resume:", "Ya")
+        add_info_row(0, tr("prog_url"), disp_url)
+        self.lbl_status = add_info_row(1, tr("prog_status"), tr("prog_receiving"))
+        self.lbl_file_size = add_info_row(2, tr("prog_file_size"), format_size_id(self.total_bytes))
+        self.lbl_downloaded = add_info_row(3, tr("prog_downloaded"), "0 B ( 0 % )")
+        self.lbl_speed = add_info_row(4, tr("prog_transfer_rate"), f"0 B/{tr('prog_sec_unit')}")
+        self.lbl_eta = add_info_row(5, tr("prog_time_left"), tr("prog_calculating"))
+        add_info_row(6, tr("prog_resume_cap"), tr("prog_yes"))
 
         info_box.columnconfigure(1, weight=1)
 
@@ -782,13 +751,13 @@ class DownloadProgressDialog:
         btn_row = tk.Frame(content_frame, bg=BG)
         btn_row.pack(fill=tk.X, pady=(0, 10))
 
-        self.btn_toggle = create_modern_button(btn_row, "<< Sembunyikan detail", self._toggle_details, kind="secondary", padx=10, pady=3, radius=7)
+        self.btn_toggle = create_modern_button(btn_row, tr("prog_hide_details"), self._toggle_details, kind="secondary", padx=10, pady=3, radius=7)
         self.btn_toggle.pack(side=tk.LEFT)
 
-        self.btn_cancel = create_modern_button(btn_row, "Batal", self._on_cancel_click, kind="danger", padx=14, pady=3, radius=7)
+        self.btn_cancel = create_modern_button(btn_row, tr("dlg_info_cancel"), self._on_cancel_click, kind="danger", padx=14, pady=3, radius=7)
         self.btn_cancel.pack(side=tk.RIGHT, padx=(6, 0))
 
-        self.btn_pause = create_modern_button(btn_row, "Jeda", self._on_pause_click, kind="secondary", padx=14, pady=3, radius=7)
+        self.btn_pause = create_modern_button(btn_row, tr("tb_pause"), self._on_pause_click, kind="secondary", padx=14, pady=3, radius=7)
         self.btn_pause.pack(side=tk.RIGHT)
 
         # Detail Frame (Multi-segment visual bar + Connection table)
@@ -797,7 +766,7 @@ class DownloadProgressDialog:
 
         tk.Label(
             self.detail_frame,
-            text="Progres posisi mulai dan unduh berdasarkan koneksi:",
+            text=tr("prog_seg_progress"),
             bg=BG,
             fg=THEME["text_secondary"],
             font=("Segoe UI", 8),
@@ -831,9 +800,9 @@ class DownloadProgressDialog:
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
         self.conn_tree = ttk.Treeview(tree_frame, columns=("num", "dl", "info"), show="headings", height=4)
-        self.conn_tree.heading("num", text="Koneksi")
-        self.conn_tree.heading("dl", text="Diunduh")
-        self.conn_tree.heading("info", text="Status")
+        self.conn_tree.heading("num", text=tr("prog_col_conn"))
+        self.conn_tree.heading("dl", text=tr("prog_col_dl"))
+        self.conn_tree.heading("info", text=tr("prog_col_status"))
 
         self.conn_tree.column("num", width=75, anchor=tk.CENTER)
         self.conn_tree.column("dl", width=120, anchor=tk.E)
@@ -846,17 +815,19 @@ class DownloadProgressDialog:
         tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         for i in range(1, self.parts + 1):
-            self.conn_tree.insert("", "end", iid=str(i), values=(f"Koneksi {i}", "0 B", "Menerima data..."))
+            self.conn_tree.insert("", "end", iid=str(i), values=(f"{tr('prog_col_conn')} {i}", "0 B", tr("prog_receiving")))
 
     def _toggle_details(self):
         if self.show_details:
             self.detail_frame.pack_forget()
-            self.btn_toggle.config(text="Tampilkan detail >>")
+            self.btn_toggle.config(text=tr("prog_show_details"))
             self.top.geometry("600x280")
             self.show_details = False
         else:
             self.detail_frame.pack(fill=tk.BOTH, expand=True)
-            self.btn_toggle.config(text="<< Sembunyikan detail")
+            self.btn_toggle.config(text=tr("prog_hide_details"))
+            self.top.geometry("600x480")
+            self.show_details = True
             self.top.geometry("600x480")
             self.show_details = True
 
@@ -888,7 +859,7 @@ class DownloadProgressDialog:
         if not self.speed_limit_enabled_var.get():
             limit_bps = 0
             if hasattr(self, "lbl_speed_limit_status"):
-                self.lbl_speed_limit_status.config(text="Status: Pembatas Kecepatan Dinonaktifkan (Kecepatan Penuh)", fg=THEME["text_secondary"])
+                self.lbl_speed_limit_status.config(text=tr("prog_limiter_status_off"), fg=THEME["text_secondary"])
         else:
             try:
                 kbps = int(self.speed_limit_val_var.get().strip())
@@ -897,23 +868,25 @@ class DownloadProgressDialog:
                 limit_bps = 512 * 1024
                 self.speed_limit_val_var.set("512")
             if hasattr(self, "lbl_speed_limit_status"):
-                self.lbl_speed_limit_status.config(text=f"Status: Aktif - Dibatasi hingga {limit_bps // 1024} KB/detik", fg=THEME["success"])
+                self.lbl_speed_limit_status.config(text=tr("prog_limiter_status_on", rate=limit_bps // 1024), fg=THEME["success"])
         if self.on_speed_limit_change:
             self.on_speed_limit_change(limit_bps)
 
     def _on_pause_click(self):
-        if self.btn_pause.cget("text") == "Lanjutkan":
+        pause_labels = ("Jeda", "Pause", tr("tb_pause"))
+        resume_labels = ("Lanjutkan", "Resume", tr("tb_resume"))
+        if self.btn_pause.cget("text") in resume_labels:
             if hasattr(self, "on_resume") and self.on_resume:
                 self.on_resume(self.task_id)
-            self.btn_pause.config(text="Jeda")
-            self.lbl_status.config(text="Menerima data...")
+            self.btn_pause.config(text=tr("tb_pause"))
+            self.lbl_status.config(text=tr("prog_receiving"))
         else:
             if self.on_pause:
                 self.on_pause(self.task_id)
-            self.btn_pause.config(text="Lanjutkan")
-            self.lbl_status.config(text="Dijeda")
-            self.lbl_speed.config(text="0 B/detik")
-            self.lbl_eta.config(text="Dijeda")
+            self.btn_pause.config(text=tr("tb_resume"))
+            self.lbl_status.config(text=tr("status_paused"))
+            self.lbl_speed.config(text=f"0 B/{tr('prog_sec_unit')}")
+            self.lbl_eta.config(text=tr("status_paused"))
 
     def _on_cancel_click(self):
         if self.on_cancel:
@@ -928,7 +901,8 @@ class DownloadProgressDialog:
         part_progress: Optional[list[dict]] = None,
     ):
         try:
-            if self.btn_pause.cget("text") == "Lanjutkan":
+            resume_labels = ("Lanjutkan", "Resume", tr("tb_resume"))
+            if self.btn_pause.cget("text") in resume_labels:
                 # Currently paused, do not overwrite paused state
                 return
 
@@ -940,15 +914,15 @@ class DownloadProgressDialog:
 
             self.lbl_file_size.config(text=format_size_id(total_bytes))
             self.lbl_downloaded.config(
-                text=f"{format_size_id(bytes_downloaded)} ( {pct:.2f} % )".replace(".", ",")
+                text=f"{format_size_id(bytes_downloaded)} ( {pct:.2f} % )"
             )
-            self.lbl_speed.config(text=f"{format_size_id(int(speed_bps))}/detik")
+            self.lbl_speed.config(text=f"{format_size_id(int(speed_bps))}/{tr('prog_sec_unit')}")
 
             if speed_bps > 0 and total_bytes > bytes_downloaded:
                 rem_sec = (total_bytes - bytes_downloaded) / speed_bps
                 self.lbl_eta.config(text=format_time_left(rem_sec))
             elif pct >= 100.0:
-                self.lbl_eta.config(text="Selesai")
+                self.lbl_eta.config(text=tr("status_completed"))
 
             canvas_w = self.progress_canvas.winfo_width()
             if canvas_w <= 10:
@@ -986,7 +960,10 @@ class DownloadProgressDialog:
                 for p in part_progress:
                     iid = str(p.get("id"))
                     if self.conn_tree.exists(iid):
-                        self.conn_tree.item(iid, values=(f"Koneksi {iid}", format_size_id(p.get("downloaded", 0)), p.get("status", "Menerima data...")))
+                        p_st = p.get("status") or tr("prog_receiving")
+                        if p_st in ("Menerima data...", "Receiving data..."):
+                            p_st = tr("prog_receiving")
+                        self.conn_tree.item(iid, values=(f"{tr('prog_col_conn')} {iid}", format_size_id(p.get("downloaded", 0)), p_st))
             else:
                 base_part = bytes_downloaded // max(1, self.parts)
                 rem_part = bytes_downloaded % max(1, self.parts)
@@ -994,7 +971,7 @@ class DownloadProgressDialog:
                     iid = str(i)
                     if self.conn_tree.exists(iid):
                         per_part = base_part + (1 if i <= rem_part else 0)
-                        self.conn_tree.item(iid, values=(f"Koneksi {i}", format_size_id(per_part), "Menerima data..."))
+                        self.conn_tree.item(iid, values=(f"{tr('prog_col_conn')} {i}", format_size_id(per_part), tr("prog_receiving")))
         except Exception:
             pass
 
@@ -1123,10 +1100,11 @@ class DownloadCompleteDialog:
 class OptionsDialog:
     """Dialog Opsi / Pengaturan IDM Clone multi-tab (Umum, Jenis Berkas, Simpan ke, Koneksi) ala IDM asli."""
 
-    def __init__(self, parent: tk.Tk, settings_manager=None, settings_mgr=None):
+    def __init__(self, parent: tk.Tk, settings_manager=None, settings_mgr=None, on_save_callback=None):
         self.parent = parent
         self.sm = settings_mgr or settings_manager or settings
-        self.categories = ["Video", "Musik", "Gambar", "Program", "Dokumen", "Berkas Terkompresi", "Umum"]
+        self.on_save_callback = on_save_callback
+        self.categories = [get_category_display_name(k) for k in CATEGORY_KEYS]
         self.conn_options = ["1", "2", "4", "8", "16", "24", "32"]
         self._build_ui()
 
@@ -1176,10 +1154,10 @@ class OptionsDialog:
         btn_box = tk.Frame(main_frame, bg=BG)
         btn_box.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
-        self.btn_save = create_modern_button(btn_box, "Simpan", self._on_save, kind="primary", padx=18, pady=5, radius=7)
+        self.btn_save = create_modern_button(btn_box, tr("btn_save"), self._on_save, kind="primary", padx=18, pady=5, radius=7)
         self.btn_save.pack(side=tk.RIGHT, padx=4)
 
-        self.btn_cancel = create_modern_button(btn_box, "Batal", self.top.destroy, kind="secondary", padx=14, pady=5, radius=7)
+        self.btn_cancel = create_modern_button(btn_box, tr("btn_cancel"), self.top.destroy, kind="secondary", padx=14, pady=5, radius=7)
         self.btn_cancel.pack(side=tk.RIGHT, padx=4)
 
         # Style the notebook
@@ -1193,11 +1171,11 @@ class OptionsDialog:
 
         # ---------------- TAB 1: UMUM (General) ----------------
         tab_general = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
-        self.notebook.add(tab_general, text="Umum")
+        self.notebook.add(tab_general, text=tr("tab_general"))
 
         tk.Label(
             tab_general,
-            text="Integrasi Peramban Lanjutan (Browser Integration):",
+            text=tr("lbl_browser_integration"),
             bg=BG,
             fg=FG,
             font=("Segoe UI", 10, "bold"),
@@ -1273,7 +1251,7 @@ class OptionsDialog:
         self.cb_close_tray_var = tk.BooleanVar(value=self.sm.get_close_to_tray())
         tk.Checkbutton(
             tab_general,
-            text="Tutup jendela ke System Tray (Close with minimize)",
+            text=tr("chk_close_tray"),
             variable=self.cb_close_tray_var,
             bg=BG,
             fg=FG,
@@ -1286,7 +1264,7 @@ class OptionsDialog:
         self.cb_start_minimized_var = tk.BooleanVar(value=self.sm.get_start_minimized())
         tk.Checkbutton(
             tab_general,
-            text="Mulai aplikasi dalam keadaan terminimalisasi di Tray",
+            text=tr("chk_start_minimized"),
             variable=self.cb_start_minimized_var,
             bg=BG,
             fg=FG,
@@ -1299,7 +1277,7 @@ class OptionsDialog:
         self.cb_sound_var = tk.BooleanVar(value=self.sm.get_play_sound_on_complete())
         tk.Checkbutton(
             tab_general,
-            text="Mainkan suara notifikasi saat unduhan selesai",
+            text=tr("chk_sound"),
             variable=self.cb_sound_var,
             bg=BG,
             fg=FG,
@@ -1312,7 +1290,7 @@ class OptionsDialog:
         self.cb_confirm_del_var = tk.BooleanVar(value=self.sm.get_confirm_on_delete())
         tk.Checkbutton(
             tab_general,
-            text="Tampilkan konfirmasi sebelum menghapus tugas unduhan",
+            text=tr("chk_confirm_delete"),
             variable=self.cb_confirm_del_var,
             bg=BG,
             fg=FG,
@@ -1325,7 +1303,7 @@ class OptionsDialog:
         self.cb_autoclose_progress_var = tk.BooleanVar(value=self.sm.get_autoclose_progress())
         tk.Checkbutton(
             tab_general,
-            text="Tutup otomatis jendela progres saat unduhan 100% selesai",
+            text=tr("chk_autoclose_progress"),
             variable=self.cb_autoclose_progress_var,
             bg=BG,
             fg=FG,
@@ -1338,7 +1316,7 @@ class OptionsDialog:
         self.cb_clipboard_var = tk.BooleanVar(value=self.sm.data.get("monitor_clipboard", True))
         tk.Checkbutton(
             tab_general,
-            text="Pantau clipboard untuk tautan unduhan otomatis",
+            text=tr("chk_clipboard"),
             variable=self.cb_clipboard_var,
             bg=BG,
             fg=FG,
@@ -1350,7 +1328,7 @@ class OptionsDialog:
 
         tk.Label(
             tab_general,
-            text="⚡ Port IPC Loopback: 127.0.0.1:19900 (Aktif & Siap)",
+            text=tr("opt_ipc_port"),
             bg=BG,
             fg=THEME["success"],
             font=("Segoe UI", 8, "italic"),
@@ -1358,11 +1336,11 @@ class OptionsDialog:
 
         # ---------------- TAB 2: JENIS BERKAS (File Types) ----------------
         tab_types = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
-        self.notebook.add(tab_types, text="Jenis Berkas")
+        self.notebook.add(tab_types, text=tr("tab_file_types"))
 
         tk.Label(
             tab_types,
-            text="Otomatis mulai unduh berkas dengan ekstensi berikut:",
+            text=tr("opt_exts_lbl"),
             bg=BG,
             fg=FG,
             font=("Segoe UI", 9, "bold"),
@@ -1376,7 +1354,7 @@ class OptionsDialog:
 
         tk.Label(
             tab_types,
-            text="Jangan mulai unduh otomatis dari situs berikut (Pengecualian):",
+            text=tr("opt_exceptions_lbl"),
             bg=BG,
             fg=FG,
             font=("Segoe UI", 9, "bold"),
@@ -1385,15 +1363,15 @@ class OptionsDialog:
         self.exceptions_var = tk.StringVar(value=self.sm.data.get("exceptions", "*.speedtest.net *.fast.com"))
         self.exceptions_entry = tk.Entry(tab_types, textvariable=self.exceptions_var, bg=ENTRY_BG, fg=FG, insertbackground=FG, relief=tk.SOLID, bd=1, font=("Segoe UI", 9))
         self.exceptions_entry.pack(fill=tk.X, pady=(0, 4))
-        tk.Label(tab_types, text="Ketik domain dipisahkan spasi (contoh: *.speedtest.net *.fast.com)", bg=BG, fg=THEME["text_tertiary"], font=("Segoe UI", 8)).pack(anchor=tk.W)
+        tk.Label(tab_types, text=tr("opt_exceptions_hint"), bg=BG, fg=THEME["text_tertiary"], font=("Segoe UI", 8)).pack(anchor=tk.W)
 
         # ---------------- TAB 3: SIMPAN KE (Save To) ----------------
         tab_save = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
-        self.notebook.add(tab_save, text="Simpan ke")
+        self.notebook.add(tab_save, text=tr("tab_save_to"))
 
         tk.Label(
             tab_save,
-            text="Folder Penyimpanan per Kategori:",
+            text=tr("opt_cat_folders_lbl"),
             bg=BG,
             fg=FG,
             font=("Segoe UI", 9, "bold"),
@@ -1401,7 +1379,7 @@ class OptionsDialog:
 
         cat_frame = tk.Frame(tab_save, bg=BG)
         cat_frame.pack(fill=tk.X, pady=4)
-        tk.Label(cat_frame, text="Pilih Kategori:", bg=BG, fg=FG, font=("Segoe UI", 9), width=15, anchor=tk.W).pack(side=tk.LEFT)
+        tk.Label(cat_frame, text=tr("opt_select_cat"), bg=BG, fg=FG, font=("Segoe UI", 9), width=15, anchor=tk.W).pack(side=tk.LEFT)
         self.cat_var = tk.StringVar(value=self.categories[0])
         self.cat_combo = ttk.Combobox(cat_frame, textvariable=self.cat_var, values=self.categories, state="readonly", width=22)
         self.cat_combo.pack(side=tk.LEFT, padx=4)
@@ -1409,8 +1387,9 @@ class OptionsDialog:
 
         path_frame = tk.Frame(tab_save, bg=BG)
         path_frame.pack(fill=tk.X, pady=(6, 14))
-        tk.Label(path_frame, text="Folder Simpan:", bg=BG, fg=FG, font=("Segoe UI", 9), width=15, anchor=tk.W).pack(side=tk.LEFT)
-        self.path_var = tk.StringVar(value=self.sm.get_category_path(self.categories[0]))
+        tk.Label(path_frame, text=tr("opt_save_folder"), bg=BG, fg=FG, font=("Segoe UI", 9), width=15, anchor=tk.W).pack(side=tk.LEFT)
+        initial_canon = get_canonical_category_key(self.categories[0])
+        self.path_var = tk.StringVar(value=self.sm.get_category_path(initial_canon))
         self.path_entry = tk.Entry(path_frame, textvariable=self.path_var, bg=ENTRY_BG, fg=FG, insertbackground=FG, relief=tk.SOLID, bd=1, font=("Segoe UI", 9))
         self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 6))
 
@@ -1421,7 +1400,7 @@ class OptionsDialog:
         sep = tk.Frame(tab_save, bg=BORDER, height=1)
         sep.pack(fill=tk.X, pady=(0, 10))
 
-        tk.Label(tab_save, text="Direktori Berkas Sementara (Temporary Directory):", bg=BG, fg=FG, font=("Segoe UI", 9, "bold")).pack(anchor=tk.W, pady=(0, 6))
+        tk.Label(tab_save, text=tr("opt_temp_dir_lbl"), bg=BG, fg=FG, font=("Segoe UI", 9, "bold")).pack(anchor=tk.W, pady=(0, 6))
         temp_frame = tk.Frame(tab_save, bg=BG)
         temp_frame.pack(fill=tk.X)
         self.temp_var = tk.StringVar(value=self.sm.data.get("temp_dir", os.path.join(os.path.expanduser("~"), "AppData", "Local", "Temp")))
@@ -1432,19 +1411,26 @@ class OptionsDialog:
 
         # ---------------- TAB 4: KONEKSI (Connection) ----------------
         tab_conn = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
-        self.notebook.add(tab_conn, text="Koneksi")
+        self.notebook.add(tab_conn, text=tr("tab_connection"))
 
         tk.Label(
             tab_conn,
-            text="Tipe / Kecepatan Sambungan:",
+            text=tr("opt_conn_type_lbl"),
             bg=BG,
             fg=FG,
             font=("Segoe UI", 9, "bold"),
         ).pack(anchor=tk.W, pady=(0, 6))
 
+        conn_types = tr("opt_conn_types")
+        if not isinstance(conn_types, (list, tuple)):
+            conn_types = [
+                "Kecepatan Tinggi: Sambungan Langsung (Ethernet/Kabel) / Wi-Fi / 4G",
+                "Kecepatan Sedang: 3G / ADSL",
+                "Kecepatan Rendah: Dial Up / VPN",
+            ]
         conn_type_combo = ttk.Combobox(
             tab_conn,
-            values=["Kecepatan Tinggi: Sambungan Langsung (Ethernet/Kabel) / Wi-Fi / 4G", "Kecepatan Sedang: 3G / ADSL", "Kecepatan Rendah: Dial Up / VPN"],
+            values=conn_types,
             state="readonly",
         )
         conn_type_combo.current(0)
@@ -1452,7 +1438,7 @@ class OptionsDialog:
 
         tk.Label(
             tab_conn,
-            text="Maks. Jumlah Koneksi (Parallel Connections):",
+            text=tr("opt_conn_max_lbl"),
             bg=BG,
             fg=FG,
             font=("Segoe UI", 9, "bold"),
@@ -1464,19 +1450,20 @@ class OptionsDialog:
         self.conn_var = tk.StringVar(value=cur_conn)
         self.conn_combo = ttk.Combobox(conn_frame, textvariable=self.conn_var, values=self.conn_options, state="readonly", width=8)
         self.conn_combo.pack(side=tk.LEFT, padx=(0, 8))
-        tk.Label(conn_frame, text="jalur (32 = Kecepatan Maksimum IDM)", bg=BG, fg=THEME["success"], font=("Segoe UI", 8, "italic")).pack(side=tk.LEFT)
+        tk.Label(conn_frame, text=tr("opt_conn_channels"), bg=BG, fg=THEME["success"], font=("Segoe UI", 8, "italic")).pack(side=tk.LEFT)
 
         tk.Label(
             tab_conn,
-            text="* Just Press Download menggunakan akselerasi multi-koneksi paralel bertahap (kelipatan 8)",
+            text=tr("opt_conn_note"),
             bg=BG,
             fg=THEME["text_tertiary"],
             font=("Segoe UI", 8),
         ).pack(anchor=tk.W, pady=(8, 0))
 
     def _on_cat_change(self, event=None):
-        cat = self.cat_var.get()
-        self.path_var.set(self.sm.get_category_path(cat))
+        cat_disp = self.cat_var.get()
+        canon_cat = get_canonical_category_key(cat_disp)
+        self.path_var.set(self.sm.get_category_path(canon_cat))
 
     def _on_browse(self):
         try:
@@ -1485,7 +1472,7 @@ class OptionsDialog:
             pass
 
         initial_dir = self.path_var.get().strip() or os.path.expanduser("~/Downloads")
-        chosen = filedialog.askdirectory(parent=self.top, initialdir=initial_dir, title="Pilih Folder untuk Kategori")
+        chosen = filedialog.askdirectory(parent=self.top, initialdir=initial_dir, title=tr("opt_browse_cat_title"))
 
         try:
             self.top.grab_set()
@@ -1500,15 +1487,16 @@ class OptionsDialog:
 
     def _on_browse_temp(self):
         initial = self.temp_var.get().strip() or os.path.expanduser("~/AppData/Local/Temp")
-        chosen = filedialog.askdirectory(parent=self.top, initialdir=initial, title="Pilih Folder Sementara")
+        chosen = filedialog.askdirectory(parent=self.top, initialdir=initial, title=tr("opt_browse_temp_title"))
         if chosen:
             self.temp_var.set(os.path.abspath(chosen))
 
     def _on_save(self):
-        cat = self.cat_var.get()
+        cat_disp = self.cat_var.get()
+        canon_cat = get_canonical_category_key(cat_disp)
         p = self.path_var.get().strip()
         if p:
-            self.sm.set_category_path(cat, os.path.abspath(p))
+            self.sm.set_category_path(canon_cat, os.path.abspath(p))
 
         # Save connection limit
         try:
@@ -1520,7 +1508,8 @@ class OptionsDialog:
         # Save browser integration, autorun, tray and system settings
         try:
             chosen_l = self.lang_var.get().strip().lower()
-            self.sm.set_language("en" if "english" in chosen_l else "id")
+            new_lang = "en" if "english" in chosen_l else "id"
+            self.sm.set_language(new_lang)
             self.sm.data["browser_integration"] = {
                 "chrome": bool(self.cb_chrome_var.get()),
                 "edge": bool(self.cb_edge_var.get()),
@@ -1538,6 +1527,9 @@ class OptionsDialog:
             self.sm.data["exceptions"] = self.exceptions_var.get().strip()
             self.sm.data["temp_dir"] = self.temp_var.get().strip()
             self.sm._save()
+
+            if self.on_save_callback:
+                self.on_save_callback(new_lang)
         except Exception:
             pass
 

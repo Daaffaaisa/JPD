@@ -1,0 +1,72 @@
+[SYS] 2026/11/11 - 21:14:53 | SQL_DSN not set, using SQLite as database 
+[SYS] 2026/11/11 - 21:14:53 | database migration started 
+[SYS] 2026/11/11 - 21:14:59 | system is not initialized and no root user exists 
+[SYS] 2026/11/11 - 21:14:59 | REDIS_CONN_STRING not set, Redis is not enabled 
+[SYS] 2026/11/11 - 21:14:59 | i18n initialized with languages: zh-CN, zh-TW, en 
+[SYS] 2026/11/11 - 21:14:59 | Loaded 0 custom OAuth providers 
+[SYS] 2026/11/11 - 21:14:59 | New API v1.0.0-rc.49 started 
+[SYS] 2026/11/11 - 21:14:59 | updating dashboard data... 
+[INFO] 2026/11/11 - 21:14:59 | SYSTEM | codex credential auto-refresh task started: tick=10m0s threshold=24h0m0s 
+[INFO] 2026/11/11 - 21:14:59 | SYSTEM | subscription quota reset task started: tick=1m0s 
+[INFO] 2026/11/11 - 21:14:59 | SYSTEM | system task runner started: runner=DESKTOP-R2BPOLM-mWQWqBOt idle_interval=15s 
+[SYS] 2026/11/11 - 21:14:59 | saved dashboard data, 0 records 
+
+  [33mWarning: Refresh cookie is not secure and refresh/logout Origin validation is disabled. Please set SESSION_COOKIE_SECURE=true in production.[0m
+
+
+  [32mNew API v1.0.0-rc.49[0m  ready in 5911 ms
+
+  ➜  [1mLocal:  [0m http://localhost:3000/
+  ➜  [1mNetwork:[0m http://192.168.1.2:3000/
+
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415111271145008268d9d6FkIkYAlY | 200 |         529µs |             ::1 |     GET /
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415112353380008268d9d6LWCYhHIy | 200 |     72.9167ms |             ::1 |     GET /static/js/lib-react.91bc21a6cf.js
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415112353380008268d9d6PsuI2beD | 200 |     73.4353ms |             ::1 |     GET /static/js/35006.98c5d73e1c.js
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415112327704008268d9d6f1SJ6OQh | 200 |     76.0029ms |             ::1 |     GET /static/js/vendor-tanstack.41b48fabbb.js
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415111919026008268d9d60htbz244 | 200 |    116.8707ms |             ::1 |     GET /static/js/vendor-ui-primitives.cddc2a93e8.js
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415111929289008268d9d6UUgdkpwH | 200 |    115.8444ms |             ::1 |     GET /static/css/index.0e3a8c709c.css
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415112353380008268d9d6SjUCLzNg | 200 |    168.7369ms |             ::1 |     GET /static/js/index.0a45d3b8cd.js
+[GIN] 2026/11/11 - 21:15:11 | api | 202611111415115413445008268d9d6BLDry2G4 | 200 |            0s |             ::1 |     GET /api/status
+[GIN] 2026/11/11 - 21:15:11 | api | 202611111415115526848008268d9d62oSBhAIq | 200 |       503.5µs |             ::1 |     GET /api/setup?t=1794406511548
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415115539865008268d9d6eJQzfz0Z | 200 |      2.0265ms |             ::1 |     GET /favicon.ico
+[GIN] 2026/11/11 - 21:15:11 | api | 202611111415115615840008268d9d6PRIWB9FZ | 200 |         510µs |             ::1 |     GET /api/setup?t=1794406511556
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415115656223008268d9d6XNz0EOPv | 200 |      1.0188ms |             ::1 |     GET /static/js/async/63247.6270ad7ae3.js
+[GIN] 2026/11/11 - 21:15:11 | api | 202611111415115898377008268d9d62vZfZx8A | 200 |       510.9µs |             ::1 |     GET /api/setup?t=1794406511586
+[GIN] 2026/11/11 - 21:15:11 | web | 202611111415115913195008268d9d6g4HYmPSz | 200 |            0s |             ::1 |     GET /logo.png
+[GIN] 2026/11/11 - 21:15:48 | api | 202611111415485467931008268d9d6oa4y7gxs | 200 |    175.0946ms |             ::1 |    POST /api/setup
+[GIN] 2026/11/11 - 21:15:48 | api | 202611111415487249615008268d9d6YJBTIloZ | 200 |            0s |             ::1 |     GET /api/setup?t=1794406548724
+[GIN] 2026/11/11 - 21:15:48 | api | 202611111415487465800008268d9d6O2k6d9cZ | 200 |            0s |             ::1 |     GET /api/setup?t=1794406548733
+[GIN] 2026/11/11 - 21:15:48 | web | 202611111415487554434008268d9d6YYxWV0qq | 200 |      1.6621ms |             ::1 |     GET /static/css/async/35875.8ba09e32d6.css
+[GIN] 2026/11/11 - 21:15:48 | web | 202611111415487576738008268d9d6laLChHr2 | 200 |       508.5µs |             ::1 |     GET /static/js/async/20534.a1e9781e05.js
+[GIN] 2026/11/11 - 21:15:48 | web | 202611111415487597348008268d9d6n4eZX51a | 200 |         507µs |             ::1 |     GET /static/js/async/99940.a7d56be340.js
+[GIN] 2026/11/11 - 21:15:48 | web | 202611111415487597348008268d9d6jWpwEKaj | 200 |         507µs |             ::1 |     GET /static/js/async/74400.f1aee56b16.js
+[GIN] 2026/11/11 - 21:15:48 | web | 202611111415487597348008268d9d6GG9AEaKQ | 200 |       1.026ms |             ::1 |     GET /static/js/async/37500.0e6b47125d.js
+[GIN] 2026/11/11 - 21:15:48 | web | 202611111415487633190008268d9d6xnSFQsaR | 200 |      1.0192ms |             ::1 |     GET /static/js/async/93834.5e2a4ee28d.js
+[GIN] 2026/11/11 - 21:15:48 | web | 202611111415487617833008268d9d6gZIl6blQ | 200 |      3.0689ms |             ::1 |     GET /static/js/async/92156.ee11067fe1.js
+[GIN] 2026/11/11 - 21:15:48 | web | 202611111415487581823008268d9d6pn8MF9Y2 | 200 |     11.3384ms |             ::1 |     GET /static/js/async/35875.45effd731f.js
+[GIN] 2026/11/11 - 21:15:48 | api | 202611111415488193568008268d9d60V91ayKg | 200 |       374.8µs |             ::1 |     GET /api/notice
+[GIN] 2026/11/11 - 21:15:48 | api | 202611111415488197316008268d9d63C2rpEoE | 200 |            0s |             ::1 |     GET /api/home_page_content
+[GIN] 2026/11/11 - 21:15:50 | web | 202611111415504807196008268d9d6dNkadN8i | 200 |            0s |             ::1 |     GET /static/js/async/10311.7594eb3009.js
+[GIN] 2026/11/11 - 21:15:50 | web | 202611111415504807196008268d9d6N1GE6iYr | 200 |            0s |             ::1 |     GET /static/js/async/57836.fa804ec13d.js
+[GIN] 2026/11/11 - 21:15:50 | web | 202611111415504807196008268d9d6HdaJ7hvS | 200 |            0s |             ::1 |     GET /static/js/async/20829.a87fcef848.js
+[GIN] 2026/11/11 - 21:15:50 | web | 202611111415504807196008268d9d6cwL16PLz | 200 |            0s |             ::1 |     GET /static/js/async/4153.9807f47f54.js
+[GIN] 2026/11/11 - 21:15:50 | web | 202611111415504807196008268d9d6lEbZXhK3 | 200 |            0s |             ::1 |     GET /static/js/async/2860.61ebb578d1.js
+[GIN] 2026/11/11 - 21:15:51 | web | 202611111415510059594008268d9d6IbHs2zWj | 200 |       900.6µs |             ::1 |     GET /static/js/async/79001.814b393dd2.js
+[GIN] 2026/11/11 - 21:15:51 | web | 202611111415510059594008268d9d6FTeHC39P | 200 |      1.4073ms |             ::1 |     GET /static/js/async/30660.3fd21b3050.js
+[GIN] 2026/11/11 - 21:15:51 | web | 202611111415510059594008268d9d68lcQjkB5 | 200 |      2.9853ms |             ::1 |     GET /static/js/async/77952.423ece52d9.js
+[GIN] 2026/11/11 - 21:15:51 | web | 202611111415510059594008268d9d6jJSVqIWU | 200 |     16.8764ms |             ::1 |     GET /static/js/async/47124.bf47f6f646.js
+[GIN] 2026/11/11 - 21:15:51 | web | 202611111415510039119008268d9d6X7if3gwb | 200 |     55.0262ms |             ::1 |     GET /static/js/async/39243.0ab7875cb6.js
+[SYS] 2026/11/11 - 21:15:59 | syncing options from database 
+[GIN] 2026/11/11 - 21:16:04 | api | 202611111416045013310008268d9d6beDt16U9 | 304 |            0s |             ::1 |     GET /api/home_page_content
+[SYS] 2026/11/11 - 21:16:59 | syncing options from database 
+[SYS] 2026/11/11 - 21:17:59 | syncing options from database 
+[SYS] 2026/11/11 - 21:18:59 | syncing options from database 
+[SYS] 2026/11/11 - 21:19:59 | updating dashboard data... 
+[SYS] 2026/11/11 - 21:19:59 | saved dashboard data, 0 records 
+[SYS] 2026/11/11 - 21:19:59 | syncing options from database 
+[SYS] 2026/11/11 - 21:20:59 | syncing options from database 
+[SYS] 2026/11/11 - 21:21:59 | syncing options from database 
+[SYS] 2026/11/11 - 21:22:59 | syncing options from database 
+[SYS] 2026/11/11 - 21:23:08 | received signal: terminated, shutting down... 
+[SYS] 2026/11/11 - 21:23:08 | saved dashboard data, 0 records 
+[SYS] 2026/11/11 - 21:23:08 | server exited 

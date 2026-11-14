@@ -2,6 +2,7 @@ import os
 import tkinter as tk
 import pytest
 from idm_gui.app import IDMGUIApp
+from idm_gui.theme import THEME
 
 
 @pytest.fixture
@@ -258,6 +259,14 @@ def test_main_window_language_switching_toolbar_and_menus(tk_root):
     assert app.tree.heading("name", "text") == "File Name"
     assert app.tree.heading("speed", "text") == "Speed"
 
+    # Context menu in English
+    assert "Resume Download" in app.context_menu.entrycget(0, "label")
+    assert "Pause Download" in app.context_menu.entrycget(1, "label")
+
+    # Empty state card in English
+    assert app.empty_state_frame.itemcget(app.empty_state_title_id, "text") == "No Downloads Yet"
+    assert app.btn_empty_add.cget("text") == "+ Add New Download"
+
     # 2. Switch back to Indonesian
     app.set_language("id")
     assert app.btn_add.cget("text") == "Tambah URL"
@@ -269,6 +278,65 @@ def test_main_window_language_switching_toolbar_and_menus(tk_root):
     assert app.card_speed.lbl_title.cget("text") == "⚡ KECEPATAN AKTIF"
     assert app.tree.heading("name", "text") == "Nama Berkas"
     assert app.tree.heading("speed", "text") == "Kecepatan"
+
+    # Context menu in Indonesian
+    assert "Lanjutkan Unduh" in app.context_menu.entrycget(0, "label")
+    assert "Jeda Unduh" in app.context_menu.entrycget(1, "label")
+
+    # Empty state card in Indonesian
+    assert app.empty_state_frame.itemcget(app.empty_state_title_id, "text") == "Belum Ada Unduhan"
+    assert app.btn_empty_add.cget("text") == "+ Tambah Unduhan Baru"
+
+
+def test_sidebar_rapid_toggle_robustness(tk_root):
+    """Verify rapid repeated clicks on hamburger toggle do not crash and preserve crisp text rendering."""
+    app = IDMGUIApp(tk_root)
+    # Add dummy tasks to queue so sidebar count update maintains count
+    for i in range(7):
+        app.queue.add_task(f"https://example.com/file{i}.zip", f"file{i}.zip")
+    app._tick_ui()
+
+    # Perform 100 rapid toggles
+    for i in range(100):
+        app.toggle_sidebar_compact()
+        if i % 10 == 0:
+            tk_root.update()
+
+    # Finish on expanded state
+    if app.sidebar_compact:
+        app.toggle_sidebar_compact()
+    tk_root.update()
+
+    assert app.sidebar_compact is False
+    assert app.sidebar_items["all"].is_compact is False
+    # Verify label and badge have valid, non-faded colors
+    assert app.sidebar_items["all"].lbl_text.cget("text") == "Semua Unduhan"
+    assert app.sidebar_items["all"].lbl_badge.cget("text") == "7"
+    assert app.lbl_sidebar_title.cget("fg") == THEME["text_tertiary"]
+
+
+def test_tray_minimize_restore_and_navbar_spam(tk_root):
+    """Verify that minimizing to tray and restoring does not cause GDI handle corruption or crashes on subsequent navbar toggles."""
+    app = IDMGUIApp(tk_root)
+    for i in range(5):
+        app.queue.add_task(f"https://example.com/file{i}.zip", f"file{i}.zip")
+    app._tick_ui()
+
+    # Minimize to tray
+    app.minimize_to_tray()
+    tk_root.update()
+
+    # Restore from tray
+    app.restore_from_tray()
+    tk_root.update()
+
+    # Rapid toggle spam after restore
+    for _ in range(30):
+        app.toggle_sidebar_compact()
+        tk_root.update()
+
+    assert app.sidebar_frame.winfo_exists()
+
 
 
 

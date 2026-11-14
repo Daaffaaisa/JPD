@@ -12,10 +12,36 @@
   let hideTimeout = null;
 
   // Position persistence: free-form relative coordinates { relX, relY } + fallback corner
-  // Synchronously initialize preferredPos & preferredCorner from localStorage to prevent any 1ms default flash
+  function cornerToPos(corner) {
+    switch (corner) {
+      case "top-left": return { relX: 0.0, relY: 0.0 };
+      case "bottom-left": return { relX: 0.0, relY: 1.0 };
+      case "bottom-right": return { relX: 1.0, relY: 1.0 };
+      case "top-right":
+      default: return { relX: 1.0, relY: 0.0 };
+    }
+  }
+
+  // Synchronously initialize preferredPos & preferredCorner from localStorage at the top
   let preferredPos = { relX: 1.0, relY: 0.0 };
   let preferredCorner = "top-right";
   let currentLang = "id";
+
+  try {
+    const cachedPos = localStorage.getItem("jpd_panel_position");
+    if (cachedPos) {
+      const parsed = JSON.parse(cachedPos);
+      if (parsed && typeof parsed.relX === "number" && typeof parsed.relY === "number") {
+        preferredPos = parsed;
+      }
+    } else {
+      const cachedCorner = localStorage.getItem("jpd_panel_corner");
+      if (cachedCorner) {
+        preferredCorner = cachedCorner;
+        preferredPos = cornerToPos(cachedCorner);
+      }
+    }
+  } catch (e) {}
 
   // Exclusion & Blacklist State
   let blockedDomains = [];
@@ -100,6 +126,17 @@
           currentLang = changes.jpd_language.newValue || "id";
           try { localStorage.setItem("jpd_language", currentLang); } catch (e) {}
           updatePanelTexts();
+        }
+        if (changes.jpd_panel_position && changes.jpd_panel_position.newValue) {
+          preferredPos = changes.jpd_panel_position.newValue;
+          try { localStorage.setItem("jpd_panel_position", JSON.stringify(preferredPos)); } catch (e) {}
+          if (panel && activeMediaEl && panel.style.display !== "none") {
+            applyCornerPosition(panel, activeMediaEl.getBoundingClientRect(), preferredPos);
+          }
+        }
+        if (changes.jpd_panel_corner && changes.jpd_panel_corner.newValue) {
+          preferredCorner = changes.jpd_panel_corner.newValue;
+          try { localStorage.setItem("jpd_panel_corner", preferredCorner); } catch (e) {}
         }
       }
     });
@@ -209,32 +246,6 @@
     if (btnEn) btnEn.style.background = currentLang === "en" ? "#2563eb" : "rgba(255,255,255,0.08)";
   }
   const updatePanelLanguage = updatePanelTexts;
-
-  function cornerToPos(corner) {
-    switch (corner) {
-      case "top-left": return { relX: 0.0, relY: 0.0 };
-      case "bottom-left": return { relX: 0.0, relY: 1.0 };
-      case "bottom-right": return { relX: 1.0, relY: 1.0 };
-      case "top-right":
-      default: return { relX: 1.0, relY: 0.0 };
-    }
-  }
-
-  try {
-    const cachedPos = localStorage.getItem("jpd_panel_position");
-    if (cachedPos) {
-      const parsed = JSON.parse(cachedPos);
-      if (parsed && typeof parsed.relX === "number" && typeof parsed.relY === "number") {
-        preferredPos = parsed;
-      }
-    } else {
-      const cachedCorner = localStorage.getItem("jpd_panel_corner");
-      if (cachedCorner) {
-        preferredCorner = cachedCorner;
-        preferredPos = cornerToPos(cachedCorner);
-      }
-    }
-  } catch (e) {}
 
   let isDragging = false;
   let dragStartX = 0;
@@ -888,7 +899,7 @@
     }
 
     const rect = activeMediaEl.getBoundingClientRect();
-    if (rect.bottom < 0 || rect.top > window.innerHeight) {
+    if (rect.bottom < 80 || rect.top > window.innerHeight - 80) {
       panel.style.opacity = "0";
       return;
     }
@@ -899,7 +910,7 @@
     panel.style.opacity = "1";
   }
 
-  window.addEventListener("scroll", syncPanelPosition, { passive: true });
+  window.addEventListener("scroll", syncPanelPosition, { capture: true, passive: true });
   window.addEventListener("resize", syncPanelPosition, { passive: true });
 
   function positionPanelOnElement(el, labelText, url, title) {
@@ -910,7 +921,7 @@
     }
     const rect = el.getBoundingClientRect();
     if (rect.width < 100 || rect.height < 60) return;
-    if (rect.bottom < 0 || rect.top > window.innerHeight) return;
+    if (rect.bottom < 80 || rect.top > window.innerHeight - 80) return;
 
     activeMediaEl = el;
     currentTargetUrl = url || el.currentSrc || el.src || window.location.href;
@@ -1426,15 +1437,109 @@
     true
   );
 
+  function findElementClosestToCenter(elements, vCenter) {
+    let closest = null;
+    let minDist = Infinity;
+    for (const el of elements) {
+      const r = el.getBoundingClientRect();
+      if (r.bottom <= 80 || r.top >= window.innerHeight - 80) continue;
+      const mid = (r.top + r.bottom) / 2;
+      const dist = Math.abs(mid - vCenter);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = el;
+      }
+    }
+    return closest;
+  }
+
+  function getBestActiveMediaElement() {
+    const vCenter = window.innerHeight / 2;
+
+    // A. TikTok Web active feed & single video handling
+    if (window.location.hostname.includes("tiktok.com")) {
+      const tiktokVideos = Array.from(document.querySelectorAll("video")).filter((v) => {
+        const r = v.getBoundingClientRect();
+        return r.width > 80 && r.height > 100 && r.bottom > 80 && r.top < window.innerHeight - 80;
+      });
+      if (tiktokVideos.length > 0) {
+        const playing = tiktokVideos.find((v) => !v.paused && v.currentTime > 0);
+        if (playing) return playing;
+        const centered = findElementClosestToCenter(tiktokVideos, vCenter);
+        if (centered) return centered;
+        return tiktokVideos[0];
+      }
+    }
+
+    // B. YouTube Shorts handling (dynamic reel feed)
+    if (window.location.pathname.includes("/shorts/")) {
+      const activeReel =
+        document.querySelector("ytd-reel-video-renderer[is-active]") ||
+        document.querySelector("ytd-shorts [is-active]");
+      if (activeReel) {
+        const video = activeReel.querySelector("video");
+        if (video) {
+          const r = video.getBoundingClientRect();
+          if (r.width > 80 && r.height > 80 && r.bottom > 80 && r.top < window.innerHeight - 80) {
+            return video;
+          }
+        }
+      }
+      const reels = Array.from(document.querySelectorAll("ytd-reel-video-renderer, ytd-shorts"));
+      const centerReel = findElementClosestToCenter(reels, vCenter);
+      if (centerReel) {
+        const video = centerReel.querySelector("video");
+        if (video) return video;
+      }
+    }
+
+    // C. General YouTube main player
+    if (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be")) {
+      const player = document.querySelector("#movie_player, .html5-video-player");
+      const video = player ? player.querySelector("video") : null;
+      if (video && !video.paused) {
+        const rect = player.getBoundingClientRect();
+        if (rect.width > 100 && rect.height > 100 && rect.bottom > 80 && rect.top < window.innerHeight - 80) {
+          return player;
+        }
+      }
+    }
+
+    // D. Any video actively playing on screen
+    const allVideos = Array.from(document.querySelectorAll("video")).filter((v) => {
+      const r = v.getBoundingClientRect();
+      return r.width > 100 && r.height > 80 && r.bottom > 80 && r.top < window.innerHeight - 80;
+    });
+    const playingVideo = allVideos.find((v) => !v.paused && v.currentTime > 0);
+    if (playingVideo) return playingVideo;
+
+    if (allVideos.length > 0) {
+      const centered = findElementClosestToCenter(allVideos, vCenter);
+      if (centered) return centered;
+    }
+
+    return null;
+  }
+
   // 2. Event listener when media starts playing
   document.addEventListener(
     "play",
     (e) => {
       const el = e.target;
       if (el && el.tagName === "VIDEO") {
-        const targetUrl = (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be"))
-          ? window.location.href
-          : (el.currentSrc || el.src);
+        const rect = el.getBoundingClientRect();
+        // Ignore play events from off-screen pre-buffering videos (common in Shorts/TikTok feeds)
+        if (rect.bottom < 80 || rect.top > window.innerHeight - 80) return;
+
+        let targetUrl = el.currentSrc || el.src;
+        if (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be")) {
+          targetUrl = window.location.href;
+        } else if (window.location.hostname.includes("tiktok.com")) {
+          const container = el.closest && el.closest(
+            'div[data-e2e="feed-item"], div[data-e2e="recommend-list-item-container"], div[class*="DivVideoContainer"], div[class*="DivPlayerContainer"], div[data-e2e="user-post-item"], div[class*="DivBasicPlayerWrapper"]'
+          );
+          targetUrl = getTikTokVideoUrl(el, container);
+        }
         positionPanelOnElement(el, null, targetUrl, document.title);
       } else if (el && el.tagName === "AUDIO") {
         positionPanelOnElement(el, null, el.currentSrc || el.src, document.title);
@@ -1446,9 +1551,13 @@
   // 3. Listener from background network sniffer (HLS/MP4 streams detected)
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === "media_detected" && msg.url) {
-      const v = document.querySelector("video");
-      if (v && v.getBoundingClientRect().width > 120) {
-        positionPanelOnElement(v, null, msg.url, document.title);
+      // Prioritize the currently visible active media element instead of blind document.querySelector("video")
+      const v = (activeMediaEl && document.documentElement.contains(activeMediaEl)) ? activeMediaEl : getBestActiveMediaElement();
+      if (v) {
+        const r = v.getBoundingClientRect();
+        if (r.width > 80 && r.height > 60 && r.bottom > 80 && r.top < window.innerHeight - 80) {
+          positionPanelOnElement(v, null, msg.url, document.title);
+        }
       }
       sendResponse({ status: "ok" });
     }
@@ -1460,11 +1569,7 @@
 
     // A. TikTok Web active feed & single video handling
     if (window.location.hostname.includes("tiktok.com")) {
-      const tiktokVideos = Array.from(document.querySelectorAll("video")).filter((v) => {
-        const r = v.getBoundingClientRect();
-        return r.width > 80 && r.height > 100 && r.bottom > 60 && r.top < window.innerHeight - 60;
-      });
-      const activeTiktok = tiktokVideos.find((v) => !v.paused && v.currentTime > 0) || tiktokVideos[0];
+      const activeTiktok = getBestActiveMediaElement();
       if (activeTiktok) {
         const container =
           activeTiktok.closest(
@@ -1479,45 +1584,34 @@
 
     // B. YouTube Shorts handling (dynamic reel feed)
     if (window.location.pathname.includes("/shorts/")) {
-      const activeReel =
-        document.querySelector("ytd-reel-video-renderer[is-active]") ||
-        document.querySelector("ytd-shorts [is-active]") ||
-        document.querySelector("ytd-reel-video-renderer");
-      const video = activeReel ? activeReel.querySelector("video") : document.querySelector("ytd-shorts video");
+      const video = getBestActiveMediaElement();
       if (video) {
-        const rect = video.getBoundingClientRect();
-        if (rect.width > 80 && rect.height > 80 && rect.bottom > 0 && rect.top < window.innerHeight) {
-          positionPanelOnElement(video, null, window.location.href, document.title);
-          return;
-        }
+        positionPanelOnElement(video, null, window.location.href, document.title);
+        return;
       }
     }
 
-    // B. General YouTube main player
+    // C. General YouTube main player
     if (window.location.hostname.includes("youtube.com") || window.location.hostname.includes("youtu.be")) {
       const player = document.querySelector("#movie_player, .html5-video-player");
       const video = player ? player.querySelector("video") : null;
       if (video && !video.paused) {
         const rect = player.getBoundingClientRect();
-        if (rect.width > 100 && rect.height > 100 && rect.bottom > 0 && rect.top < window.innerHeight) {
+        if (rect.width > 100 && rect.height > 100 && rect.bottom > 80 && rect.top < window.innerHeight - 80) {
           positionPanelOnElement(player, null, window.location.href, document.title);
           return;
         }
       }
     }
 
-    // C. Any video actively playing on screen
-    const allVideos = Array.from(document.querySelectorAll("video"));
-    const playingVideo = allVideos.find((v) => !v.paused && v.currentTime > 0);
+    // D. Any video actively playing on screen
+    const playingVideo = getBestActiveMediaElement();
     if (playingVideo) {
-      const rect = playingVideo.getBoundingClientRect();
-      if (rect.width > 120 && rect.height > 80 && rect.bottom > 0 && rect.top < window.innerHeight) {
-        const targetUrl = playingVideo.currentSrc || playingVideo.src || window.location.href;
-        positionPanelOnElement(playingVideo, null, targetUrl, document.title);
-      }
+      const targetUrl = playingVideo.currentSrc || playingVideo.src || window.location.href;
+      positionPanelOnElement(playingVideo, null, targetUrl, document.title);
     }
   }
 
-  // Poll every 600ms to keep button permanently attached to active media without auto-hiding
-  setInterval(checkShortsAndVideos, 600);
+  // Poll every 500ms to keep button permanently attached to active media without auto-hiding
+  setInterval(checkShortsAndVideos, 500);
 })();

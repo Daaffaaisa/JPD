@@ -55,6 +55,14 @@ STRINGS = {
         "col_progress": "Progres",
         "col_speed": "Kecepatan",
         "col_url": "URL Unduhan",
+        # Context Menu
+        "ctx_resume": "▶ Lanjutkan Unduh",
+        "ctx_pause": "⏸ Jeda Unduh",
+        "ctx_open_file": "📂 Buka Berkas",
+        "ctx_open_folder": "📁 Buka Folder Penyimpanan",
+        "ctx_copy_url": "📋 Salin URL Unduhan",
+        "ctx_delete_list": "🗑 Hapus dari Daftar",
+        "ctx_delete_file": "❌ Hapus Berkas dari Komputer",
         # Statuses
         "status_downloading": "⚡ Mengunduh",
         "status_completed": "✓ Selesai",
@@ -133,6 +141,105 @@ STRINGS = {
         "complete_open_file": "Buka Berkas",
         "complete_open_folder": "Buka Folder",
         "complete_done": "Selesai",
+        # Add URL Dialog
+        "dlg_add_title": "Masukkan URL untuk Mengunduh",
+        "dlg_add_url_lbl": "Alamat Tautan (URL):",
+        "dlg_add_err_format": "* Format URL harus diawali dengan http:// atau https://",
+        "dlg_add_err_empty": "* Masukkan tautan unduhan terlebih dahulu",
+        "dlg_add_btn_download": "+ Unduh",
+        "dlg_add_btn_cancel": "Batal",
+        # Confirmation & Messages
+        "confirm_delete_title": "Konfirmasi Hapus Unduhan",
+        "confirm_delete_msg": "Apakah Anda yakin ingin menghapus {count} unduhan yang dipilih?",
+        "confirm_delete_single": "Apakah Anda yakin ingin menghapus unduhan yang dipilih?",
+        "confirm_delete_file_title": "Konfirmasi Hapus Berkas",
+        "confirm_delete_file_msg": "Apakah Anda yakin ingin menghapus berkas '{fname}' secara permanen dari komputer Anda?",
+        "delete_error_title": "Gagal Menghapus",
+        "delete_error_msg": "Tidak dapat menghapus berkas: {err}",
+        "export_dialog_title": "Ekspor Daftar Tautan Unduhan",
+        "import_dialog_title": "Impor Daftar Tautan Unduhan",
+        # Options Dialog extra
+        "opt_ipc_port": "⚡ Port IPC Loopback: 127.0.0.1:19900 (Aktif & Siap)",
+        "opt_exts_lbl": "Otomatis mulai unduh berkas dengan ekstensi berikut:",
+        "opt_exceptions_lbl": "Jangan mulai unduh otomatis dari situs berikut (Pengecualian):",
+        "opt_exceptions_hint": "Ketik domain dipisahkan spasi (contoh: *.speedtest.net *.fast.com)",
+        "opt_cat_folders_lbl": "Folder Penyimpanan per Kategori:",
+        "opt_select_cat": "Pilih Kategori:",
+        "opt_save_folder": "Folder Simpan:",
+        "opt_temp_dir_lbl": "Direktori Berkas Sementara (Temporary Directory):",
+        "opt_conn_type_lbl": "Tipe / Kecepatan Sambungan:",
+        "opt_conn_max_lbl": "Maks. Jumlah Koneksi (Parallel Connections):",
+        "opt_conn_channels": "jalur (32 = Kecepatan Maksimum IDM)",
+        "opt_conn_note": "* Just Press Download menggunakan akselerasi multi-koneksi paralel bertahap (kelipatan 8)",
+        # Progress Dialog extra
+        "prog_tab_status": "Status unduhan",
+        "prog_tab_limiter": "Pembatas Kecepatan",
+        "prog_tab_options": "Opsi saat selesai",
+        "prog_url": "URL Unduhan:",
+        "prog_status": "Status:",
+        "prog_receiving": "Menerima data...",
+        "prog_file_size": "Ukuran berkas:",
+        "prog_downloaded": "Diunduh:",
+        "prog_transfer_rate": "Tingkat transfer:",
+        "prog_time_left": "Waktu tersisa:",
+        "prog_calculating": "Menghitung...",
+        "prog_resume_cap": "Kemampuan resume:",
+        "prog_yes": "Ya",
+        "prog_no": "Tidak",
+        "prog_hide_details": "<< Sembunyikan detail",
+        "prog_show_details": ">> Tampilkan detail",
+        "prog_seg_progress": "Progres posisi mulai dan unduh berdasarkan koneksi:",
+        "prog_col_conn": "Koneksi",
+        "prog_col_dl": "Diunduh",
+        "prog_col_status": "Status",
+        "prog_limiter_enable": "Aktifkan Pembatas Kecepatan untuk Unduhan Ini",
+        "prog_limiter_max": "Batas Kecepatan Maksimum:",
+        "prog_limiter_presets": "Pilih Preset Cepat:",
+        "prog_limiter_status_on": "Status: Pembatas Kecepatan Aktif ({rate} KB/s)",
+        "prog_limiter_status_off": "Status: Pembatas Kecepatan Dinonaktifkan (Kecepatan Penuh)",
+        "prog_auto_actions": "Tindakan Otomatis Pasca-Unduh:",
+        "prog_auto_close": "Tutup jendela dialog progres ini saat pengunduhan selesai",
+        "prog_disconnect": "Gantung saluran / Putuskan koneksi internet saat selesai",
+        "prog_shutdown": "Matikan komputer secara otomatis setelah unduhan selesai",
+        "prog_force_shutdown": "Paksa proses sistem untuk segera mati",
+        # Dialog info extra
+        "dlg_info_tip_add_cat": "Tambah Kategori Baru...",
+        "dlg_info_add_cat_title": "Tambah Kategori Baru",
+        "dlg_info_add_cat_prompt": "Masukkan nama kategori baru:",
+        "dlg_info_tip_browse": "Pilih Folder Penyimpanan...",
+        "dlg_info_browse_title": "Pilih Folder Penyimpanan untuk Kategori",
+        # Progress extra
+        "prog_unit_kbs": "KB/detik",
+        "prog_sec_unit": "detik",
+        "prog_note_safe_shutdown": "* Catatan: Aksi penutupan atau shutdown aman hanya akan dieksekusi setelah seluruh bagian berkas diverifikasi utuh.",
+        # Options extra
+        "opt_browse_cat_title": "Pilih Folder untuk Kategori",
+        "opt_browse_temp_title": "Pilih Folder Sementara",
+        "opt_conn_types": [
+            "Kecepatan Tinggi: Sambungan Langsung (Ethernet/Kabel) / Wi-Fi / 4G",
+            "Kecepatan Sedang: 3G / ADSL",
+            "Kecepatan Rendah: Dial Up / VPN",
+        ],
+        # System Tray & Popups
+        "tray_open": "Buka Just Press Download",
+        "tray_add_url": "Tambah URL Baru...",
+        "tray_resume_all": "Lanjutkan Semua Unduhan",
+        "tray_pause_all": "Jeda Semua Unduhan",
+        "tray_options": "Pengaturan (Opsi)...",
+        "tray_exit": "Keluar (Exit)",
+        "tray_notify_complete": "Unduhan Selesai: {fname}",
+        "tray_notify_minimized": "Aplikasi diminimalkan ke System Tray",
+        # Menu Dialogs
+        "tip_dialog_title": "Tip Hari Ini - Just Press Download",
+        "tip_dialog_body": "💡 Tip Cepat:\n\n1. Anda dapat menyalin tautan berkas di browser, dan Just Press Download otomatis menangkapnya.\n2. Gunakan tombol '⚙ Opsi' di menu atas untuk mengubah jumlah koneksi paralel hingga 32 jalur.\n3. Klik dua kali baris unduhan untuk langsung membuka berkas yang telah selesai diunduh.",
+        "update_dialog_title": "Periksa Pembaruan - Just Press Download",
+        "update_dialog_body": "✔ Anda telah menggunakan versi terbaru Just Press Download (v1.1.0 High-Performance Release)!\n\nSemua komponen sistem mutakhir dan terintegrasi.",
+        "about_dialog_title": "Tentang Just Press Download",
+        "about_dialog_body": "Just Press Download\nHigh-Performance Parallel Download Accelerator\nDikembangkan dengan Python, Tkinter, dan TDD.\nFitur: Akselerasi Range Paralel, Stream Video Muxer, Integrasi Peramban Native.",
+        # Security warnings
+        "sec_warn_double_ext": "Peringatan: Berkas memiliki ekstensi ganda (.{penultimate_ext}.{last_ext}) yang umum digunakan adware/malware!",
+        "sec_warn_risky_ext": "Peringatan: Berkas berekstensi .{ext} merupakan skrip berisiko tinggi!",
+        "status_unknown": "Tidak diketahui",
     },
     "en": {
         "app_name": "Just Press Download",
@@ -182,6 +289,14 @@ STRINGS = {
         "col_progress": "Progress",
         "col_speed": "Speed",
         "col_url": "Download URL",
+        # Context Menu
+        "ctx_resume": "▶ Resume Download",
+        "ctx_pause": "⏸ Pause Download",
+        "ctx_open_file": "📂 Open File",
+        "ctx_open_folder": "📁 Open Destination Folder",
+        "ctx_copy_url": "📋 Copy Download URL",
+        "ctx_delete_list": "🗑 Remove from List",
+        "ctx_delete_file": "❌ Delete File from Disk",
         # Statuses
         "status_downloading": "⚡ Downloading",
         "status_completed": "✓ Completed",
@@ -260,8 +375,208 @@ STRINGS = {
         "complete_open_file": "Open File",
         "complete_open_folder": "Open Folder",
         "complete_done": "Done",
+        # Add URL Dialog
+        "dlg_add_title": "Enter URL to Download",
+        "dlg_add_url_lbl": "URL Address:",
+        "dlg_add_err_format": "* URL must begin with http:// or https://",
+        "dlg_add_err_empty": "* Please enter a download link first",
+        "dlg_add_btn_download": "+ Download",
+        "dlg_add_btn_cancel": "Cancel",
+        # Confirmation & Messages
+        "confirm_delete_title": "Confirm Delete Download",
+        "confirm_delete_msg": "Are you sure you want to delete {count} selected downloads?",
+        "confirm_delete_single": "Are you sure you want to delete the selected download?",
+        "confirm_delete_file_title": "Confirm Delete File",
+        "confirm_delete_file_msg": "Are you sure you want to permanently delete '{fname}' from your computer?",
+        "delete_error_title": "Deletion Failed",
+        "delete_error_msg": "Could not delete file: {err}",
+        "export_dialog_title": "Export Download Links List",
+        "import_dialog_title": "Import Download Links List",
+        # Options Dialog extra
+        "opt_ipc_port": "⚡ IPC Loopback Port: 127.0.0.1:19900 (Active & Ready)",
+        "opt_exts_lbl": "Automatically start downloading files with the following extensions:",
+        "opt_exceptions_lbl": "Do not start downloading automatically from the following sites (Exceptions):",
+        "opt_exceptions_hint": "Type domains separated by space (example: *.speedtest.net *.fast.com)",
+        "opt_cat_folders_lbl": "Save Folders per Category:",
+        "opt_select_cat": "Select Category:",
+        "opt_save_folder": "Save Folder:",
+        "opt_temp_dir_lbl": "Temporary Directory:",
+        "opt_conn_type_lbl": "Connection Type / Speed:",
+        "opt_conn_max_lbl": "Max. Parallel Connections:",
+        "opt_conn_channels": "lines (32 = IDM Maximum Speed)",
+        "opt_conn_note": "* Just Press Download utilizes staged parallel multi-connections (multiples of 8)",
+        # Progress Dialog extra
+        "prog_tab_status": "Download status",
+        "prog_tab_limiter": "Speed Limiter",
+        "prog_tab_options": "Completion Options",
+        "prog_url": "Download URL:",
+        "prog_status": "Status:",
+        "prog_receiving": "Receiving data...",
+        "prog_file_size": "File size:",
+        "prog_downloaded": "Downloaded:",
+        "prog_transfer_rate": "Transfer rate:",
+        "prog_time_left": "Time left:",
+        "prog_calculating": "Calculating...",
+        "prog_resume_cap": "Resume capability:",
+        "prog_yes": "Yes",
+        "prog_no": "No",
+        "prog_hide_details": "<< Hide details",
+        "prog_show_details": ">> Show details",
+        "prog_seg_progress": "Download progress by connection:",
+        "prog_col_conn": "Connection",
+        "prog_col_dl": "Downloaded",
+        "prog_col_status": "Status",
+        "prog_limiter_enable": "Enable Speed Limiter for This Download",
+        "prog_limiter_max": "Maximum Speed Limit:",
+        "prog_limiter_presets": "Quick Presets:",
+        "prog_limiter_status_on": "Status: Speed limiter active ({rate} KB/s)",
+        "prog_limiter_status_off": "Status: Speed limiter disabled (Full speed)",
+        "prog_auto_actions": "Automatic Post-Download Actions:",
+        "prog_auto_close": "Close this dialog when download finishes",
+        "prog_disconnect": "Disconnect internet connection when done",
+        "prog_shutdown": "Shut down computer when done",
+        "prog_force_shutdown": "Force processes to close",
+        # Dialog info extra
+        "dlg_info_tip_add_cat": "Add New Category...",
+        "dlg_info_add_cat_title": "Add New Category",
+        "dlg_info_add_cat_prompt": "Enter new category name:",
+        "dlg_info_tip_browse": "Select Save Folder...",
+        "dlg_info_browse_title": "Select Save Folder for Category",
+        # Progress extra
+        "prog_unit_kbs": "KB/s",
+        "prog_sec_unit": "sec",
+        "prog_note_safe_shutdown": "* Note: Safe close or shutdown will only be executed after all file parts are verified intact.",
+        # Options extra
+        "opt_browse_cat_title": "Select Folder for Category",
+        "opt_browse_temp_title": "Select Temporary Folder",
+        "opt_conn_types": [
+            "High Speed: Direct Connection (Ethernet/Cable) / Wi-Fi / 4G",
+            "Medium Speed: 3G / ADSL",
+            "Low Speed: Dial Up / VPN",
+        ],
+        # System Tray & Popups
+        "tray_open": "Open Just Press Download",
+        "tray_add_url": "Add New URL...",
+        "tray_resume_all": "Resume All Downloads",
+        "tray_pause_all": "Pause All Downloads",
+        "tray_options": "Options / Settings...",
+        "tray_exit": "Exit",
+        "tray_notify_complete": "Download Completed: {fname}",
+        "tray_notify_minimized": "Application minimized to System Tray",
+        # Menu Dialogs
+        "tip_dialog_title": "Tip of the Day - Just Press Download",
+        "tip_dialog_body": "💡 Quick Tips:\n\n1. You can copy a download link in your browser, and Just Press Download will automatically capture it.\n2. Use the '⚙ Options' button to configure up to 32 parallel connections.\n3. Double-click any completed download row to immediately open the file.",
+        "update_dialog_title": "Check for Updates - Just Press Download",
+        "update_dialog_body": "✔ You are using the latest version of Just Press Download (v1.1.0 High-Performance Release)!\n\nAll system components are up to date.",
+        "about_dialog_title": "About Just Press Download",
+        "about_dialog_body": "Just Press Download\nHigh-Performance Parallel Download Accelerator\nDeveloped with Python, Tkinter, and TDD.\nFeatures: Parallel Range Download, Streaming Muxer, Browser Native Host.",
+        # Security warnings
+        "sec_warn_double_ext": "Warning: File has a double extension (.{penultimate_ext}.{last_ext}) commonly used by adware/malware!",
+        "sec_warn_risky_ext": "Warning: File with .{ext} extension is a high-risk executable/script!",
+        "status_unknown": "Unknown",
     }
 }
+
+
+CATEGORY_KEYS = [
+    "Video",
+    "Musik",
+    "Gambar",
+    "Program",
+    "Dokumen",
+    "Berkas Terkompresi",
+    "Umum",
+]
+
+CATEGORY_TR_KEYS = {
+    "Video": "cat_video",
+    "Musik": "cat_music",
+    "Gambar": "cat_pictures",
+    "Program": "cat_programs",
+    "Dokumen": "cat_documents",
+    "Berkas Terkompresi": "cat_compressed",
+    "Umum": "cat_general",
+}
+
+
+def get_category_display_name(cat_key: str, lang: Optional[str] = None) -> str:
+    """Returns the localized display name for a given canonical category key."""
+    l = lang or get_current_lang()
+    tr_k = CATEGORY_TR_KEYS.get(cat_key)
+    if tr_k:
+        return tr(tr_k, lang=l)
+    return cat_key
+
+
+def get_canonical_category_key(name: str) -> str:
+    """Normalizes an English or Indonesian category name back to the internal canonical key."""
+    n = name.strip().lower()
+    if n in ("video",):
+        return "Video"
+    elif n in ("musik", "music", "audio"):
+        return "Musik"
+    elif n in ("gambar", "pictures", "picture", "images", "image", "foto", "photo"):
+        return "Gambar"
+    elif n in ("program", "programs"):
+        return "Program"
+    elif n in ("dokumen", "documents", "document"):
+        return "Dokumen"
+    elif n in ("berkas terkompresi", "terkompresi", "compressed", "archive", "zip"):
+        return "Berkas Terkompresi"
+    elif n in ("umum", "general"):
+        return "Umum"
+    return name
+
+
+def format_size_id(num_bytes: int, lang: Optional[str] = None) -> str:
+    """Formats bytes in localized style (ID: 337,84 MB, Tidak diketahui; EN: 337.84 MB, Unknown)."""
+    l = lang or get_current_lang()
+    if num_bytes <= 0:
+        return "Tidak diketahui" if l == "id" else "Unknown"
+    elif num_bytes < 1024:
+        return f"{num_bytes} B"
+    elif num_bytes < 1024 * 1024:
+        val = num_bytes / 1024
+        s = f"{val:.2f} KB"
+        return s.replace(".", ",") if l == "id" else s
+    elif num_bytes < 1024 * 1024 * 1024:
+        val = num_bytes / (1024 * 1024)
+        s = f"{val:.2f} MB"
+        return s.replace(".", ",") if l == "id" else s
+    else:
+        val = num_bytes / (1024 * 1024 * 1024)
+        s = f"{val:.2f} GB"
+        return s.replace(".", ",") if l == "id" else s
+
+
+def format_time_left(seconds: float, lang: Optional[str] = None) -> str:
+    """Formats remaining time in localized style (ID: 13 menit 58 detik; EN: 13 min 58 sec)."""
+    l = lang or get_current_lang()
+    if seconds <= 0:
+        return "Selesai" if l == "id" else "Complete"
+    s = int(seconds)
+    if l == "en":
+        if s < 60:
+            return f"{s} sec"
+        elif s < 3600:
+            m = s // 60
+            rem_s = s % 60
+            return f"{m} min {rem_s} sec" if rem_s > 0 else f"{m} min"
+        else:
+            h = s // 3600
+            rem_m = (s % 3600) // 60
+            return f"{h} hr {rem_m} min" if rem_m > 0 else f"{h} hr"
+    else:
+        if s < 60:
+            return f"{s} detik"
+        elif s < 3600:
+            m = s // 60
+            rem_s = s % 60
+            return f"{m} menit {rem_s} detik" if rem_s > 0 else f"{m} menit"
+        else:
+            h = s // 3600
+            rem_m = (s % 3600) // 60
+            return f"{h} jam {rem_m} menit" if rem_m > 0 else f"{h} jam"
 
 
 def get_current_lang() -> str:

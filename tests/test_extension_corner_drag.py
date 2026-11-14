@@ -55,6 +55,12 @@ def test_content_js_corner_persistence_and_drag():
     assert "localStorage.setItem" in code
     assert 'p.style.transition = "none"' in code
 
+    # Verify scroll & video feed stability helpers to prevent position flash
+    assert "getBestActiveMediaElement" in code
+    assert "findElementClosestToCenter" in code
+    assert "capture: true" in code
+    assert "changes.jpd_panel_position" in code
+
 
 def test_manifest_storage_permission():
     manifest_path = os.path.abspath("extension/manifest.json")

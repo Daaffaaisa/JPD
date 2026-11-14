@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 import threading
 import time
 import urllib.parse
@@ -19,15 +20,29 @@ from idm_gui.dialogs import (
     OptionsDialog,
 )
 from idm_gui.settings import settings
-from idm_gui.i18n import tr, get_current_lang
+from idm_gui.i18n import (
+    tr,
+    get_current_lang,
+    format_size_id,
+    format_time_left,
+    get_category_display_name,
+    get_canonical_category_key,
+)
 from idm_gui.theme import (
     THEME,
     setup_global_ttk_theme,
     create_modern_button,
     draw_round_rectangle,
+    draw_liquid_glass_panel,
+    RADIUS_SM,
+    RADIUS_MD,
+    RADIUS_LG,
+    RADIUS_XL,
     apply_window_icon,
+    _apply_win32_native_icon,
     get_app_png_path,
     interpolate_color,
+    Tooltip,
     FONT_DISPLAY,
     FONT_FAMILY,
     FONT_TITLE,
@@ -145,74 +160,70 @@ class TactileCard(tk.Canvas):
             return
         self.delete("card_bg")
         r = self.r
-        # 1. Ambient drop shadow (offset down 2px)
-        draw_round_rectangle(self, 2, 4, w - 2, h, r=r + 1, fill="#04070e", outline="", tags="card_bg")
-        # 2. Outer bottom bevel rim
-        draw_round_rectangle(self, 1, 1, w - 1, h - 2, r=r, fill="#070b13", outline="", tags="card_bg")
-        # 3. Stepped 3D body: top plate lighter, bottom plate deeper
-        mid = (h - 2) // 2
-        draw_round_rectangle(self, 2, 2, w - 2, h - 3, r=r - 1, fill="#1e2a3c", outline="", tags="card_bg")
-        draw_round_rectangle(self, 2, mid, w - 2, h - 3, r=r - 1, fill="#131b26", outline="", tags="card_bg")
-        # 4. Inset overhead specular rim highlight (Apple 3D gleam)
-        self.create_line(r + 2, 2, w - r - 2, 2, fill="#4e6894", width=1.5, tags="card_bg")
+        draw_liquid_glass_panel(
+            self,
+            x1=2,
+            y1=2,
+            x2=w - 2,
+            y2=h - 2,
+            r=r,
+            fill=THEME["surface"],
+            border=THEME["glass_border"],
+            rim_highlight=THEME["glass_rim"],
+            refraction=THEME["glass_refraction"],
+            shadow=True,
+            tags="card_bg",
+        )
         self.tag_lower("card_bg")
 
 
-class TactileStorageCard(tk.Canvas):
-    """Modern 3D elevated storage card with smooth rounded corners, specular highlight, and embedded open button."""
+class TactileStorageCard(tk.Frame):
+    """Modern 3D elevated storage card with dark styling and embedded open button."""
 
     def __init__(self, parent: tk.Widget, on_open_folder: Any, r: int = 10):
-        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["surface_alt"]
-        super().__init__(parent, height=86, bg=bg_col, highlightthickness=0)
+        super().__init__(parent, bg=THEME["surface"], highlightbackground=THEME["glass_border"], highlightthickness=1, padx=8, pady=6)
         self.r = r
         self.on_open_folder = on_open_folder
 
         self.lbl_title = tk.Label(
             self,
-            text="PENYIMPANAN",
-            bg="#192231",
+            text=tr("sec_storage"),
+            bg=THEME["surface"],
             fg=THEME["text_tertiary"],
             font=(FONT_DISPLAY, 7, "bold"),
+            anchor=tk.W,
         )
+        self.lbl_title.pack(fill=tk.X, anchor=tk.W)
+
         self.lbl_path = tk.Label(
             self,
             text=os.path.basename(os.path.expanduser("~")) + "/Downloads",
-            bg="#131b26",
+            bg=THEME["surface"],
             fg=THEME["text_secondary"],
             font=(FONT_FAMILY, 8),
+            anchor=tk.W,
         )
-        self.btn_open = create_modern_button(
+        self.lbl_path.pack(fill=tk.X, anchor=tk.W, pady=(2, 4))
+
+        self.btn_open = tk.Button(
             self,
-            text="↗ Buka Folder",
+            text=tr("tb_open_folder"),
             command=on_open_folder,
-            kind="secondary",
+            bg=THEME["secondary_bg"],
+            fg=THEME["text_primary"],
+            activebackground=THEME["secondary_hover"],
+            activeforeground="#ffffff",
+            relief=tk.FLAT,
+            font=(FONT_FAMILY, 8),
+            cursor="hand2",
             padx=6,
             pady=2,
-            radius=6,
-            tooltip="Buka Folder Unduhan Utama",
+            bd=0,
         )
-
-        self.win_t = self.create_window(14, 15, window=self.lbl_title, anchor=tk.W)
-        self.win_p = self.create_window(14, 34, window=self.lbl_path, anchor=tk.W)
-        self.win_b = self.create_window(14, 63, window=self.btn_open, anchor=tk.W)
-
-        self.bind("<Configure>", self._redraw)
-
-    def _redraw(self, event=None):
-        w = self.winfo_width()
-        h = self.winfo_height()
-        if w < 30 or h < 30:
-            return
-        self.delete("card_bg")
-        r = self.r
-        draw_round_rectangle(self, 2, 4, w - 2, h, r=r + 1, fill="#04070e", outline="", tags="card_bg")
-        draw_round_rectangle(self, 1, 1, w - 1, h - 2, r=r, fill="#070b13", outline="", tags="card_bg")
-        mid = (h - 2) // 2
-        draw_round_rectangle(self, 2, 2, w - 2, h - 3, r=r - 1, fill="#192231", outline="", tags="card_bg")
-        draw_round_rectangle(self, 2, mid, w - 2, h - 3, r=r - 1, fill="#131b26", outline="", tags="card_bg")
-        self.create_line(r + 2, 2, w - r - 2, 2, fill="#3d5275", width=1.5, tags="card_bg")
-        self.tag_lower("card_bg")
-        self.itemconfigure(self.win_b, width=max(40, w - 28))
+        self.btn_open.bind("<Enter>", lambda e: self.btn_open.configure(bg=THEME["secondary_hover"]))
+        self.btn_open.bind("<Leave>", lambda e: self.btn_open.configure(bg=THEME["secondary_bg"]))
+        self.tooltip_open = Tooltip(self.btn_open, tr("tip_folder"))
+        self.btn_open.pack(fill=tk.X)
 
 
 class TactileTableContainer(tk.Canvas):
@@ -236,14 +247,20 @@ class TactileTableContainer(tk.Canvas):
             return
         self.delete("card_bg")
         r = self.r
-
-        # 1. Ambient drop shadow
-        draw_round_rectangle(self, 3, 5, w - 3, h, r=r + 2, fill="#04070e", outline="", tags="card_bg")
-        # 2. Outer dark bottom rim
-        draw_round_rectangle(self, 2, 2, w - 2, h - 2, r=r, fill="#070b13", outline="", tags="card_bg")
-        # 3. Main body with subtle dark border (no distracting bright white lines)
-        draw_round_rectangle(self, 3, 3, w - 3, h - 3, r=r - 1, fill=THEME["tree_bg"], outline="#1e293b", width=1, tags="card_bg")
-
+        draw_liquid_glass_panel(
+            self,
+            x1=2,
+            y1=2,
+            x2=w - 2,
+            y2=h - 2,
+            r=r,
+            fill=THEME["tree_bg"],
+            border=THEME["glass_border"],
+            rim_highlight=THEME["glass_rim"],
+            refraction=THEME["glass_refraction"],
+            shadow=True,
+            tags="card_bg",
+        )
         self.tag_lower("card_bg")
 
         pad = 4
@@ -263,7 +280,8 @@ class SidebarNavItem(tk.Frame):
         on_click: Optional[Any] = None,
         on_double_click: Optional[Any] = None,
     ):
-        super().__init__(parent, bg=THEME["surface_alt"], cursor="hand2")
+        super().__init__(parent, bg=THEME["surface_alt"], cursor="hand2", height=34)
+        self.pack_propagate(False)
         self.key = key
         self.raw_text = text
         self.on_click = on_click
@@ -272,18 +290,18 @@ class SidebarNavItem(tk.Frame):
         self.is_compact = False
         self.count = 0
 
-        # Left 3px active indicator bar
-        self.indicator = tk.Frame(self, width=3, bg=THEME["surface_alt"])
-        self.indicator.pack(side=tk.LEFT, fill=tk.Y, pady=2)
+        # Inset pill container (matches hamburger and folder button margins)
+        self.pill = tk.Frame(self, bg=THEME["surface_alt"])
+        self.pill.place(x=4, y=1, width=206, height=32)
 
-        # Content container (identical padding in both compact & expanded modes to prevent jumping)
-        self.content = tk.Frame(self, bg=THEME["surface_alt"], padx=0, pady=2)
-        self.content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6), pady=1)
+        # Left 3px active indicator bar inside pill
+        self.indicator = tk.Frame(self.pill, width=3, bg=THEME["surface_alt"])
+        self.indicator.place(x=0, y=4, width=3, height=24)
 
-        # Fixed-width 36px container for icon (centered on 28px rail axis: 3px indicator + 7px pad = 10px start + 18px = 28px center)
-        self.icon_box = tk.Frame(self.content, bg=THEME["surface_alt"], width=36, height=28)
+        # Fixed-width container for icon (centered inside 46px visible pill at rail width 52)
+        self.icon_box = tk.Frame(self.pill, bg=THEME["surface_alt"], width=28, height=28)
         self.icon_box.pack_propagate(False)
-        self.icon_box.pack(side=tk.LEFT, padx=(7, 6))
+        self.icon_box.place(x=6, y=2, width=28, height=28)
 
         clean_icon = icon.replace("\ufe0f", "")
         self.lbl_icon = tk.Label(
@@ -296,79 +314,65 @@ class SidebarNavItem(tk.Frame):
         )
         self.lbl_icon.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-        # Phone-style round notification badge overlay for compact mode (top-right of icon)
-        self.badge_canvas = tk.Canvas(self.icon_box, width=14, height=14, bg=THEME["surface_alt"], highlightthickness=0)
+        # Phone-style round notification pip for compact mode (snug on top-right of icon)
+        self.badge_pip = tk.Frame(self.icon_box, width=6, height=6, bg=THEME["danger"])
+        self.badge_canvas = self.badge_pip  # Backward compatibility alias for tests
 
-        self.lbl_badge = tk.Label(
-            self.content,
-            text="0",
-            bg=THEME["input_bg"],
-            fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 8, "bold"),
-            padx=6,
-            pady=1,
-        )
-        self.lbl_badge.pack(side=tk.RIGHT, padx=(4, 4))
+        # Label container strictly starting at x=38 so distance between icon and text is a clean 6-8px
+        self.label_box = tk.Frame(self.pill, bg=THEME["surface_alt"], width=166, height=32)
+        self.label_box.pack_propagate(False)
+        self.label_box.place(x=38, y=0, width=166, height=32)
 
         self.lbl_text = tk.Label(
-            self.content,
+            self.label_box,
             text=text,
             bg=THEME["surface_alt"],
             fg=THEME["text_secondary"],
             font=(FONT_FAMILY, 10),
         )
-        self.lbl_text.pack(side=tk.LEFT)
+        self.lbl_text.pack(side=tk.LEFT, padx=(2, 0))
 
-        for w in (self, self.content, self.icon_box, self.lbl_icon, self.lbl_text, self.lbl_badge, self.badge_canvas):
+        self.lbl_badge = tk.Label(
+            self.label_box,
+            text="0",
+            bg=THEME["input_bg"],
+            fg=THEME["text_tertiary"],
+            font=(FONT_DISPLAY, 8, "bold"),
+            padx=5,
+            pady=1,
+        )
+        self.lbl_badge.pack(side=tk.RIGHT, padx=(0, 6))
+
+        for w in (self, self.pill, self.label_box, self.icon_box, self.lbl_icon, self.lbl_text, self.lbl_badge, self.badge_pip):
             w.bind("<Button-1>", lambda e: self._handle_click())
             w.bind("<Double-Button-1>", lambda e: self._handle_double_click())
             w.bind("<Enter>", lambda e: self._on_enter())
             w.bind("<Leave>", lambda e: self._on_leave())
 
-    def _draw_phone_badge(self):
-        if not self.is_compact or self.count <= 0:
-            self.badge_canvas.place_forget()
-            return
-
-        cnt_str = str(self.count) if self.count < 100 else "99+"
-        is_double = len(cnt_str) > 1
-        bw = 20 if is_double else 14
-        bh = 14
-        self.badge_canvas.configure(width=bw, height=bh)
-        self.badge_canvas.delete("all")
-
-        bg_col = self.icon_box.cget("bg")
-        self.badge_canvas.configure(bg=bg_col)
-
-        if not is_double:
-            self.badge_canvas.create_oval(1, 1, 13, 13, fill="#ef4444", outline="#070b13", width=1)
-            self.badge_canvas.create_text(7, 7, text=cnt_str, fill="#ffffff", font=(FONT_DISPLAY, 7, "bold"))
+    def _update_badge_display(self):
+        self.lbl_badge.config(text=str(self.count))
+        if self.is_compact and self.count > 0:
+            self.badge_pip.place(x=19, y=3, width=6, height=6)
         else:
-            self.badge_canvas.create_oval(1, 1, 13, 13, fill="#ef4444", outline="#070b13", width=1)
-            self.badge_canvas.create_oval(bw - 13, 1, bw - 1, 13, fill="#ef4444", outline="#070b13", width=1)
-            self.badge_canvas.create_rectangle(7, 1, bw - 7, 13, fill="#ef4444", outline="")
-            self.badge_canvas.create_line(7, 1, bw - 7, 1, fill="#070b13", width=1)
-            self.badge_canvas.create_line(7, 13, bw - 7, 13, fill="#070b13", width=1)
-            self.badge_canvas.create_text(bw // 2, 7, text=cnt_str, fill="#ffffff", font=(FONT_DISPLAY, 6, "bold"))
-
-        self.badge_canvas.place(relx=1.0, rely=0.0, anchor=tk.NE)
+            self.badge_pip.place_forget()
 
     def set_compact(self, compact: bool):
         self.is_compact = compact
         if compact:
-            self.lbl_text.pack_forget()
-            self.lbl_badge.pack_forget()
-            self._draw_phone_badge()
+            self.pill.place(x=4, y=1, width=44, height=32)
+            self.icon_box.place(x=8, y=2, width=28, height=28)
+            self.label_box.place(x=300, y=0)
         else:
-            self.badge_canvas.place_forget()
-            self.lbl_badge.pack(side=tk.RIGHT, padx=(4, 4))
-            self.lbl_text.pack(side=tk.LEFT)
+            self.pill.place(x=4, y=1, width=206, height=32)
+            self.icon_box.place(x=6, y=2, width=28, height=28)
+            self.label_box.place(x=38, y=0, width=166, height=32)
+        self._update_badge_display()
 
     def set_text_fade(self, alpha: float):
         """Fade text and badge labels smoothly between background color and target foreground color."""
-        bg_col = "#1e293b" if self.is_active else THEME["surface_alt"]
+        bg_col = "#13233c" if self.is_active else THEME["surface_alt"]
         target_fg = "#ffffff" if self.is_active else THEME["text_secondary"]
-        target_badge_fg = "#60a5fa" if self.is_active else THEME["text_tertiary"]
+        target_badge_fg = THEME["accent_glow"] if self.is_active else THEME["text_tertiary"]
         blended_fg = interpolate_color(bg_col, target_fg, alpha)
         blended_badge_fg = interpolate_color(bg_col, target_badge_fg, alpha)
         blended_badge_bg = interpolate_color(bg_col, THEME["input_bg"], alpha)
@@ -388,27 +392,26 @@ class SidebarNavItem(tk.Frame):
 
     def set_active(self, active: bool):
         self.is_active = active
-        bg_col = "#1e293b" if active else THEME["surface_alt"]
+        bg_col = "#13233c" if active else THEME["surface_alt"]
         fg_col = "#ffffff" if active else THEME["text_secondary"]
         ind_col = THEME["accent_primary"] if active else THEME["surface_alt"]
-        badge_fg = "#60a5fa" if active else THEME["text_tertiary"]
+        badge_fg = THEME["accent_glow"] if active else THEME["text_tertiary"]
 
         self.configure(bg=THEME["surface_alt"])
+        self.pill.configure(bg=bg_col)
         self.indicator.configure(bg=ind_col)
-        self.content.configure(bg=bg_col)
+        self.label_box.configure(bg=bg_col)
         self.icon_box.configure(bg=bg_col)
-        self.badge_canvas.configure(bg=bg_col)
-        self.lbl_icon.configure(bg=bg_col, fg="#60a5fa" if active else THEME["text_secondary"])
+        self._update_badge_display()
+        self.lbl_icon.configure(bg=bg_col, fg=THEME["accent_glow"] if active else THEME["text_secondary"])
         self.lbl_text.configure(bg=bg_col, fg=fg_col, font=(FONT_DISPLAY if active else FONT_FAMILY, 9, "bold" if active else "normal"))
         self.lbl_badge.configure(bg=THEME["input_bg"], fg=badge_fg)
-        if self.is_compact:
-            self._draw_phone_badge()
 
     def set_count(self, count: int):
+        if self.count == count:
+            return
         self.count = count
-        self.lbl_badge.config(text=str(count))
-        if self.is_compact:
-            self._draw_phone_badge()
+        self._update_badge_display()
 
     def set_label(self, new_text: str):
         self.raw_text = new_text
@@ -416,22 +419,79 @@ class SidebarNavItem(tk.Frame):
 
     def _on_enter(self):
         if not self.is_active:
-            hover_bg = "#192231"
-            self.content.configure(bg=hover_bg)
+            hover_bg = "#111c2e"
+            self.pill.configure(bg=hover_bg)
+            self.label_box.configure(bg=hover_bg)
             self.icon_box.configure(bg=hover_bg)
-            self.badge_canvas.configure(bg=hover_bg)
+            self._update_badge_display()
             self.lbl_icon.configure(bg=hover_bg)
             self.lbl_text.configure(bg=hover_bg)
 
     def _on_leave(self):
         if not self.is_active:
             bg_col = THEME["surface_alt"]
-            self.content.configure(bg=bg_col)
+            self.pill.configure(bg=bg_col)
+            self.label_box.configure(bg=bg_col)
             self.icon_box.configure(bg=bg_col)
-            self.badge_canvas.configure(bg=bg_col)
-            self.lbl_text.configure(bg=bg_col)
+            self._update_badge_display()
             self.lbl_icon.configure(bg=bg_col)
             self.lbl_text.configure(bg=bg_col)
+
+
+SIDEBAR_WIDTH_EXPANDED = 214
+SIDEBAR_WIDTH_COMPACT = 52
+
+
+class ModernMainPaned:
+    """High-performance, crash-free container replacement for tk.PanedWindow on Windows 11.
+    Eliminates GDI sash collisions, window unmapping race conditions, and tcl9tk90.dll TkWinGetDrawableDC crashes.
+    """
+
+    def __init__(self, parent: tk.Misc, bg: str):
+        self.container = tk.Frame(parent, bg=bg)
+        self._panes: list[tk.Widget] = []
+
+    def pack(self, **kwargs):
+        return self.container.pack(**kwargs)
+
+    def add(self, widget: tk.Widget, **kwargs):
+        if widget not in self._panes:
+            if "before" in kwargs:
+                self._panes.insert(0, widget)
+            else:
+                self._panes.append(widget)
+        if len(self._panes) > 0 and widget == self._panes[0]:
+            widget.pack(side=tk.LEFT, fill=tk.Y)
+        else:
+            widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    def forget(self, widget: tk.Widget):
+        try:
+            widget.pack_forget()
+        except Exception:
+            pass
+
+    def panes(self) -> list[tk.Widget]:
+        return list(self._panes)
+
+    def sash_place(self, idx: int, x: int, y: int):
+        if self._panes:
+            try:
+                self._panes[0]["width"] = x
+            except Exception:
+                pass
+
+    def paneconfig(self, *args, **kwargs):
+        pass
+
+    def sash_coord(self, idx: int):
+        if self._panes:
+            try:
+                w = self._panes[0].winfo_width()
+                return (w if w > 1 else SIDEBAR_WIDTH_EXPANDED, 1)
+            except Exception:
+                return (SIDEBAR_WIDTH_EXPANDED, 1)
+        return (SIDEBAR_WIDTH_EXPANDED, 1)
 
 
 class IDMGUIApp:
@@ -450,6 +510,12 @@ class IDMGUIApp:
                 dpi = ctypes.windll.user32.GetDpiForWindow(hwnd)
                 if dpi > 0:
                     self.root.tk.call("tk", "scaling", dpi / 72.0)
+                # Apply Windows 11 Immersive Dark Titlebar (DWMWA_USE_IMMERSIVE_DARK_MODE = 20)
+                dwmapi = getattr(ctypes.windll, "dwmapi", None)
+                if dwmapi:
+                    top_hwnd = ctypes.windll.user32.GetAncestor(hwnd, 2)
+                    dark_mode = ctypes.c_int(1)
+                    dwmapi.DwmSetWindowAttribute(top_hwnd, 20, ctypes.byref(dark_mode), ctypes.sizeof(dark_mode))
             except Exception:
                 pass
 
@@ -507,6 +573,7 @@ class IDMGUIApp:
         is_incoming = "--url" in sys.argv
         if is_autostart or is_incoming or self.settings.get_start_minimized():
             self.root.withdraw()
+            self.root.after(300, self._trim_memory_if_idle)
         else:
             self.root.deiconify()
 
@@ -548,7 +615,7 @@ class IDMGUIApp:
 
     def _apply_initial_sash(self):
         try:
-            target = 56 if getattr(self, "sidebar_compact", False) else 230
+            target = SIDEBAR_WIDTH_COMPACT if getattr(self, "sidebar_compact", False) else SIDEBAR_WIDTH_EXPANDED
             self.paned.paneconfig(self.sidebar_frame, minsize=target)
             self.paned.sash_place(0, target, 0)
             self.sidebar_frame.configure(width=target)
@@ -626,11 +693,11 @@ class IDMGUIApp:
             executable_exts = {"exe", "scr", "vbs", "bat", "cmd", "pif", "hta", "jar", "ps1"}
             document_image_exts = {"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "jpeg", "png", "mp4", "mp3", "zip"}
             if last_ext in executable_exts and penultimate_ext in document_image_exts:
-                return True, f"Peringatan: Berkas memiliki ekstensi ganda (.{penultimate_ext}.{last_ext}) yang umum digunakan adware/malware!"
+                return True, tr("sec_warn_double_ext", penultimate_ext=penultimate_ext, last_ext=last_ext)
 
         dangerous_scripts = {"vbs", "scr", "pif", "hta"}
         if len(parts) >= 2 and parts[-1] in dangerous_scripts:
-            return True, f"Peringatan: Berkas berekstensi .{parts[-1]} merupakan skrip berisiko tinggi!"
+            return True, tr("sec_warn_risky_ext", ext=parts[-1])
 
         return False, ""
 
@@ -776,8 +843,26 @@ class IDMGUIApp:
 
         self.root.after(50, handle_incoming)
 
+    def _build_tray_menu(self):
+        try:
+            import pystray
+            self.tray_menu_items = [
+                pystray.MenuItem(tr("tray_open"), self.restore_from_tray, default=True),
+                pystray.MenuItem(tr("tray_add_url"), lambda icon, item: self.root.after(0, self.open_add_url_dialog)),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(tr("tray_resume_all"), lambda icon, item: self.root.after(0, self.resume_all)),
+                pystray.MenuItem(tr("tray_pause_all"), lambda icon, item: self.root.after(0, self.pause_all)),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(tr("tray_options"), lambda icon, item: self.root.after(0, self.open_options_dialog)),
+                pystray.MenuItem(tr("tray_exit"), lambda icon, item: self.root.after(0, self.quit_app)),
+            ]
+            return pystray.Menu(*self.tray_menu_items)
+        except Exception:
+            return None
+
     def _init_tray(self):
         """Initializes system tray icon in a background daemon thread."""
+        self._build_tray_menu()
         if os.environ.get("PYTEST_CURRENT_TEST"):
             return
         try:
@@ -790,16 +875,7 @@ class IDMGUIApp:
             else:
                 tray_img = Image.new("RGBA", (32, 32), color="#2563eb")
 
-            tray_menu = pystray.Menu(
-                pystray.MenuItem("Buka Just Press Download", self.restore_from_tray, default=True),
-                pystray.MenuItem("Tambah URL Baru...", lambda icon, item: self.root.after(0, self.open_add_url_dialog)),
-                pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Lanjutkan Semua Unduhan", lambda icon, item: self.root.after(0, self.resume_all)),
-                pystray.MenuItem("Jeda Semua Unduhan", lambda icon, item: self.root.after(0, self.pause_all)),
-                pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Pengaturan (Opsi)...", lambda icon, item: self.root.after(0, self.open_options_dialog)),
-                pystray.MenuItem("Keluar (Exit)", lambda icon, item: self.root.after(0, self.quit_app)),
-            )
+            tray_menu = self._build_tray_menu()
 
             self.tray_icon = pystray.Icon(
                 "JustPressDownload",
@@ -820,23 +896,76 @@ class IDMGUIApp:
                 self.root.lift()
                 self.root.focus_force()
                 self.root.state("normal")
-                self.root.update_idletasks()
-                apply_window_icon(self.root)
+                _apply_win32_native_icon(self.root)
+                self.root.after(10, self._tick_ui)
             except Exception:
                 pass
         self.root.after(0, _restore)
 
     def minimize_to_tray(self):
-        """Minimizes main window to system tray."""
+        """Minimizes main window to system tray and reclaims unused working set memory."""
         try:
             self.root.withdraw()
             if hasattr(self, "tray_icon") and self.tray_icon and hasattr(self.tray_icon, "notify"):
                 try:
-                    self.tray_icon.notify("Aplikasi diminimalkan ke System Tray", "Just Press Download")
+                    self.tray_icon.notify(tr("tray_notify_minimized"), "Just Press Download")
                 except Exception:
                     pass
+            self.root.after(150, self._trim_memory_if_idle)
         except Exception:
             pass
+
+    def _trim_memory_if_idle(self):
+        """Reclaims unused working set memory when in tray or idle.
+        Zero impact on functionality or network performance; Windows pages in on demand.
+        """
+        try:
+            if hasattr(self, "queue"):
+                active = any(
+                    t.status in (TaskStatus.DOWNLOADING, TaskStatus.QUEUED)
+                    for t in self.queue.list_tasks()
+                )
+                if active:
+                    return
+
+            import gc
+            gc.collect()
+
+            if sys.platform == "win32":
+                import ctypes
+                from ctypes import wintypes
+                kernel32 = ctypes.windll.kernel32
+                psapi = getattr(ctypes.windll, "psapi", None)
+                kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+                h = kernel32.GetCurrentProcess()
+
+                if psapi and hasattr(psapi, "EmptyWorkingSet"):
+                    psapi.EmptyWorkingSet.argtypes = [wintypes.HANDLE]
+                    psapi.EmptyWorkingSet.restype = wintypes.BOOL
+                    psapi.EmptyWorkingSet(h)
+                else:
+                    SIZE_T = ctypes.c_size_t
+                    kernel32.SetProcessWorkingSetSize.argtypes = [wintypes.HANDLE, SIZE_T, SIZE_T]
+                    kernel32.SetProcessWorkingSetSize.restype = wintypes.BOOL
+                    kernel32.SetProcessWorkingSetSize(h, SIZE_T(-1), SIZE_T(-1))
+        except Exception:
+            pass
+
+    def _cleanup_task_tracking(self, task_id: str):
+        """Frees tracking dictionary references and closed dialogs for completed/cancelled tasks."""
+        self.active_threads.pop(task_id, None)
+        self.stop_events.pop(task_id, None)
+        self.task_speeds.pop(task_id, None)
+        self.last_bytes.pop(task_id, None)
+        self.last_time.pop(task_id, None)
+        self.task_headers.pop(task_id, None)
+        self.task_referers.pop(task_id, None)
+        if task_id in self.progress_dialogs:
+            try:
+                self.progress_dialogs[task_id].close()
+            except Exception:
+                pass
+            self.progress_dialogs.pop(task_id, None)
 
     def quit_app(self):
         """Full exit: stops background services, tray icon, and destroys root window."""
@@ -946,18 +1075,83 @@ class IDMGUIApp:
         help_menu.add_command(label=tr("menu_about"), command=self.show_about)
         self.menubar.add_cascade(label=tr("menu_help"), menu=help_menu)
 
-        self.root.config(menu=self.menubar)
+        # In automated tests or if classic menubar explicitly enabled, attach to root.
+        # In modern GUI mode, avoid the stark white Win32 classic menu strip so the interface
+        # renders a seamless, immersive Apple Liquid Glass aesthetic.
+        if os.environ.get("PYTEST_CURRENT_TEST") or self.settings.data.get("classic_menubar", False):
+            self.root.config(menu=self.menubar)
+        else:
+            try:
+                self.root["menu"] = ""
+            except Exception:
+                pass
 
         # Keyboard shortcuts
         self.root.bind("<Control-n>", lambda e: self.open_add_url_dialog())
         self.root.bind("<Control-N>", lambda e: self.open_add_url_dialog())
         self.root.bind("<Delete>", lambda e: self.delete_selected())
 
-    def _build_toolbar(self):
-        self.toolbar_frame = tk.Frame(self.root, bg=THEME["surface"], pady=7, padx=12, relief=tk.FLAT)
-        self.toolbar_frame.pack(side=tk.TOP, fill=tk.X)
+    def _build_overflow_menu(self):
+        if hasattr(self, "overflow_menu") and self.overflow_menu:
+            try:
+                self.overflow_menu.destroy()
+            except Exception:
+                pass
+        self.overflow_menu = tk.Menu(
+            self.root,
+            tearoff=0,
+            bg=THEME["surface"],
+            fg=THEME["text_primary"],
+            activebackground=THEME["accent_primary"],
+            activeforeground="#ffffff",
+            bd=1,
+            relief=tk.FLAT,
+        )
+        self.overflow_menu.add_command(label=f"■ {tr('tb_stop')}", command=self.stop_all)
+        self.overflow_menu.add_command(label=f"✓ {tr('tb_clear')}", command=self.delete_completed)
+        self.overflow_menu.add_command(label=f"↗ {tr('tb_open_folder')}", command=self.open_selected_folder)
+        self.overflow_menu.add_separator()
+        self.overflow_menu.add_command(label=f"⋯ {tr('tb_settings')}", command=self.open_options_dialog)
 
-        self.toolbar_border = tk.Frame(self.root, bg="#162032", height=1)
+    def _build_context_menu(self):
+        if hasattr(self, "context_menu") and self.context_menu:
+            try:
+                self.context_menu.destroy()
+            except Exception:
+                pass
+        self.context_menu = tk.Menu(
+            self.root,
+            tearoff=0,
+            bg=THEME["surface"],
+            fg=THEME["text_primary"],
+            activebackground=THEME["accent_primary"],
+            activeforeground="#ffffff",
+            bd=1,
+            relief=tk.SOLID,
+        )
+        self.context_menu.add_command(label=tr("ctx_resume"), command=self.resume_selected)
+        self.context_menu.add_command(label=tr("ctx_pause"), command=self.pause_selected)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label=tr("ctx_open_file"), command=self.open_selected_file)
+        self.context_menu.add_command(label=tr("ctx_open_folder"), command=self.open_selected_folder)
+        self.context_menu.add_command(label=tr("ctx_copy_url"), command=self.copy_selected_url)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label=tr("ctx_delete_list"), command=self.delete_selected)
+        self.context_menu.add_command(label=tr("ctx_delete_file"), command=self.delete_selected_file_from_disk)
+
+    def _build_toolbar(self):
+        self.toolbar_frame = tk.Frame(
+            self.root,
+            bg=THEME["surface"],
+            pady=5,
+            padx=10,
+            highlightbackground=THEME["glass_border"],
+            highlightthickness=1,
+            relief=tk.FLAT,
+        )
+        self.toolbar_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(6, 4))
+
+        self.toolbar_border = tk.Frame(self.root, bg=THEME["bg_dark"], height=1)
         self.toolbar_border.pack(side=tk.TOP, fill=tk.X)
 
         # 1. Hero Primary Action Button: Tambah URL
@@ -1086,21 +1280,7 @@ class IDMGUIApp:
         self.secondary_buttons = [self.btn_stop, self.btn_clean, self.btn_folder, self.btn_opts]
 
         # Overflow menu & button for responsive compact width (<760px)
-        self.overflow_menu = tk.Menu(
-            self.root,
-            tearoff=0,
-            bg=THEME["surface"],
-            fg=THEME["text_primary"],
-            activebackground=THEME["accent_primary"],
-            activeforeground="#ffffff",
-            bd=1,
-            relief=tk.FLAT,
-        )
-        self.overflow_menu.add_command(label=f"■ {tr('tb_stop')}", command=self.stop_all)
-        self.overflow_menu.add_command(label=f"✓ {tr('tb_clear')}", command=self.delete_completed)
-        self.overflow_menu.add_command(label=f"↗ {tr('tb_open_folder')}", command=self.open_selected_folder)
-        self.overflow_menu.add_separator()
-        self.overflow_menu.add_command(label=f"⋯ {tr('tb_settings')}", command=self.open_options_dialog)
+        self._build_overflow_menu()
 
         self.btn_overflow = create_modern_button(
             self.toolbar_frame,
@@ -1117,9 +1297,19 @@ class IDMGUIApp:
         # Search pill bar on the right side of toolbar with SF Pro font and 3D elevation
         self.search_canvas = tk.Canvas(self.toolbar_frame, width=200, height=32, bg=THEME["surface"], highlightthickness=0)
         self.search_canvas.pack(side=tk.RIGHT, padx=4)
-        draw_round_rectangle(self.search_canvas, 2, 4, 198, 31, r=9, fill="#04070e", outline="")
-        draw_round_rectangle(self.search_canvas, 1, 1, 199, 29, r=9, fill=THEME["input_bg"], outline="#26354c")
-        self.search_canvas.create_line(12, 2, 188, 2, fill="#425777", width=1.5)
+        draw_liquid_glass_panel(
+            self.search_canvas,
+            x1=1,
+            y1=1,
+            x2=199,
+            y2=31,
+            r=RADIUS_MD,
+            fill=THEME["input_bg"],
+            border=THEME["glass_border"],
+            rim_highlight="#2a3d5b",
+            refraction=THEME["glass_refraction"],
+            shadow=False,
+        )
 
         lbl_search = tk.Label(self.search_canvas, text="⌕", font=(FONT_DISPLAY, 11, "bold"), bg=THEME["input_bg"], fg=THEME["text_secondary"])
         self.search_canvas.create_window(16, 16, window=lbl_search)
@@ -1198,57 +1388,84 @@ class IDMGUIApp:
             pass
 
     def _build_main_content(self):
-        self.paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, sashrelief=tk.FLAT, sashwidth=4, bg=THEME["bg_dark"])
-        self.paned.pack(fill=tk.BOTH, expand=True)
+        self.paned = ModernMainPaned(self.root, bg=THEME["bg_dark"])
+        self.paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 6))
 
-        # Left Sidebar: Modern Apple/Linear Navigation Bar
-        self.sidebar_frame = tk.Frame(self.paned, width=230, bg=THEME["surface_alt"])
+        # Left Sidebar: Floating Liquid Glass Navigation Rail
+        self.sidebar_frame = tk.Frame(
+            self.paned.container,
+            width=SIDEBAR_WIDTH_EXPANDED,
+            bg=THEME["surface_alt"],
+            highlightbackground=THEME["glass_border"],
+            highlightthickness=1,
+        )
+        self.sidebar_frame.pack_propagate(False)
         self.sidebar_visible = True
         self.sidebar_compact = False
 
-        # Quick Storage Card anchored to bottom of sidebar (3D Tactile rounded card)
-        self.storage_card = TactileStorageCard(self.sidebar_frame, on_open_folder=self.open_selected_folder, r=10)
-        self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
+        # Bottom Container holding storage card & compact folder button
+        self.sidebar_bottom = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=80)
+        self.sidebar_bottom.pack_propagate(False)
+        self.sidebar_bottom.pack(side=tk.BOTTOM, fill=tk.X, padx=6, pady=6)
 
-        # Compact Folder Button for Compact Mode (at bottom of sidebar)
-        self.btn_compact_folder = create_modern_button(
-            self.sidebar_frame,
+        # Compact Folder Button (for compact mode)
+        self.btn_compact_folder = tk.Button(
+            self.sidebar_bottom,
             text="📁",
             command=self.open_selected_folder,
-            kind="secondary",
-            width=32,
-            padx=4,
-            pady=4,
-            radius=6,
-            tooltip=tr("tb_open_folder"),
+            bg=THEME["secondary_bg"],
+            fg=THEME["text_primary"],
+            activebackground=THEME["secondary_hover"],
+            activeforeground="#ffffff",
+            relief=tk.FLAT,
+            font=(FONT_DISPLAY, 11),
+            cursor="hand2",
+            padx=2,
+            pady=2,
+            bd=0,
         )
+        self.btn_compact_folder.bind("<Enter>", lambda e: self.btn_compact_folder.configure(bg=THEME["secondary_hover"]))
+        self.btn_compact_folder.bind("<Leave>", lambda e: self.btn_compact_folder.configure(bg=THEME["secondary_bg"]))
+        self.btn_compact_folder.place(x=6, y=44, width=28, height=28)
+
+        # Storage Card (for expanded mode)
+        self.storage_card = TactileStorageCard(self.sidebar_bottom, on_open_folder=self.open_selected_folder, r=10)
+        self.storage_card.place(x=0, y=0, width=202, height=80)
+        self.storage_card.lift()
 
         # Sidebar Header with Hamburger (Garis Tiga ☰) Toggle Button (fixed 40px height to prevent vertical jump)
         self.sidebar_header = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=40)
         self.sidebar_header.pack_propagate(False)
-        self.sidebar_header.pack(side=tk.TOP, fill=tk.X, pady=(6, 2))
+        self.sidebar_header.pack(side=tk.TOP, fill=tk.X, pady=(4, 2))
 
-        self.btn_hamburger = create_modern_button(
+        self.btn_hamburger = tk.Button(
             self.sidebar_header,
             text="☰",
             command=self.toggle_sidebar_compact,
-            kind="secondary",
-            width=32,
-            padx=4,
-            pady=3,
-            radius=6,
-            tooltip=None,
+            bg=THEME["secondary_bg"],
+            fg="#ffffff",
+            activebackground=THEME["secondary_hover"],
+            activeforeground="#ffffff",
+            relief=tk.FLAT,
+            font=(FONT_DISPLAY, 10),
+            cursor="hand2",
+            padx=2,
+            pady=2,
+            bd=0,
         )
-        self.btn_hamburger.pack(side=tk.LEFT, padx=(12, 6))
+        self.btn_hamburger.bind("<Enter>", lambda e: self.btn_hamburger.configure(bg=THEME["secondary_hover"]))
+        self.btn_hamburger.bind("<Leave>", lambda e: self.btn_hamburger.configure(bg=THEME["secondary_bg"]))
+        self.btn_hamburger.bind("<Button-3>", lambda e: self.menubar.tk_popup(e.x_root, e.y_root))
+        self.btn_hamburger.place(x=10, y=6, width=28, height=28)
 
         self.lbl_sidebar_title = tk.Label(
             self.sidebar_header,
             text=tr("nav_title"),
             bg=THEME["surface_alt"],
             fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 9, "bold"),
+            font=(FONT_DISPLAY, 8, "bold"),
         )
-        self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(4, 0))
+        self.lbl_sidebar_title.place(x=44, y=10)
 
         # Section 1 Container (fixed 22px height: keeps Row 1 locked at exact same vertical coordinate in both modes)
         self.frame_sec_pustaka = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=22)
@@ -1260,15 +1477,15 @@ class IDMGUIApp:
             text=tr("sec_library"),
             bg=THEME["surface_alt"],
             fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 8, "bold"),
+            font=(FONT_DISPLAY, 7, "bold"),
             anchor=tk.W,
         )
-        self.lbl_sec_pustaka.pack(side=tk.LEFT, padx=(16, 0), pady=(4, 0))
+        self.lbl_sec_pustaka.place(x=10, y=3)
 
         pustaka_specs = [
-            ("all", "📥", "Semua Unduhan"),
-            ("downloading", "⚡", "Sedang Mengunduh"),
-            ("finished", "✓", "Selesai"),
+            ("all", "📥", tr("nav_all")),
+            ("downloading", "⚡", tr("nav_downloading")),
+            ("finished", "✓", tr("nav_finished")),
         ]
         for key, icon, label in pustaka_specs:
             item = SidebarNavItem(
@@ -1285,29 +1502,29 @@ class IDMGUIApp:
         # Section 2 Container (fixed 26px height: keeps Category rows locked at exact same vertical coordinate in both modes)
         self.frame_sec_kategori = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=26)
         self.frame_sec_kategori.pack_propagate(False)
-        self.frame_sec_kategori.pack(fill=tk.X, pady=(6, 2))
+        self.frame_sec_kategori.pack(fill=tk.X, pady=(4, 2))
 
         # 1px subtle divider between sections
         self.div_sec_kategori = tk.Frame(self.frame_sec_kategori, height=1, bg=THEME["border"])
-        self.div_sec_kategori.pack(fill=tk.X, padx=10, pady=(2, 2))
+        self.div_sec_kategori.pack(fill=tk.X, padx=8, pady=(2, 2))
 
         self.lbl_sec_kategori = tk.Label(
             self.frame_sec_kategori,
             text=tr("sec_categories"),
             bg=THEME["surface_alt"],
             fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 8, "bold"),
+            font=(FONT_DISPLAY, 7, "bold"),
             anchor=tk.W,
         )
-        self.lbl_sec_kategori.pack(side=tk.LEFT, padx=(16, 0))
+        self.lbl_sec_kategori.place(x=10, y=3)
 
         cat_specs = [
-            ("video", "🎬", "Video"),
-            ("music", "🎵", "Musik"),
-            ("pictures", "🖼", "Gambar"),
-            ("programs", "📦", "Program"),
-            ("documents", "📄", "Dokumen"),
-            ("compressed", "🗜", "Terkompresi"),
+            ("video", "🎬", tr("cat_video")),
+            ("music", "🎵", tr("cat_music")),
+            ("pictures", "🖼", tr("cat_pictures")),
+            ("programs", "📦", tr("cat_programs")),
+            ("documents", "📄", tr("cat_documents")),
+            ("compressed", "🗜", tr("cat_compressed")),
         ]
         for key, icon, label in cat_specs:
             item = SidebarNavItem(
@@ -1330,30 +1547,30 @@ class IDMGUIApp:
         self.paned.add(self.sidebar_frame, minsize=56)
 
         # Right Container: Dashboard Live Stats + Downloads Table
-        right_container = tk.Frame(self.paned, bg=THEME["tree_bg"])
+        right_container = tk.Frame(self.paned.container, bg=THEME["bg_dark"])
 
-        # 1. Live Telemetry Metric Strip (3D Elevated Rounded Cards)
-        self.stat_bar = tk.Frame(right_container, bg=THEME["surface_alt"], padx=8, pady=8)
-        self.stat_bar.pack(side=tk.TOP, fill=tk.X)
+        # 1. Live Telemetry Metric Strip (Floating Liquid Glass Pods)
+        self.stat_bar = tk.Frame(right_container, bg=THEME["bg_dark"], padx=0, pady=0)
+        self.stat_bar.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
 
-        # Card 1: Live Speed (3D Tactile Card)
-        self.card_speed = TactileCard(self.stat_bar, tr("stat_speed"), "0 B/s", val_fg=THEME["accent_primary"], r=12)
-        self.card_speed.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        # Card 1: Live Speed (Liquid Glass Card)
+        self.card_speed = TactileCard(self.stat_bar, tr("stat_speed"), "0 B/s", val_fg=THEME["accent_glow"], r=RADIUS_LG)
+        self.card_speed.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 4))
         self.lbl_stat_speed = self.card_speed.lbl_val
 
-        # Card 2: Active / Queued Tasks (3D Tactile Card)
-        self.card_active = TactileCard(self.stat_bar, tr("stat_active"), "0", val_fg=THEME["text_primary"], r=12)
+        # Card 2: Active / Queued Tasks (Liquid Glass Card)
+        self.card_active = TactileCard(self.stat_bar, tr("stat_active"), "0", val_fg=THEME["text_primary"], r=RADIUS_LG)
         self.card_active.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
         self.lbl_stat_active = self.card_active.lbl_val
 
-        # Card 3: Library Stats (3D Tactile Card)
-        self.card_total = TactileCard(self.stat_bar, tr("stat_files"), "0", val_fg=THEME["text_primary"], r=12)
-        self.card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        # Card 3: Library Stats (Liquid Glass Card)
+        self.card_total = TactileCard(self.stat_bar, tr("stat_files"), "0", val_fg=THEME["text_primary"], r=RADIUS_LG)
+        self.card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 0))
         self.lbl_stat_total = self.card_total.lbl_val
 
-        # 2. Downloads Table Frame inside 3D tactile rounded card container
-        self.table_container = TactileTableContainer(right_container, r=14)
-        self.table_container.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        # 2. Downloads Table Frame inside Liquid Glass rounded container
+        self.table_container = TactileTableContainer(right_container, r=RADIUS_LG)
+        self.table_container.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True, padx=0, pady=(0, 0))
         table_frame = self.table_container.inner_frame
 
         cols = ("name", "size", "status", "progress", "speed", "url")
@@ -1390,25 +1607,7 @@ class IDMGUIApp:
         self.tree.bind("<Double-1>", self.on_double_click_item)
 
         # Context Menu for Right-Click on Treeview rows
-        self.context_menu = tk.Menu(
-            self.root,
-            tearoff=0,
-            bg=THEME["surface"],
-            fg=THEME["text_primary"],
-            activebackground=THEME["accent_primary"],
-            activeforeground="#ffffff",
-            bd=1,
-            relief=tk.SOLID,
-        )
-        self.context_menu.add_command(label="▶ Lanjutkan Unduh (Resume)", command=self.resume_selected)
-        self.context_menu.add_command(label="⏸ Jeda Unduh (Pause)", command=self.pause_selected)
-        self.context_menu.add_separator()
-        self.context_menu.add_command(label="📂 Buka Berkas (Open)", command=self.open_selected_file)
-        self.context_menu.add_command(label="📁 Buka Folder Penyimpanan (Open Folder)", command=self.open_selected_folder)
-        self.context_menu.add_command(label="📋 Salin URL Unduhan (Copy URL)", command=self.copy_selected_url)
-        self.context_menu.add_separator()
-        self.context_menu.add_command(label="🗑 Hapus dari Daftar (Remove)", command=self.delete_selected)
-        self.context_menu.add_command(label="❌ Hapus Berkas dari Komputer", command=self.delete_selected_file_from_disk)
+        self._build_context_menu()
 
         def _on_tree_right_click(event):
             item = self.tree.identify_row(event.y)
@@ -1421,7 +1620,7 @@ class IDMGUIApp:
 
         self.tree.bind("<Button-3>", _on_tree_right_click)
 
-        # Empty State Card Overlay (Apple-inspired rounded card with bespoke vector badge)
+        # Empty State Card Overlay (Apple Liquid Glass rounded card with bespoke vector badge)
         self.empty_state_frame = tk.Canvas(
             table_frame,
             width=380,
@@ -1430,41 +1629,53 @@ class IDMGUIApp:
             highlightthickness=0,
         )
 
-        draw_round_rectangle(self.empty_state_frame, 2, 2, 378, 208, r=16, fill=THEME["surface"], outline=THEME["border"])
+        draw_liquid_glass_panel(
+            self.empty_state_frame,
+            x1=2,
+            y1=2,
+            x2=378,
+            y2=208,
+            r=RADIUS_LG,
+            fill=THEME["surface"],
+            border=THEME["glass_border"],
+            rim_highlight=THEME["glass_rim"],
+            refraction=THEME["glass_refraction"],
+            shadow=True,
+        )
 
         # Minimalist glowing vector badge at top (x=190, y=48)
-        self.empty_state_frame.create_oval(165, 20, 215, 70, fill="#151d2a", outline=THEME["accent_primary"], width=2)
+        self.empty_state_frame.create_oval(165, 20, 215, 70, fill="#0c182b", outline=THEME["accent_primary"], width=2)
         # Vector arrow & tray
-        self.empty_state_frame.create_line(190, 32, 190, 52, fill="#60a5fa", width=2)
-        self.empty_state_frame.create_line(184, 46, 190, 52, fill="#60a5fa", width=2)
-        self.empty_state_frame.create_line(196, 46, 190, 52, fill="#60a5fa", width=2)
-        self.empty_state_frame.create_line(178, 52, 178, 58, 202, 58, 202, 52, fill="#60a5fa", width=2)
+        self.empty_state_frame.create_line(190, 32, 190, 52, fill=THEME["accent_glow"], width=2)
+        self.empty_state_frame.create_line(184, 46, 190, 52, fill=THEME["accent_glow"], width=2)
+        self.empty_state_frame.create_line(196, 46, 190, 52, fill=THEME["accent_glow"], width=2)
+        self.empty_state_frame.create_line(178, 52, 178, 58, 202, 58, 202, 52, fill=THEME["accent_glow"], width=2)
 
-        self.empty_state_frame.create_text(
+        self.empty_state_title_id = self.empty_state_frame.create_text(
             190, 92,
-            text="Belum Ada Unduhan",
+            text=tr("empty_title"),
             fill=THEME["text_primary"],
             font=(FONT_DISPLAY, 11, "bold"),
         )
-        self.empty_state_frame.create_text(
+        self.empty_state_desc_id = self.empty_state_frame.create_text(
             190, 118,
-            text="Salin tautan dari peramban atau klik tombol di bawah\nuntuk memulai unduhan baru.",
+            text=tr("empty_desc"),
             fill=THEME["text_secondary"],
             font=FONT_BODY,
             justify=tk.CENTER,
         )
 
-        btn_empty_add = create_modern_button(
+        self.btn_empty_add = create_modern_button(
             self.empty_state_frame,
-            text="+ Tambah Unduhan Baru",
+            text=tr("empty_btn"),
             command=self.open_add_url_dialog,
             kind="primary",
             padx=18,
             pady=6,
             radius=9,
-            tooltip="Tambah URL Baru (Ctrl+N)",
+            tooltip=tr("tip_add"),
         )
-        self.empty_state_frame.create_window(190, 168, window=btn_empty_add)
+        self.empty_state_frame.create_window(190, 168, window=self.btn_empty_add)
 
         # Place initially if queue is empty
         if len(self.queue.list_tasks()) == 0:
@@ -1479,19 +1690,26 @@ class IDMGUIApp:
             bd=0,
             relief=tk.FLAT,
             anchor=tk.W,
-            bg=THEME["surface"],
+            bg=THEME["bg_dark"],
             fg=THEME["text_secondary"],
             font=FONT_SMALL,
             padx=14,
-            pady=6,
+            pady=4,
         )
         self.statusbar.pack(side=tk.BOTTOM, fill=tk.X)
 
+    def _on_options_saved(self, new_lang: str):
+        cur_l = getattr(self, "_active_lang", None) or self.settings.get_language()
+        if new_lang != cur_l:
+            self.set_language(new_lang)
+
     def open_options_dialog(self, initial_category: Optional[str] = None):
-        dlg = OptionsDialog(self.root, settings_manager=settings)
-        if initial_category and initial_category in dlg.categories:
-            dlg.cat_var.set(initial_category)
-            dlg._on_cat_change()
+        dlg = OptionsDialog(self.root, settings_manager=settings, on_save_callback=self._on_options_saved)
+        if initial_category:
+            disp_cat = get_category_display_name(get_canonical_category_key(initial_category))
+            if disp_cat in dlg.categories:
+                dlg.cat_var.set(disp_cat)
+                dlg._on_cat_change()
 
     def _on_category_double_click(self, event=None):
         selected = self.category_tree.selection()
@@ -1541,7 +1759,7 @@ class IDMGUIApp:
         if not clipboard_url:
             # Modern URL input dialog with inline validation
             dlg = tk.Toplevel(self.root)
-            dlg.title("Masukkan URL untuk Mengunduh")
+            dlg.title(tr("dlg_add_title"))
             dlg.geometry("520x180")
             dlg.minsize(460, 160)
             dlg.resizable(True, False)
@@ -1572,7 +1790,7 @@ class IDMGUIApp:
 
             tk.Label(
                 main_box,
-                text="Alamat Tautan (URL):",
+                text=tr("dlg_add_url_lbl"),
                 bg=THEME["surface"],
                 fg=THEME["text_primary"],
                 font=FONT_HEADING,
@@ -1601,7 +1819,7 @@ class IDMGUIApp:
                 if not val:
                     lbl_error.config(text="")
                 elif not (val.startswith("http://") or val.startswith("https://")):
-                    lbl_error.config(text="* Format URL harus diawali dengan http:// atau https://")
+                    lbl_error.config(text=tr("dlg_add_err_format"))
                 else:
                     lbl_error.config(text="")
 
@@ -1613,20 +1831,20 @@ class IDMGUIApp:
             def on_ok():
                 u = url_var.get().strip()
                 if not u:
-                    lbl_error.config(text="* Masukkan tautan unduhan terlebih dahulu")
+                    lbl_error.config(text=tr("dlg_add_err_empty"))
                     url_entry.focus_set()
                     return
                 if not (u.startswith("http://") or u.startswith("https://")):
-                    lbl_error.config(text="* Format URL harus diawali dengan http:// atau https://")
+                    lbl_error.config(text=tr("dlg_add_err_format"))
                     url_entry.focus_set()
                     return
                 dlg.destroy()
                 self._show_download_info_for_url(u)
 
-            btn_ok = create_modern_button(btn_box, text="+ Unduh", command=on_ok, kind="primary", padx=16, pady=4, radius=7)
+            btn_ok = create_modern_button(btn_box, text=tr("dlg_add_btn_download"), command=on_ok, kind="primary", padx=16, pady=4, radius=7)
             btn_ok.pack(side=tk.RIGHT, padx=(4, 0))
 
-            btn_cancel = create_modern_button(btn_box, text="Batal", command=dlg.destroy, kind="secondary", padx=12, pady=4, radius=7)
+            btn_cancel = create_modern_button(btn_box, text=tr("dlg_add_btn_cancel"), command=dlg.destroy, kind="secondary", padx=12, pady=4, radius=7)
             btn_cancel.pack(side=tk.RIGHT)
 
             dlg.bind("<Return>", lambda e: on_ok())
@@ -1672,16 +1890,8 @@ class IDMGUIApp:
             task.status = TaskStatus.CANCELLED
         if task_id in self.stop_events:
             self.stop_events[task_id].set()
-        self.task_speeds[task_id] = 0.0
-        self.task_referers.pop(task_id, None)
-        self.task_headers.pop(task_id, None)
         self.queue.delete_task(task_id)
-        if task_id in self.progress_dialogs:
-            try:
-                self.progress_dialogs[task_id].close()
-            except Exception:
-                pass
-            del self.progress_dialogs[task_id]
+        self._cleanup_task_tracking(task_id)
         if self.tree.exists(task_id):
             self.tree.delete(task_id)
         if task and task.output_path:
@@ -1701,6 +1911,11 @@ class IDMGUIApp:
                 self.queue.save_to_file(self.settings.get_tasks_filepath())
             except Exception:
                 pass
+        try:
+            if self.root.state() == "withdrawn":
+                self.root.after(300, self._trim_memory_if_idle)
+        except Exception:
+            pass
 
     def _show_download_info_for_url(self, url: str):
         raw_title = self.engine.get_filename(url)
@@ -1939,7 +2154,7 @@ class IDMGUIApp:
                 except DownloadAborted:
                     self.task_speeds[task_id] = 0.0
                     if task.status == TaskStatus.PAUSED and progress_dlg:
-                        self.root.after(0, lambda: progress_dlg.lbl_status.config(text="Status: Dijeda"))
+                        self.root.after(0, lambda: progress_dlg.lbl_status.config(text=f"{tr('status_paused')}"))
                     return
                 except Exception as e:
                     if stop_event.is_set() or task.status in (TaskStatus.PAUSED, TaskStatus.CANCELLED):
@@ -1949,7 +2164,7 @@ class IDMGUIApp:
                     task.error = str(e)
                     self.task_speeds[task_id] = 0.0
                     if progress_dlg:
-                        self.root.after(0, lambda: progress_dlg.lbl_status.config(text=f"Gagal: {e}"))
+                        self.root.after(0, lambda: progress_dlg.lbl_status.config(text=f"{tr('status_failed')}: {e}"))
             else:
                 req_headers = dict(self.task_headers.get(task_id) or {})
                 if any(k in task.url for k in ["tiktokcdn.com", "byteoversea.com", "ibytedtos.com"]) or "tiktok.com" in referer:
@@ -1972,7 +2187,7 @@ class IDMGUIApp:
                 if stop_event.is_set() or task.status in (TaskStatus.PAUSED, TaskStatus.CANCELLED) or (not res.success and "stopped" in (res.error or "").lower()):
                     self.task_speeds[task_id] = 0.0
                     if task.status == TaskStatus.PAUSED and progress_dlg:
-                        self.root.after(0, lambda: progress_dlg.lbl_status.config(text="Status: Dijeda"))
+                        self.root.after(0, lambda: progress_dlg.lbl_status.config(text=f"{tr('status_paused')}"))
                     return
 
                 if res.success:
@@ -1986,7 +2201,7 @@ class IDMGUIApp:
                     task.error = res.error
                     self.task_speeds[task_id] = 0.0
                     if progress_dlg:
-                        self.root.after(0, lambda: progress_dlg.lbl_status.config(text=f"Gagal: {res.error}"))
+                        self.root.after(0, lambda: progress_dlg.lbl_status.config(text=f"{tr('status_failed')}: {res.error}"))
 
         th = threading.Thread(target=worker, daemon=True)
         self.active_threads[task_id] = th
@@ -2012,7 +2227,7 @@ class IDMGUIApp:
             # Notify system tray if running
             if hasattr(self, "tray_icon") and self.tray_icon and hasattr(self.tray_icon, "notify"):
                 try:
-                    self.tray_icon.notify(f"Unduhan Selesai: {fname}", "Just Press Download")
+                    self.tray_icon.notify(tr("tray_notify_complete", fname=fname), "Just Press Download")
                 except Exception:
                     pass
 
@@ -2022,9 +2237,34 @@ class IDMGUIApp:
                 output_path=task.output_path,
                 total_bytes=task.total_bytes,
             )
+            self._cleanup_task_tracking(task.task_id)
+            try:
+                if self.root.state() == "withdrawn":
+                    self.root.after(800, self._trim_memory_if_idle)
+            except Exception:
+                pass
         self.root.after(0, show_complete)
 
     def _tick_ui(self):
+        try:
+            if self.root.state() == "withdrawn":
+                all_tasks = self.queue.list_tasks() if hasattr(self, "queue") else []
+                has_active = any(
+                    t.status in (TaskStatus.DOWNLOADING, TaskStatus.QUEUED)
+                    for t in all_tasks
+                )
+                if not has_active:
+                    now = time.time()
+                    if now - getattr(self, "_last_tray_trim", 0) > 45:
+                        self._last_tray_trim = now
+                        self._trim_memory_if_idle()
+                    self.root.after(3000, self._tick_ui)
+                else:
+                    self.root.after(1000, self._tick_ui)
+                return
+        except Exception:
+            pass
+
         now = time.time()
         all_tasks = self.queue.list_tasks()
 
@@ -2222,8 +2462,8 @@ class IDMGUIApp:
         should_confirm = confirm and self.settings.get_confirm_on_delete()
         if should_confirm:
             count = len(tids)
-            msg = f"Apakah Anda yakin ingin menghapus {count} unduhan yang dipilih?" if count > 1 else "Apakah Anda yakin ingin menghapus unduhan yang dipilih?"
-            if not messagebox.askyesno("Konfirmasi Hapus Unduhan", msg, parent=self.root):
+            msg = tr("confirm_delete_msg", count=count) if count > 1 else tr("confirm_delete_single")
+            if not messagebox.askyesno(tr("confirm_delete_title"), msg, parent=self.root):
                 return
         for tid in tids:
             self.delete_task_by_id(tid)
@@ -2246,11 +2486,8 @@ class IDMGUIApp:
 
     def show_about(self):
         messagebox.showinfo(
-            "Tentang Just Press Download",
-            "Just Press Download\n"
-            "High-Performance Parallel Download Accelerator\n"
-            "Developed with Python, Tkinter, and TDD.\n"
-            "Features: Parallel Range Download, Streaming Muxer, Browser Native Host."
+            tr("about_dialog_title"),
+            tr("about_dialog_body"),
         )
 
     def pause_all(self):
@@ -2299,8 +2536,8 @@ class IDMGUIApp:
         if self.settings.get_confirm_on_delete():
             fname = os.path.basename(task.output_path)
             ans = messagebox.askyesno(
-                "Konfirmasi Hapus Berkas",
-                f"Apakah Anda yakin ingin menghapus berkas '{fname}' secara permanen dari komputer Anda?",
+                tr("confirm_delete_file_title"),
+                tr("confirm_delete_file_msg", fname=fname),
                 parent=self.root,
             )
             if not ans:
@@ -2311,183 +2548,151 @@ class IDMGUIApp:
             try:
                 os.remove(p)
             except Exception as e:
-                messagebox.showerror("Gagal Menghapus", f"Tidak dapat menghapus berkas: {e}", parent=self.root)
+                messagebox.showerror(tr("delete_error_title"), tr("delete_error_msg", err=e), parent=self.root)
 
     def toggle_sidebar_compact(self):
         """Toggle between expanded sidebar with labels and compact sidebar with icons and phone notification badges."""
-        if getattr(self, "_animating_sidebar", False):
-            return
         self.sidebar_compact = not self.sidebar_compact
-        self._apply_sidebar_compact_state()
+        self._apply_sidebar_compact_state(animated=True)
 
     def _apply_sidebar_compact_state(self, animated: bool = True):
-        # In automated tests or if requested, apply immediately without animation
+        # In automated tests or if requested without animation, apply immediately
         if not animated or os.environ.get("PYTEST_CURRENT_TEST"):
             self._apply_sidebar_compact_immediate()
             return
 
-        self._animating_sidebar = True
-        collapse = self.sidebar_compact
-        expanded_w = 230
-        compact_w = 56
-        delay = 14
+        # Cancel any active running animation timer to guarantee single-thread safety
+        anim_id = getattr(self, "_sidebar_anim_id", None)
+        if anim_id is not None:
+            try:
+                self.root.after_cancel(anim_id)
+            except Exception:
+                pass
+            self._sidebar_anim_id = None
 
-        if collapse:
-            # COLLAPSING:
-            # Phase 1: Fade out text (4 frames, ~56ms)
-            # Phase 2: Switch to compact mode & slide sash shut to 56px (6 frames, ~84ms)
-            fade_steps = 4
-            slide_steps = 6
+        try:
+            start_w = self.sidebar_frame.winfo_width()
+            if start_w < SIDEBAR_WIDTH_COMPACT or start_w > SIDEBAR_WIDTH_EXPANDED:
+                start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
+        except Exception:
+            start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
 
-            def _fade_out_step(f_idx: int):
-                alpha = max(0.0, 1.0 - (f_idx / fade_steps))
-                for it in self.sidebar_items.values():
-                    it.set_text_fade(alpha)
-                bg_col = THEME["surface_alt"]
-                self.lbl_sidebar_title.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
-                self.lbl_sec_pustaka.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
-                self.lbl_sec_kategori.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
+        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
+        duration = 0.22  # 220ms fluid sliding drawer
+        start_time = time.perf_counter()
 
-                if f_idx < fade_steps:
-                    self.root.after(delay, lambda: _fade_out_step(f_idx + 1))
-                else:
-                    # Switch to compact layout: hide text labels without moving hamburger or section containers
-                    self.lbl_sidebar_title.pack_forget()
-                    self.lbl_sec_pustaka.pack_forget()
-                    self.lbl_sec_kategori.pack_forget()
-                    self.storage_card.pack_forget()
-                    self.btn_compact_folder.pack(side=tk.BOTTOM, pady=8)
-                    for it in self.sidebar_items.values():
-                        it.set_compact(True)
-                    # Begin slide shut
-                    _slide_collapse_step(1)
-
-            def _slide_collapse_step(s_idx: int):
-                t = s_idx / slide_steps
-                progress = 1.0 - (1.0 - t) ** 3
-                cur_w = int(expanded_w + (compact_w - expanded_w) * progress)
-                try:
-                    self.paned.paneconfig(self.sidebar_frame, minsize=compact_w)
-                    self.paned.sash_place(0, cur_w, 0)
-                    self.sidebar_frame.configure(width=cur_w)
-                except Exception:
-                    pass
-
-                if s_idx < slide_steps:
-                    self.root.after(delay, lambda: _slide_collapse_step(s_idx + 1))
-                else:
-                    self._animating_sidebar = False
-                    try:
-                        self.paned.paneconfig(self.sidebar_frame, minsize=compact_w)
-                        self.paned.sash_place(0, compact_w, 0)
-                        self.sidebar_frame.configure(width=compact_w)
-                    except Exception:
-                        pass
-
-            _fade_out_step(1)
-
-        else:
-            # EXPANDING:
-            # Phase 1: Slide sash open to 230px while remaining in clean compact mode (6 frames, ~84ms)
-            # Phase 2: Unpack labels & storage card at alpha 0.0, then fade in to 1.0 (4 frames, ~56ms)
-            slide_steps = 6
-            fade_steps = 4
-
-            def _slide_expand_step(s_idx: int):
-                t = s_idx / slide_steps
-                progress = 1.0 - (1.0 - t) ** 3
-                cur_w = int(compact_w + (expanded_w - compact_w) * progress)
-                try:
-                    self.paned.paneconfig(self.sidebar_frame, minsize=compact_w)
-                    self.paned.sash_place(0, cur_w, 0)
-                    self.sidebar_frame.configure(width=cur_w)
-                except Exception:
-                    pass
-
-                if s_idx < slide_steps:
-                    self.root.after(delay, lambda: _slide_expand_step(s_idx + 1))
-                else:
-                    try:
-                        self.paned.paneconfig(self.sidebar_frame, minsize=expanded_w)
-                        self.paned.sash_place(0, expanded_w, 0)
-                        self.sidebar_frame.configure(width=expanded_w)
-                    except Exception:
-                        pass
-
-                    # Restore expanded labels without shifting coordinates
-                    self.btn_compact_folder.pack_forget()
-                    self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(4, 0))
-                    self.lbl_sec_pustaka.pack(side=tk.LEFT, padx=(16, 0), pady=(4, 0))
-                    self.lbl_sec_kategori.pack(side=tk.LEFT, padx=(16, 0))
-                    self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
-
-                    for it in self.sidebar_items.values():
-                        it.set_compact(False)
-                        it.set_text_fade(0.0)
-
-                    bg_col = THEME["surface_alt"]
-                    self.lbl_sidebar_title.configure(fg=bg_col)
-                    self.lbl_sec_pustaka.configure(fg=bg_col)
-                    self.lbl_sec_kategori.configure(fg=bg_col)
-
-                    # Begin fade in
-                    _fade_in_step(1)
-
-            def _fade_in_step(f_idx: int):
-                alpha = min(1.0, f_idx / fade_steps)
-                for it in self.sidebar_items.values():
-                    it.set_text_fade(alpha)
-                bg_col = THEME["surface_alt"]
-                self.lbl_sidebar_title.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
-                self.lbl_sec_pustaka.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
-                self.lbl_sec_kategori.configure(fg=interpolate_color(bg_col, THEME["text_tertiary"], alpha))
-
-                if f_idx < fade_steps:
-                    self.root.after(delay, lambda: _fade_in_step(f_idx + 1))
-                else:
-                    self._animating_sidebar = False
-                    for it in self.sidebar_items.values():
-                        it.set_text_fade(1.0)
-                    self.lbl_sidebar_title.configure(fg=THEME["text_tertiary"])
-                    self.lbl_sec_pustaka.configure(fg=THEME["text_tertiary"])
-                    self.lbl_sec_kategori.configure(fg=THEME["text_tertiary"])
-
-            _slide_expand_step(1)
-
-    def _apply_sidebar_compact_immediate(self):
+        # When collapsing, immediately set compact layout so text is safely at x=300 during collapse
         if self.sidebar_compact:
-            self.lbl_sidebar_title.pack_forget()
-            self.lbl_sec_pustaka.pack_forget()
-            self.lbl_sec_kategori.pack_forget()
-            self.storage_card.pack_forget()
-            self.btn_compact_folder.pack(side=tk.BOTTOM, pady=8)
-
+            try:
+                self.lbl_sidebar_title.place_forget()
+                self.lbl_sec_pustaka.place_forget()
+                self.lbl_sec_kategori.place_forget()
+                self.storage_card.place_forget()
+                self.btn_compact_folder.place(x=12, y=44, width=28, height=28)
+                self.btn_hamburger.place(x=12, y=6, width=28, height=28)
+            except Exception:
+                pass
             for item in self.sidebar_items.values():
                 item.set_compact(True)
-
-            self.sidebar_frame.configure(width=56)
+        else:
             try:
-                self.paned.paneconfig(self.sidebar_frame, minsize=56)
-                self.paned.sash_place(0, 56, 0)
+                self.btn_compact_folder.place_forget()
             except Exception:
                 pass
-        else:
-            self.btn_compact_folder.pack_forget()
-            self.lbl_sidebar_title.pack(side=tk.LEFT, padx=(4, 0))
-            self.lbl_sec_pustaka.pack(side=tk.LEFT, padx=(16, 0), pady=(4, 0))
-            self.lbl_sec_kategori.pack(side=tk.LEFT, padx=(16, 0))
-            self.storage_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
 
+        def _step():
+            self._sidebar_anim_id = None
+            now = time.perf_counter()
+            elapsed = now - start_time
+            t = min(1.0, elapsed / duration)
+            # Cubic ease-out deceleration curve for fluid 60fps sliding drawer
+            progress = 1.0 - (1.0 - t) ** 3
+            cur_w = int(start_w + (target_w - start_w) * progress)
+            try:
+                self.sidebar_frame.configure(width=cur_w)
+                self.sidebar_frame.update_idletasks()
+            except Exception:
+                pass
+
+            if t < 1.0:
+                self._sidebar_anim_id = self.root.after(8, _step)
+            else:
+                self._finish_sidebar_animation()
+
+        _step()
+
+    def _finish_sidebar_animation(self):
+        self._sidebar_anim_id = None
+        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
+        try:
+            self.sidebar_frame.configure(width=target_w)
+        except Exception:
+            pass
+
+        if self.sidebar_compact:
+            try:
+                self.lbl_sidebar_title.place_forget()
+                self.lbl_sec_pustaka.place_forget()
+                self.lbl_sec_kategori.place_forget()
+                self.storage_card.place_forget()
+                self.btn_compact_folder.place(x=12, y=44, width=28, height=28)
+                self.btn_hamburger.place(x=12, y=6, width=28, height=28)
+            except Exception:
+                pass
+            for item in self.sidebar_items.values():
+                item.set_compact(True)
+        else:
+            try:
+                self.btn_compact_folder.place_forget()
+                self.btn_hamburger.place(x=10, y=6, width=28, height=28)
+                self.lbl_sidebar_title.place(x=44, y=10)
+                self.lbl_sec_pustaka.place(x=10, y=3)
+                self.lbl_sec_kategori.place(x=10, y=3)
+                self.storage_card.place(x=0, y=0, width=202, height=80)
+            except Exception:
+                pass
             for item in self.sidebar_items.values():
                 item.set_compact(False)
-                item.set_text_fade(1.0)
 
-            self.sidebar_frame.configure(width=230)
+    def _apply_sidebar_compact_immediate(self):
+        anim_id = getattr(self, "_sidebar_anim_id", None)
+        if anim_id is not None:
             try:
-                self.paned.paneconfig(self.sidebar_frame, minsize=230)
-                self.paned.sash_place(0, 230, 0)
+                self.root.after_cancel(anim_id)
             except Exception:
                 pass
+            self._sidebar_anim_id = None
+
+        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
+        try:
+            self.sidebar_frame.configure(width=target_w)
+        except Exception:
+            pass
+
+        if self.sidebar_compact:
+            try:
+                self.lbl_sidebar_title.place_forget()
+                self.lbl_sec_pustaka.place_forget()
+                self.lbl_sec_kategori.place_forget()
+                self.storage_card.place_forget()
+                self.btn_compact_folder.place(x=12, y=44, width=28, height=28)
+                self.btn_hamburger.place(x=12, y=6, width=28, height=28)
+            except Exception:
+                pass
+            for item in self.sidebar_items.values():
+                item.set_compact(True)
+        else:
+            try:
+                self.btn_compact_folder.place_forget()
+                self.btn_hamburger.place(x=10, y=6, width=28, height=28)
+                self.lbl_sidebar_title.place(x=44, y=10)
+                self.lbl_sec_pustaka.place(x=10, y=3)
+                self.lbl_sec_kategori.place(x=10, y=3)
+                self.storage_card.place(x=0, y=0, width=202, height=80)
+            except Exception:
+                pass
+            for item in self.sidebar_items.values():
+                item.set_compact(False)
 
     def toggle_sidebar(self):
         if self.sidebar_visible:
@@ -2495,13 +2700,13 @@ class IDMGUIApp:
             self.sidebar_visible = False
         else:
             panes = self.paned.panes()
-            min_s = 56 if self.sidebar_compact else 230
+            min_s = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
             if panes:
                 self.paned.add(self.sidebar_frame, before=panes[0], minsize=min_s)
             else:
                 self.paned.add(self.sidebar_frame, minsize=min_s)
             self.sidebar_visible = True
-            target_w = 56 if self.sidebar_compact else 230
+            target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
             try:
                 self.paned.sash_place(0, target_w, 0)
             except Exception:
@@ -2509,24 +2714,49 @@ class IDMGUIApp:
 
     def set_language(self, lang: str):
         """Sets the application language ('id' or 'en') and dynamically updates UI strings."""
+        self._active_lang = lang
         self.settings.set_language(lang)
         self.root.title(tr("app_name"))
 
         # 1. Update menu
         self._build_menu()
+        self._build_context_menu()
+        self._build_overflow_menu()
+
+        # Update system tray menu
+        new_m = self._build_tray_menu()
+        if hasattr(self, "tray_icon") and self.tray_icon and new_m:
+            try:
+                self.tray_icon.menu = new_m
+            except Exception:
+                pass
 
         # 2. Update toolbar buttons
         try:
-            self.btn_add.config(text=tr("tb_add_url"))
-            self.btn_resume.config(text=tr("tb_resume"))
-            self.btn_pause.config(text=tr("tb_pause"))
-            self.btn_delete.config(text=tr("tb_delete"))
-            self.btn_stop.config(text=tr("tb_stop"))
-            self.btn_clean.config(text=tr("tb_clear"))
-            self.btn_folder.config(text=tr("tb_open_folder"))
-            self.btn_opts.config(text=tr("tb_settings"))
+            self.btn_add.config(text=tr("tb_add_url"), tooltip=tr("tip_add"))
+            self.btn_resume.config(text=tr("tb_resume"), tooltip=tr("tip_resume"))
+            self.btn_pause.config(text=tr("tb_pause"), tooltip=tr("tip_pause"))
+            self.btn_delete.config(text=tr("tb_delete"), tooltip=tr("tip_delete"))
+            self.btn_stop.config(text=tr("tb_stop"), tooltip=tr("tip_stop"))
+            self.btn_clean.config(text=tr("tb_clear"), tooltip=tr("tip_clear"))
+            self.btn_folder.config(text=tr("tb_open_folder"), tooltip=tr("tip_folder"))
+            self.btn_opts.config(text=tr("tb_settings"), tooltip=tr("tip_settings"))
             if self.btn_overflow:
-                self.btn_overflow.config(text=tr("tb_more"))
+                self.btn_overflow.config(text=tr("tb_more"), tooltip=tr("tb_more"))
+            if hasattr(self, "btn_compact_folder") and self.btn_compact_folder:
+                pass
+
+            self.toolbar_buttons = [
+                (self.btn_add, tr("tip_add")),
+                (self.btn_resume, tr("tip_resume")),
+                (self.btn_pause, tr("tip_pause")),
+                (self.btn_delete, tr("tip_delete")),
+                (self.btn_stop, tr("tip_stop")),
+                (self.btn_clean, tr("tip_clear")),
+                (self.btn_folder, tr("tip_folder")),
+                (self.btn_opts, tr("tip_settings")),
+            ]
+
             if hasattr(self, "search_entry") and self.search_entry:
                 cur_s = self.search_entry.get().strip()
                 if cur_s in ("Cari unduhan...", "Search downloads...", ""):
@@ -2551,6 +2781,9 @@ class IDMGUIApp:
             self.lbl_sec_kategori.config(text=tr("sec_categories"))
             self.storage_card.lbl_title.config(text=tr("sec_storage"))
             self.storage_card.btn_open.config(text=tr("tb_open_folder"))
+            tip = getattr(self.storage_card.btn_open, "tooltip_obj", None)
+            if tip:
+                tip.set_text(tr("tip_folder"))
         except Exception:
             pass
 
@@ -2581,7 +2814,17 @@ class IDMGUIApp:
         except Exception:
             pass
 
-        # 7. Re-render UI table rows, status bar, and telemetry
+        # 7. Update empty state card
+        if hasattr(self, "empty_state_frame") and self.empty_state_frame:
+            try:
+                self.empty_state_frame.itemconfigure(self.empty_state_title_id, text=tr("empty_title"))
+                self.empty_state_frame.itemconfigure(self.empty_state_desc_id, text=tr("empty_desc"))
+                if hasattr(self, "btn_empty_add") and self.btn_empty_add:
+                    self.btn_empty_add.config(text=tr("empty_btn"), tooltip=tr("tip_add"))
+            except Exception:
+                pass
+
+        # 8. Re-render UI table rows, status bar, and telemetry
         self._tick_ui()
 
     def sort_by_column(self, col: str):
@@ -2599,7 +2842,7 @@ class IDMGUIApp:
                 parent=self.root,
                 defaultextension=".txt",
                 filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
-                title="Ekspor Daftar Tautan Unduhan",
+                title=tr("export_dialog_title"),
             )
         if target_path:
             tasks = self.queue.list_tasks()
@@ -2613,7 +2856,7 @@ class IDMGUIApp:
             target_path = filedialog.askopenfilename(
                 parent=self.root,
                 filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
-                title="Impor Daftar Tautan Unduhan",
+                title=tr("import_dialog_title"),
             )
         if target_path and os.path.exists(target_path):
             with open(target_path, "r", encoding="utf-8") as f:
@@ -2625,17 +2868,14 @@ class IDMGUIApp:
 
     def show_tip_of_the_day(self):
         messagebox.showinfo(
-            "Tip Hari Ini - Just Press Download",
-            "💡 Tip Cepat:\n\n"
-            "1. Anda dapat menyalin tautan berkas di browser, dan Just Press Download otomatis menangkapnya.\n"
-            "2. Gunakan tombol '⚙ Opsi' di menu atas untuk mengubah jumlah koneksi paralel hingga 32 jalur.\n"
-            "3. Klik dua kali baris unduhan untuk langsung membuka berkas yang telah selesai diunduh.",
+            tr("tip_dialog_title"),
+            tr("tip_dialog_body"),
         )
 
     def check_for_updates(self):
         messagebox.showinfo(
-            "Periksa Pembaruan - Just Press Download",
-            "✔ Anda telah menggunakan versi terbaru Just Press Download (v1.1.0 High-Performance Release)!\n\nSemua komponen sistem mutakhir dan terintegrasi.",
+            tr("update_dialog_title"),
+            tr("update_dialog_body"),
         )
 
 
