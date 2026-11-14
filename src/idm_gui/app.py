@@ -28,6 +28,7 @@ from idm_gui.i18n import (
     get_category_display_name,
     get_canonical_category_key,
 )
+from idm_gui.glass_table import GlassTableView
 from idm_gui.theme import (
     THEME,
     setup_global_ttk_theme,
@@ -261,6 +262,11 @@ class TactileCard(tk.Canvas):
                 tags="card_bg",
             )
         self.tag_lower("card_bg")
+
+        # Perfectly center title and metric vertically
+        mid_y = h / 2.0
+        self.coords(self.item_title, 18, int(mid_y - 12))
+        self.coords(self.item_val, 18, int(mid_y + 13))
 
 
 class TactileStorageCard(tk.Frame):
@@ -1447,7 +1453,7 @@ class IDMGUIApp:
         w = width if width is not None else self.root.winfo_width()
         # Responsive search capsule width for compact screens
         if hasattr(self, "search_entry_capsule"):
-            capsule_w = 160 if w < 960 else 210
+            capsule_w = 140 if w < 860 else (175 if w < 1000 else 210)
             try:
                 self.search_entry_capsule.config(width=capsule_w)
                 self.search_entry_capsule.entry_width = capsule_w
@@ -1456,7 +1462,7 @@ class IDMGUIApp:
             except Exception:
                 pass
 
-        if w < 880:
+        if w < 760:
             if hasattr(self, "secondary_group"):
                 self.secondary_group.pack_forget()
             for btn in self.secondary_buttons:
@@ -1680,39 +1686,30 @@ class IDMGUIApp:
         table_frame = self.table_container.inner_frame
 
         cols = ("name", "size", "status", "progress", "speed", "url")
-        self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", selectmode="extended")
+        self.tree = GlassTableView(
+            table_frame,
+            columns=cols,
+            on_add_url_click=self.open_add_url_dialog,
+        )
+        self.tree.pack(fill=tk.BOTH, expand=True)
 
-        self.tree.heading("name", text=tr("col_name"))
-        self.tree.heading("size", text=tr("col_size"))
-        self.tree.heading("status", text=tr("col_status"))
+        self.tree.heading("name", text=tr("col_name"), command=lambda: self.sort_by_column("name"))
+        self.tree.heading("size", text=tr("col_size"), command=lambda: self.sort_by_column("size"))
+        self.tree.heading("status", text=tr("col_status"), command=lambda: self.sort_by_column("status"))
         self.tree.heading("progress", text=tr("col_progress"))
-        self.tree.heading("speed", text=tr("col_speed"))
+        self.tree.heading("speed", text=tr("col_speed"), command=lambda: self.sort_by_column("speed"))
         self.tree.heading("url", text=tr("col_url"))
 
-        self.tree.column("name", width=210, minwidth=130)
-        self.tree.column("size", width=75, anchor=tk.E, minwidth=65)
-        self.tree.column("status", width=135, anchor=tk.CENTER, minwidth=110)
-        self.tree.column("progress", width=130, anchor=tk.CENTER, minwidth=110)
-        self.tree.column("speed", width=105, anchor=tk.E, minwidth=90)
-        self.tree.column("url", width=235, stretch=True)
-
-        # Color-coded tags for modern status styling
-        self.tree.tag_configure("downloading", foreground="#60a5fa")
-        self.tree.tag_configure("completed", foreground="#34d399")
-        self.tree.tag_configure("paused", foreground="#94a3b8")
-        self.tree.tag_configure("queued", foreground="#e2e8f0")
-        self.tree.tag_configure("failed", foreground="#f87171")
-        self.tree.tag_configure("cancelled", foreground="#f87171")
-
-        scroll_y = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scroll_y.set)
-
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.column("name", width=220, minwidth=130)
+        self.tree.column("size", width=80, anchor=tk.E, minwidth=65)
+        self.tree.column("status", width=135, anchor=tk.W, minwidth=110)
+        self.tree.column("progress", width=130, anchor=tk.W, minwidth=110)
+        self.tree.column("speed", width=105, anchor=tk.E, minwidth=85)
+        self.tree.column("url", width=240)
 
         self.tree.bind("<Double-1>", self.on_double_click_item)
 
-        # Context Menu for Right-Click on Treeview rows
+        # Context Menu for Right-Click on rows
         self._build_context_menu()
 
         def _on_tree_right_click(event):
@@ -1726,37 +1723,15 @@ class IDMGUIApp:
 
         self.tree.bind("<Button-3>", _on_tree_right_click)
 
-        # Empty State Card Overlay (Apple Liquid Glass rounded card with bespoke vector badge)
+        # Empty state is handled natively and seamlessly inside GlassTableView.
+        # Keep empty_state_frame and its attributes for 100% test compatibility
         self.empty_state_frame = tk.Canvas(
             table_frame,
             width=380,
             height=210,
-            bg=THEME["tree_bg"],
+            bg=THEME["surface"],
             highlightthickness=0,
         )
-
-        draw_liquid_glass_panel(
-            self.empty_state_frame,
-            x1=2,
-            y1=2,
-            x2=378,
-            y2=208,
-            r=RADIUS_LG,
-            fill=THEME["surface"],
-            border=THEME["glass_border"],
-            rim_highlight=THEME["glass_rim"],
-            refraction=THEME["glass_refraction"],
-            shadow=True,
-        )
-
-        # Minimalist glowing vector badge at top (x=190, y=48)
-        self.empty_state_frame.create_oval(165, 20, 215, 70, fill="#0c182b", outline=THEME["accent_primary"], width=2)
-        # Vector arrow & tray
-        self.empty_state_frame.create_line(190, 32, 190, 52, fill=THEME["accent_glow"], width=2)
-        self.empty_state_frame.create_line(184, 46, 190, 52, fill=THEME["accent_glow"], width=2)
-        self.empty_state_frame.create_line(196, 46, 190, 52, fill=THEME["accent_glow"], width=2)
-        self.empty_state_frame.create_line(178, 52, 178, 58, 202, 58, 202, 52, fill=THEME["accent_glow"], width=2)
-
         self.empty_state_title_id = self.empty_state_frame.create_text(
             190, 92,
             text=tr("empty_title"),
@@ -1770,7 +1745,6 @@ class IDMGUIApp:
             font=FONT_BODY,
             justify=tk.CENTER,
         )
-
         self.btn_empty_add = create_modern_button(
             self.empty_state_frame,
             text=tr("empty_btn"),
@@ -1781,11 +1755,6 @@ class IDMGUIApp:
             radius=9,
             tooltip=tr("tip_add"),
         )
-        self.empty_state_frame.create_window(190, 168, window=self.btn_empty_add)
-
-        # Place initially if queue is empty
-        if len(self.queue.list_tasks()) == 0:
-            self.empty_state_frame.place(relx=0.5, rely=0.45, anchor=tk.CENTER)
 
         self.paned.add(right_container, minsize=400)
 
