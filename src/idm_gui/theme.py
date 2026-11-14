@@ -20,10 +20,10 @@ THEME = {
     "surface_alt": "#0d1524",      # L1 Inset Nav Glass: Sidebar navigation
     "surface_canvas": "#070a10",   # Deepest abyss canvas for table viewport
     "input_bg": "#090f1a",         # Inset dark glass for inputs & counter badges
-    # Ambient Mesh Lighting Orbs
-    "mesh_sapphire": "#0a1e3f",    # Cool sapphire ambient light
-    "mesh_violet": "#13112c",      # Soft violet ambient light
-    "mesh_teal": "#071f33",        # Deep ocean teal ambient glow
+    # Ambient Mesh Lighting Orbs (Luminous Chromatic Ambient Glow)
+    "mesh_sapphire": "#2563eb",    # Luminous vibrant sapphire blue
+    "mesh_violet": "#8b5cf6",      # Luminous vibrant royal violet
+    "mesh_teal": "#06b6d4",        # Luminous vibrant electric cyan/teal
     # Glass Rims & Specular Refraction
     "glass_rim": "#ffffff",        # 1px overhead specular highlight
     "glass_refraction": "#38bdf8", # 1px cyan edge refraction
@@ -1205,16 +1205,128 @@ class AmbientMeshEngine:
         if self._mesh_img is None:
             from PIL import Image, ImageDraw, ImageFilter
             w, h = self.width, self.height
-            bg = Image.new("RGB", (w, h), THEME["bg_dark"])
+            bg = Image.new("RGB", (w, h), "#060812")
             d = ImageDraw.Draw(bg)
-            # Sapphire glow upper-left
-            d.ellipse([int(w * 0.08), -int(h * 0.15), int(w * 0.45), int(h * 0.45)], fill=THEME["mesh_sapphire"])
-            # Prism violet glow lower-right
-            d.ellipse([int(w * 0.55), int(h * 0.35), int(w * 1.05), int(h * 0.95)], fill=THEME["mesh_violet"])
-            # Ocean teal glow center
-            d.ellipse([int(w * 0.28), int(h * 0.22), int(w * 0.68), int(h * 0.72)], fill=THEME["mesh_teal"])
-            self._mesh_img = bg.filter(ImageFilter.GaussianBlur(radius=80))
+            # Sapphire glow upper-left / center
+            d.ellipse([int(w * 0.05), -int(h * 0.15), int(w * 0.55), int(h * 0.52)], fill=THEME["mesh_sapphire"])
+            # Prism royal violet lower-right
+            d.ellipse([int(w * 0.42), int(h * 0.22), int(w * 1.08), int(h * 1.05)], fill=THEME["mesh_violet"])
+            # Electric cyan / teal mid-left & center
+            d.ellipse([int(w * 0.15), int(h * 0.18), int(w * 0.65), int(h * 0.75)], fill=THEME["mesh_teal"])
+            self._mesh_img = bg.filter(ImageFilter.GaussianBlur(radius=85))
         return self._mesh_img
+
+    def create_glass_panel(
+        self,
+        w: int,
+        h: int,
+        r: int,
+        root_x: int = 0,
+        root_y: int = 0,
+        tint_rgba: tuple[int, int, int, int] = (10, 16, 28, 105),
+        border_rgba: tuple[int, int, int, int] = (70, 110, 170, 190),
+        specular: bool = True,
+        caustic: bool = True,
+    ) -> Any:
+        """Generates an authentic translucent Liquid Glass PhotoImage with physical
+        normal-based curved specular highlight and caustic refraction, cropping from the underlying mesh.
+        """
+        from PIL import Image, ImageDraw, ImageFilter, ImageTk
+
+        w = max(10, int(w))
+        h = max(10, int(h))
+        r = max(2, min(int(r), min(w, h) // 2))
+
+        mesh = self.get_mesh_image()
+        mw, mh = mesh.size
+        cx1 = max(0, min(mw - w, root_x % (mw - w) if mw > w else 0))
+        cy1 = max(0, min(mh - h, root_y % (mh - h) if mh > h else 0))
+        crop = mesh.crop((cx1, cy1, cx1 + w, cy1 + h)).convert("RGBA")
+
+        # 40% dark tint allows 60% of background mesh glow to shine through
+        tint = Image.new("RGBA", (w, h), tint_rgba)
+        glass = Image.alpha_composite(crop, tint)
+
+        # 3x supersampling for razor sharp curves
+        scale = 3
+        sw, sh, sr = w * scale, h * scale, r * scale
+
+        # Anti-aliased rounded rectangle mask
+        mask = Image.new("L", (sw, sh), 0)
+        d_m = ImageDraw.Draw(mask)
+        d_m.rounded_rectangle([0, 0, sw - 1, sh - 1], radius=sr, fill=255)
+        mask = mask.resize((w, h), Image.Resampling.LANCZOS)
+        glass.putalpha(mask)
+
+        # Base hairline border
+        border_img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+        d_b = ImageDraw.Draw(border_img)
+        d_b.rounded_rectangle([0, 0, sw - 1, sh - 1], radius=sr, outline=border_rgba, width=scale)
+        border_img = border_img.resize((w, h), Image.Resampling.LANCZOS)
+        glass = Image.alpha_composite(glass, border_img)
+
+        # Physical Normal-Based Curved Specular Rim (Top Edge & Top Corners)
+        if specular and w > 2 * r and h > 10:
+            spec_img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+            d_s = ImageDraw.Draw(spec_img)
+            d_s.rounded_rectangle([0, 0, sw - 1, sh - 1], radius=sr, outline=(255, 255, 255, 255), width=scale)
+
+            alpha_spec = bytearray(sw * sh)
+            for sy in range(sh):
+                if sy > sr:
+                    continue
+                for sx in range(sw):
+                    if sx < sr:
+                        dx = sr - sx
+                        dy = sr - sy
+                        dist = math.hypot(dx, dy)
+                        ny = dy / max(1.0, dist)
+                    elif sx > sw - sr:
+                        dx = sx - (sw - sr)
+                        dy = sr - sy
+                        dist = math.hypot(dx, dy)
+                        ny = dy / max(1.0, dist)
+                    else:
+                        ny = 1.0
+                    alpha_spec[sy * sw + sx] = int(245 * max(0.0, ny) ** 1.8)
+
+            spec_mask = Image.frombytes("L", (sw, sh), bytes(alpha_spec))
+            spec_img.putalpha(Image.composite(spec_mask, Image.new("L", (sw, sh), 0), spec_img.getchannel("A")))
+            spec_curved = spec_img.resize((w, h), Image.Resampling.LANCZOS)
+            glass = Image.alpha_composite(glass, spec_curved)
+
+        # Physical Normal-Based Caustic Refraction (Bottom Edge & Bottom Corners)
+        if caustic and w > 2 * r and h > 10:
+            caust_img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+            d_c = ImageDraw.Draw(caust_img)
+            d_c.rounded_rectangle([0, 0, sw - 1, sh - 1], radius=sr, outline=(56, 189, 248, 255), width=scale)
+
+            alpha_caust = bytearray(sw * sh)
+            for sy in range(sh):
+                if sy < sh - sr:
+                    continue
+                dy_from_bot = (sh - 1) - sy
+                for sx in range(sw):
+                    if sx < sr:
+                        dx = sr - sx
+                        dy = sr - dy_from_bot
+                        dist = math.hypot(dx, dy)
+                        ny = dy / max(1.0, dist)
+                    elif sx > sw - sr:
+                        dx = sx - (sw - sr)
+                        dy = sr - dy_from_bot
+                        dist = math.hypot(dx, dy)
+                        ny = dy / max(1.0, dist)
+                    else:
+                        ny = 1.0
+                    alpha_caust[sy * sw + sx] = int(210 * max(0.0, ny) ** 1.8)
+
+            caust_mask = Image.frombytes("L", (sw, sh), bytes(alpha_caust))
+            caust_img.putalpha(Image.composite(caust_mask, Image.new("L", (sw, sh), 0), caust_img.getchannel("A")))
+            caust_curved = caust_img.resize((w, h), Image.Resampling.LANCZOS)
+            glass = Image.alpha_composite(glass, caust_curved)
+
+        return ImageTk.PhotoImage(glass)
 
     def get_mesh_photo(self, master: Optional[tk.Misc] = None) -> Any:
         if self._mesh_photo is None:

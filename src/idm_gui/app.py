@@ -229,20 +229,37 @@ class TactileCard(tk.Canvas):
             return
         self.delete("card_bg")
         r = self.r
-        draw_liquid_glass_panel(
-            self,
-            x1=2,
-            y1=2,
-            x2=w - 2,
-            y2=h - 2,
-            r=r,
-            fill=THEME["surface"],
-            border=THEME["glass_border"],
-            rim_highlight=THEME["glass_rim"],
-            refraction=THEME["glass_refraction"],
-            shadow=True,
-            tags="card_bg",
-        )
+        try:
+            top = self.winfo_toplevel()
+            root_x = max(0, self.winfo_rootx() - top.winfo_rootx())
+            root_y = max(0, self.winfo_rooty() - top.winfo_rooty())
+            self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
+                w=w,
+                h=h,
+                r=r,
+                root_x=root_x,
+                root_y=root_y,
+                tint_rgba=(10, 16, 28, 105),
+                border_rgba=(70, 110, 170, 190),
+                specular=True,
+                caustic=True,
+            )
+            self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
+        except Exception:
+            draw_liquid_glass_panel(
+                self,
+                x1=2,
+                y1=2,
+                x2=w - 2,
+                y2=h - 2,
+                r=r,
+                fill=THEME["surface"],
+                border=THEME["glass_border"],
+                rim_highlight=THEME["glass_rim"],
+                refraction=THEME["glass_refraction"],
+                shadow=True,
+                tags="card_bg",
+            )
         self.tag_lower("card_bg")
 
 
@@ -316,20 +333,37 @@ class TactileTableContainer(tk.Canvas):
             return
         self.delete("card_bg")
         r = self.r
-        draw_liquid_glass_panel(
-            self,
-            x1=2,
-            y1=2,
-            x2=w - 2,
-            y2=h - 2,
-            r=r,
-            fill=THEME["tree_bg"],
-            border=THEME["glass_border"],
-            rim_highlight=THEME["glass_rim"],
-            refraction=THEME["glass_refraction"],
-            shadow=True,
-            tags="card_bg",
-        )
+        try:
+            top = self.winfo_toplevel()
+            root_x = max(0, self.winfo_rootx() - top.winfo_rootx())
+            root_y = max(0, self.winfo_rooty() - top.winfo_rooty())
+            self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
+                w=w,
+                h=h,
+                r=r,
+                root_x=root_x,
+                root_y=root_y,
+                tint_rgba=(8, 12, 20, 125),
+                border_rgba=(60, 95, 150, 180),
+                specular=True,
+                caustic=True,
+            )
+            self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
+        except Exception:
+            draw_liquid_glass_panel(
+                self,
+                x1=2,
+                y1=2,
+                x2=w - 2,
+                y2=h - 2,
+                r=r,
+                fill=THEME["tree_bg"],
+                border=THEME["glass_border"],
+                rim_highlight=THEME["glass_rim"],
+                refraction=THEME["glass_refraction"],
+                shadow=True,
+                tags="card_bg",
+            )
         self.tag_lower("card_bg")
 
         pad = 4
@@ -1209,23 +1243,32 @@ class IDMGUIApp:
         self.context_menu.add_command(label=tr("ctx_delete_file"), command=self.delete_selected_file_from_disk)
 
     def _build_toolbar(self):
+        # Master floating toolbar row on top of background mesh
         self.toolbar_frame = tk.Frame(
             self.root,
-            bg=THEME["surface"],
-            pady=5,
-            padx=10,
-            highlightbackground=THEME["glass_border"],
-            highlightthickness=1,
+            bg=THEME["bg_dark"],
+            pady=4,
+            padx=8,
             relief=tk.FLAT,
         )
-        self.toolbar_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(6, 4))
+        self.toolbar_frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(6, 4))
 
         self.toolbar_border = tk.Frame(self.root, bg=THEME["bg_dark"], height=1)
         self.toolbar_border.pack(side=tk.TOP, fill=tk.X)
 
-        # 1. Hero Primary Action Button: Tambah URL
-        self.btn_add = create_modern_button(
+        # POD 1: Primary Action [Add URL]
+        self.pod_primary = tk.Frame(
             self.toolbar_frame,
+            bg=THEME["surface"],
+            highlightbackground=THEME["glass_border"],
+            highlightthickness=1,
+            padx=2,
+            pady=2,
+        )
+        self.pod_primary.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.btn_add = create_modern_button(
+            self.pod_primary,
             text=tr("tb_add_url"),
             command=self.open_add_url_dialog,
             kind="primary",
@@ -1235,14 +1278,22 @@ class IDMGUIApp:
             radius=8,
             tooltip=tr("tip_add"),
         )
-        self.btn_add.pack(side=tk.LEFT, padx=(0, 10))
+        self.btn_add.pack(side=tk.LEFT)
 
-        # 2. Segmented Control Group 1: Transfer Controls (Lanjutkan | Jeda | Hapus)
-        self.grp_transfer = tk.Frame(self.toolbar_frame, bg=THEME["surface"], padx=0, pady=0)
-        self.grp_transfer.pack(side=tk.LEFT, padx=(0, 6))
+        # POD 2: Transfer Controls [Resume, Pause, Delete]
+        self.pod_transfer = tk.Frame(
+            self.toolbar_frame,
+            bg=THEME["surface"],
+            highlightbackground=THEME["glass_border"],
+            highlightthickness=1,
+            padx=4,
+            pady=3,
+        )
+        self.pod_transfer.pack(side=tk.LEFT, padx=(0, 8))
+        self.grp_transfer = self.pod_transfer
 
         self.btn_resume = create_modern_button(
-            self.grp_transfer,
+            self.pod_transfer,
             text=tr("tb_resume"),
             command=self.resume_selected,
             kind="toolbar",
@@ -1255,7 +1306,7 @@ class IDMGUIApp:
         self.btn_resume.pack(side=tk.LEFT, padx=2)
 
         self.btn_pause = create_modern_button(
-            self.grp_transfer,
+            self.pod_transfer,
             text=tr("tb_pause"),
             command=self.pause_selected,
             kind="toolbar",
@@ -1268,7 +1319,7 @@ class IDMGUIApp:
         self.btn_pause.pack(side=tk.LEFT, padx=2)
 
         self.btn_delete = create_modern_button(
-            self.grp_transfer,
+            self.pod_transfer,
             text=tr("tb_delete"),
             command=self.delete_selected,
             kind="danger",
@@ -1280,12 +1331,20 @@ class IDMGUIApp:
         )
         self.btn_delete.pack(side=tk.LEFT, padx=2)
 
-        # 3. Segmented Control Group 2: Secondary Tools (Hentikan | Bersihkan | Buka Folder | Pengaturan)
-        self.secondary_group = tk.Frame(self.toolbar_frame, bg=THEME["surface"], padx=0, pady=0)
-        self.secondary_group.pack(side=tk.LEFT, padx=(0, 6))
+        # POD 3: Management Tools [Stop, Clear, Open Folder, Settings]
+        self.pod_tools = tk.Frame(
+            self.toolbar_frame,
+            bg=THEME["surface"],
+            highlightbackground=THEME["glass_border"],
+            highlightthickness=1,
+            padx=4,
+            pady=3,
+        )
+        self.pod_tools.pack(side=tk.LEFT, padx=(0, 8))
+        self.secondary_group = self.pod_tools
 
         self.btn_stop = create_modern_button(
-            self.secondary_group,
+            self.pod_tools,
             text=tr("tb_stop"),
             command=self.stop_all,
             kind="toolbar",
@@ -1298,7 +1357,7 @@ class IDMGUIApp:
         self.btn_stop.pack(side=tk.LEFT, padx=2)
 
         self.btn_clean = create_modern_button(
-            self.secondary_group,
+            self.pod_tools,
             text=tr("tb_clear"),
             command=self.delete_completed,
             kind="toolbar",
@@ -1311,7 +1370,7 @@ class IDMGUIApp:
         self.btn_clean.pack(side=tk.LEFT, padx=2)
 
         self.btn_folder = create_modern_button(
-            self.secondary_group,
+            self.pod_tools,
             text=tr("tb_open_folder"),
             command=self.open_selected_folder,
             kind="toolbar",
@@ -1324,7 +1383,7 @@ class IDMGUIApp:
         self.btn_folder.pack(side=tk.LEFT, padx=2)
 
         self.btn_opts = create_modern_button(
-            self.secondary_group,
+            self.pod_tools,
             text=tr("tb_settings"),
             command=self.open_options_dialog,
             kind="toolbar",
@@ -1363,7 +1422,7 @@ class IDMGUIApp:
             tooltip=tr("tb_more"),
         )
 
-        # Liquid Glass Search Capsule on the right side of toolbar
+        # POD 4: Liquid Glass Search Capsule
         self.search_entry_capsule = GlassSearchEntry(
             self.toolbar_frame,
             placeholder=tr("tb_search_placeholder"),
@@ -1386,7 +1445,18 @@ class IDMGUIApp:
 
     def _update_toolbar_overflow(self, width: Optional[int] = None):
         w = width if width is not None else self.root.winfo_width()
-        if w < 760:
+        # Responsive search capsule width for compact screens
+        if hasattr(self, "search_entry_capsule"):
+            capsule_w = 160 if w < 960 else 210
+            try:
+                self.search_entry_capsule.config(width=capsule_w)
+                self.search_entry_capsule.entry_width = capsule_w
+                self.search_entry_capsule._draw_bg()
+                self.search_entry_capsule.coords(self.search_entry_capsule.clear_win, capsule_w - 16, 16)
+            except Exception:
+                pass
+
+        if w < 880:
             if hasattr(self, "secondary_group"):
                 self.secondary_group.pack_forget()
             for btn in self.secondary_buttons:
@@ -1582,23 +1652,26 @@ class IDMGUIApp:
         # Right Container: Dashboard Live Stats + Downloads Table
         right_container = tk.Frame(self.paned.container, bg=THEME["bg_dark"])
 
-        # 1. Live Telemetry Metric Strip (Floating Liquid Glass Pods)
+        # 1. Live Telemetry Metric Strip (Floating Liquid Glass Pods - Uniform 1/3 Width Grid)
         self.stat_bar = tk.Frame(right_container, bg=THEME["bg_dark"], padx=0, pady=0)
         self.stat_bar.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+        self.stat_bar.columnconfigure(0, weight=1, uniform="kpi_pods")
+        self.stat_bar.columnconfigure(1, weight=1, uniform="kpi_pods")
+        self.stat_bar.columnconfigure(2, weight=1, uniform="kpi_pods")
 
         # Card 1: Live Speed (Liquid Glass Card)
         self.card_speed = TactileCard(self.stat_bar, tr("stat_speed"), "0 B/s", val_fg=THEME["accent_glow"], r=RADIUS_LG)
-        self.card_speed.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 4))
+        self.card_speed.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
         self.lbl_stat_speed = self.card_speed.lbl_val
 
         # Card 2: Active / Queued Tasks (Liquid Glass Card)
         self.card_active = TactileCard(self.stat_bar, tr("stat_active"), "0", val_fg=THEME["text_primary"], r=RADIUS_LG)
-        self.card_active.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        self.card_active.grid(row=0, column=1, sticky="nsew", padx=4)
         self.lbl_stat_active = self.card_active.lbl_val
 
         # Card 3: Library Stats (Liquid Glass Card)
         self.card_total = TactileCard(self.stat_bar, tr("stat_files"), "0", val_fg=THEME["text_primary"], r=RADIUS_LG)
-        self.card_total.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 0))
+        self.card_total.grid(row=0, column=2, sticky="nsew", padx=(4, 0))
         self.lbl_stat_total = self.card_total.lbl_val
 
         # 2. Downloads Table Frame inside Liquid Glass rounded container
@@ -1618,7 +1691,7 @@ class IDMGUIApp:
 
         self.tree.column("name", width=210, minwidth=130)
         self.tree.column("size", width=75, anchor=tk.E, minwidth=65)
-        self.tree.column("status", width=115, anchor=tk.CENTER, minwidth=100)
+        self.tree.column("status", width=135, anchor=tk.CENTER, minwidth=110)
         self.tree.column("progress", width=130, anchor=tk.CENTER, minwidth=110)
         self.tree.column("speed", width=105, anchor=tk.E, minwidth=90)
         self.tree.column("url", width=235, stretch=True)
@@ -1717,19 +1790,43 @@ class IDMGUIApp:
         self.paned.add(right_container, minsize=400)
 
     def _build_statusbar(self):
-        self.statusbar = tk.Label(
+        # Translucent Liquid Glass bottom status capsule
+        self.statusbar_container = tk.Frame(
             self.root,
+            bg=THEME["surface_alt"],
+            highlightbackground=THEME["glass_border"],
+            highlightthickness=1,
+            height=26,
+        )
+        self.statusbar_container.pack_propagate(False)
+        self.statusbar_container.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 6))
+
+        self.statusbar = tk.Label(
+            self.statusbar_container,
             text="⚡ Siap (IPC Server Port 19900 Aktif)",
             bd=0,
             relief=tk.FLAT,
             anchor=tk.W,
-            bg=THEME["bg_dark"],
+            bg=THEME["surface_alt"],
             fg=THEME["text_secondary"],
             font=FONT_SMALL,
-            padx=14,
-            pady=4,
+            padx=10,
+            pady=2,
         )
-        self.statusbar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.statusbar.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.lbl_status_ipc = tk.Label(
+            self.statusbar_container,
+            text="● IPC: 127.0.0.1:19900",
+            bd=0,
+            relief=tk.FLAT,
+            anchor=tk.E,
+            bg=THEME["surface_alt"],
+            fg=THEME["accent_glow"],
+            font=FONT_SMALL,
+            padx=10,
+        )
+        self.lbl_status_ipc.pack(side=tk.RIGHT)
 
     def _on_options_saved(self, new_lang: str):
         cur_l = getattr(self, "_active_lang", None) or self.settings.get_language()
