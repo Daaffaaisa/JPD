@@ -5,6 +5,8 @@ High-precision dark utility theme inspired by Windows modern design and classic 
 
 import os
 import sys
+import time
+import math
 from typing import Callable, Optional, Any
 import tkinter as tk
 from tkinter import ttk
@@ -21,21 +23,31 @@ THEME = {
     # Ambient Mesh Lighting Orbs
     "mesh_sapphire": "#0a1e3f",    # Cool sapphire ambient light
     "mesh_violet": "#13112c",      # Soft violet ambient light
+    "mesh_teal": "#071f33",        # Deep ocean teal ambient glow
     # Glass Rims & Specular Refraction
     "glass_rim": "#ffffff",        # 1px overhead specular highlight
     "glass_refraction": "#38bdf8", # 1px cyan edge refraction
     "glass_border": "#1e2e46",     # Muted glass structural border
     "glass_border_hover": "#38bdf8", # Glow ring on hover
-    "glass_shadow": "#030508",     # Diffused soft ambient shadow
-    # Legacy borders & focus ring
+    "glass_shadow_ambient": "#010204", # Diffused soft ambient shadow
+    "glass_shadow_contact": "#03050a", # Close contact shadow
+    "glass_shadow": "#020306",     # Legacy alias
+    # Focus Ring Tokens
+    "focus_ring": "#38bdf8",       # Luminous sapphire focus ring
+    "focus_ring_outer": "#1e3a5f", # Outer soft focus ring halo
+    # Disabled State Tokens
+    "disabled_text": "#526075",    # Slate-500 dimmed text
+    "disabled_bg": "#090e18",      # Inactive glass surface
+    "disabled_border": "#151f2e",  # Inactive glass border
+    # Borders & Dividers
     "border": "#1e2e46",           # Slate-700 glass hairline border
     "border_light": "#2a3d5b",     # Muted slate glass divider
-    "focus_ring": "#38bdf8",       # Luminous sapphire focus ring
-    # Typography (High Contrast Glass Readable)
-    "text_primary": "#ffffff",     # Pure crisp high-contrast white
-    "text_secondary": "#cbd5e1",   # Slate-300: High-contrast cool secondary labels
-    "text_tertiary": "#94a3b8",    # Slate-400: Captions & metadata
-    "text_disabled": "#64748b",    # Slate-500: Disabled text
+    # Typography (High Contrast Glass Readable - Verified WCAG AA/AAA)
+    "text_primary": "#ffffff",     # Pure crisp high-contrast white (19.57:1)
+    "text_secondary": "#cbd5e1",   # Slate-300: High-contrast cool secondary labels (13.18:1)
+    "text_tertiary": "#94a3b8",    # Slate-400: Captions & metadata (7.63:1)
+    "text_subtle": "#7c8ba1",      # Slate-450: URL & subtle metadata (> 4.5:1 WCAG AA: 5.65:1)
+    "text_disabled": "#526075",    # Dimmed disabled text
     # Semantic Colors (Single Brand Accent + Status)
     "accent_primary": "#007aff",   # Apple Sapphire Blue CTA
     "accent_hover": "#0284c7",     # Vivid Cyan-Blue hover
@@ -46,9 +58,15 @@ THEME = {
     "success": "#10b981",          # Emerald-500: Active speed / complete
     "success_glow": "#34d399",     # Emerald neon specular
     "warning": "#f59e0b",          # Amber-500: Security warning
+    # Destructive Action Tokens (Delete)
     "danger": "#f43f5e",           # Rose-500: Destructive action
-    "danger_hover": "#e11d48",     # Rose-600 hover
-    "danger_text": "#fda4af",      # Rose-300 high contrast warning
+    "danger_glow": "#f43f5e",      # Rose neon edge glow
+    "danger_surface": "#4c0519",   # Deep translucent rose glass
+    "danger_hover": "#881337",     # Rose-800 hover
+    "danger_active": "#300310",    # Pressed deep rose
+    "danger_border": "#be123c",    # Rose-700 structural border
+    "danger_rim": "#fda4af",       # Rose specular rim
+    "danger_text": "#ffffff",      # White on destructive buttons
     # Component specifics
     "tree_bg": "#080c14",
     "tree_fg": "#f8fafc",
@@ -84,6 +102,39 @@ def is_reduced_motion() -> bool:
         return bool(settings.data.get("reduced_motion", False))
     except Exception:
         return False
+
+
+def get_window_dpi(window: Any = None) -> int:
+    """Returns the effective DPI for the window on Windows (e.g. 96=100%, 120=125%, 144=150%)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = 0
+            if window and hasattr(window, "winfo_id"):
+                hwnd = window.winfo_id()
+            if hwnd > 0 and hasattr(user32, "GetDpiForWindow"):
+                dpi = user32.GetDpiForWindow(hwnd)
+                if dpi > 0:
+                    return int(dpi)
+            if hasattr(user32, "GetDpiForSystem"):
+                dpi = user32.GetDpiForSystem()
+                if dpi > 0:
+                    return int(dpi)
+        except Exception:
+            pass
+    return 96
+
+
+def get_dpi_scale(window: Any = None) -> float:
+    """Returns DPI scaling multiplier (1.0 = 100%, 1.25 = 125%, 1.5 = 150%)."""
+    return get_window_dpi(window) / 96.0
+
+
+def scale_px(val: int, window: Any = None, scale: Optional[float] = None) -> int:
+    """Scales a pixel dimension safely according to monitor DPI scaling (125%/150%)."""
+    s = scale if scale is not None else get_dpi_scale(window)
+    return max(1, int(round(val * s)))
 
 # Typography selection with native Windows ClearType subpixel hinting
 FONT_DISPLAY = "Segoe UI" if sys.platform == "win32" else "SF Pro Display"
@@ -549,32 +600,32 @@ class RoundedButton(tk.Canvas):
             self.bg_hover = THEME["accent_hover"]
             self.bg_active = THEME["accent_active"]
             self.top_highlight = "#93c5fd"
-            self.bot_shadow = "#020408"
-            self.border_col = "#007aff"
-            self.border_hover = "#38bdf8"
-            self.refraction_col = "#38bdf8"
+            self.bot_shadow = THEME["glass_shadow_ambient"]
+            self.border_col = THEME["accent_primary"]
+            self.border_hover = THEME["accent_glow"]
+            self.refraction_col = THEME["accent_glow"]
             self.fg = "#ffffff"
             self.font = FONT_HEADING
         elif kind == "danger":
-            self.bg_normal = THEME["danger"]
+            self.bg_normal = THEME["danger_surface"]
             self.bg_hover = THEME["danger_hover"]
-            self.bg_active = "#8b0000"
-            self.top_highlight = "#fda4af"
-            self.bot_shadow = "#020408"
-            self.border_col = "#9f1239"
-            self.border_hover = "#f43f5e"
-            self.refraction_col = "#f43f5e"
-            self.fg = "#ffffff"
+            self.bg_active = THEME["danger_active"]
+            self.top_highlight = THEME["danger_rim"]
+            self.bot_shadow = THEME["glass_shadow_ambient"]
+            self.border_col = THEME["danger_border"]
+            self.border_hover = THEME["danger_glow"]
+            self.refraction_col = THEME["danger_glow"]
+            self.fg = THEME["danger_text"]
             self.font = FONT_BODY
         elif kind == "toolbar":
             self.bg_normal = THEME["surface"]
             self.bg_hover = THEME["secondary_hover"]
             self.bg_active = THEME["accent_primary"]
             self.top_highlight = "#475569"
-            self.bot_shadow = "#020408"
-            self.border_col = "#1e2e46"
-            self.border_hover = "#38bdf8"
-            self.refraction_col = "#1e3a5f"
+            self.bot_shadow = THEME["glass_shadow_ambient"]
+            self.border_col = THEME["glass_border"]
+            self.border_hover = THEME["accent_glow"]
+            self.refraction_col = THEME["glass_border_hover"]
             self.fg = THEME["text_primary"]
             self.font = FONT_BODY
         else:  # secondary
@@ -582,9 +633,9 @@ class RoundedButton(tk.Canvas):
             self.bg_hover = THEME["secondary_hover"]
             self.bg_active = "#0f1a2b"
             self.top_highlight = "#64748b"
-            self.bot_shadow = "#020408"
+            self.bot_shadow = THEME["glass_shadow_ambient"]
             self.border_col = "#243650"
-            self.border_hover = "#38bdf8"
+            self.border_hover = THEME["accent_glow"]
             self.refraction_col = "#1e3a5f"
             self.fg = THEME["text_primary"]
             self.font = FONT_BODY
@@ -610,12 +661,15 @@ class RoundedButton(tk.Canvas):
             cursor="hand2",
         )
 
+        self.is_focused = False
         self._draw(self.bg_normal)
 
         self.bind("<Enter>", self._on_enter, add="+")
         self.bind("<Leave>", self._on_leave, add="+")
         self.bind("<Button-1>", self._on_press, add="+")
         self.bind("<ButtonRelease-1>", self._on_release, add="+")
+        self.bind("<FocusIn>", lambda e: self._on_focus(True), add="+")
+        self.bind("<FocusOut>", lambda e: self._on_focus(False), add="+")
 
         self.tooltip_obj: Optional[Tooltip] = None
         if tooltip:
@@ -658,39 +712,54 @@ class RoundedButton(tk.Canvas):
 
         border_active = interpolate_color(self.border_col, self.border_hover, glow_alpha) if glow_alpha > 0 else self.border_col
 
-        if is_pressed:
+        if self.state == "disabled":
+            fill_color = THEME["disabled_bg"]
+            border_active = THEME["disabled_border"]
+            text_fg = THEME["disabled_text"]
+            # Main frosted disabled body
+            draw_round_rectangle(self, 1, 1, w - 1, h - 1, r=r, fill=fill_color, outline=border_active, width=1)
+        elif is_pressed:
+            text_fg = self.fg
             # Pressed state: sinks down 1px with deepened core & contact border
             draw_round_rectangle(self, 1, 2, w - 1, h, r=r, fill=fill_color, outline=self.bot_shadow, width=1)
         else:
+            text_fg = self.fg
             # 1. Soft layered ambient drop shadow
             draw_round_rectangle(self, 1, 3, w - 1, h, r=r, fill=self.bot_shadow, outline="")
-            draw_round_rectangle(self, 1, 2, w - 1, h, r=r, fill="#050810", outline="")
-            # 2. Outer luminous glow ring when hovered
-            if glow_alpha > 0.05:
+            draw_round_rectangle(self, 1, 2, w - 1, h, r=r, fill=THEME["glass_shadow_contact"], outline="")
+            # 2. Focus ring if focused
+            if getattr(self, "is_focused", False):
+                draw_round_rectangle(self, 0, 0, w, h, r=r + 1, fill="", outline=THEME["focus_ring"], width=2)
+            # 3. Outer luminous glow ring when hovered
+            elif glow_alpha > 0.05:
                 draw_round_rectangle(self, 0, 0, w, h, r=r + 1, fill="", outline=border_active, width=1)
-            # 3. Main frosted glass container with structural border
+            # 4. Main frosted glass container with structural border
             draw_round_rectangle(self, 1, 1, w - 1, h - 1, r=r, fill=fill_color, outline=border_active, width=1)
-            # 4. Overhead specular highlight line across top curve (Apple Frosted Rim)
+            # 5. Overhead specular highlight line across top curve (Apple Frosted Rim)
             if w > 2 * r and h > 10:
                 self.create_line(r + 2, 2, w - r - 2, 2, fill=self.top_highlight, width=1)
-            # 5. Subtle bottom refraction sheen
+            # 6. Subtle bottom refraction sheen
             if self.refraction_col and w > 2 * r:
                 self.create_line(r + 3, h - 2, w - r - 3, h - 2, fill=self.refraction_col, width=1)
 
-        # 6. Icon and Text rendering
+        # 7. Icon and Text rendering
         icon_photo = self._get_icon_photo(self.icon, size=15) if self.icon else None
 
         if icon_photo and self.text:
             content_w = 15 + 6 + self.text_w
             x_start = max(self.padx, (w - content_w) // 2)
             self.create_image(x_start + 7, (h // 2) + y_offset, image=icon_photo)
-            self.create_text(x_start + 15 + 6, (h // 2) + y_offset, text=self.text, fill=self.fg, font=self.font, anchor=tk.W)
+            self.create_text(x_start + 15 + 6, (h // 2) + y_offset, text=self.text, fill=text_fg, font=self.font, anchor=tk.W)
             self._icon_ref = icon_photo
         elif icon_photo and not self.text:
             self.create_image(w // 2, (h // 2) + y_offset, image=icon_photo)
             self._icon_ref = icon_photo
         else:
-            self.create_text(w // 2, (h // 2) + y_offset, text=self.text, fill=self.fg, font=self.font, anchor=tk.CENTER)
+            self.create_text(w // 2, (h // 2) + y_offset, text=self.text, fill=text_fg, font=self.font, anchor=tk.CENTER)
+
+    def _on_focus(self, focused: bool):
+        self.is_focused = focused
+        self._draw(self.bg_hover if self._glow_alpha > 0.5 else self.bg_normal, glow_alpha=self._glow_alpha)
 
     def _animate_hover(self, target_hover: bool):
         if self._anim_id is not None:
@@ -742,7 +811,16 @@ class RoundedButton(tk.Canvas):
             if self.command:
                 self.command()
 
+    def configure(self, cnf=None, **kwargs):
+        if cnf:
+            kwargs.update(cnf)
+        self.config(**kwargs)
+
     def config(self, **kwargs):
+        if "state" in kwargs:
+            self.state = kwargs.pop("state")
+            super().config(cursor="hand2" if self.state != "disabled" else "arrow")
+            self._draw(self.bg_normal)
         if "text" in kwargs or "icon" in kwargs:
             if "text" in kwargs:
                 self.text = kwargs["text"]
@@ -757,9 +835,6 @@ class RoundedButton(tk.Canvas):
             self.total_w = self.custom_width if self.custom_width else (self.text_w + icon_space + (self.padx * 2))
             super().config(width=self.total_w)
             self._draw(self.bg_normal)
-        if "state" in kwargs:
-            self.state = kwargs["state"]
-            self.config(cursor="hand2" if self.state != "disabled" else "arrow")
         if "command" in kwargs:
             self.command = kwargs["command"]
         if "tooltip" in kwargs:
@@ -914,3 +989,288 @@ def setup_global_ttk_theme():
         selectforeground=[("readonly", "#ffffff")],
         arrowcolor=[("readonly", THEME["text_primary"]), ("!disabled", THEME["text_primary"])],
     )
+
+
+class GlassThinScrollbar(tk.Canvas):
+    """Ultra-sleek auto-hiding floating scrollbar for Liquid Glass surfaces."""
+
+    def __init__(self, parent: tk.Widget, command: Optional[Callable] = None, width: int = 6, **kwargs):
+        bg = kwargs.pop("bg", THEME["surface_canvas"])
+        super().__init__(parent, width=width, bg=bg, highlightthickness=0, **kwargs)
+        self.command = command
+        self.bar_width = width
+        self.first = 0.0
+        self.last = 1.0
+        self.thumb_color = "#1e3a5f"
+        self.hover_color = THEME["accent_glow"]
+        self.active_color = self.thumb_color
+        self._fade_id: Optional[str] = None
+        self._dragging: bool = False
+        self._drag_start_y: int = 0
+
+        self.bind("<Enter>", self._on_enter, add="+")
+        self.bind("<Leave>", self._on_leave, add="+")
+        self.bind("<Button-1>", self._on_press, add="+")
+        self.bind("<B1-Motion>", self._on_drag, add="+")
+        self.bind("<ButtonRelease-1>", self._on_release, add="+")
+        self.bind("<Configure>", lambda e: self._redraw(), add="+")
+
+    def set(self, first: float | str, last: float | str):
+        self.first = float(first)
+        self.last = float(last)
+        self._show_and_schedule_fade()
+        self._redraw()
+
+    def _show_and_schedule_fade(self):
+        if self._fade_id is not None:
+            try:
+                self.after_cancel(self._fade_id)
+            except Exception:
+                pass
+            self._fade_id = None
+        self.active_color = self.thumb_color
+        self._fade_id = self.after(1500, self._hide_thumb)
+
+    def _hide_thumb(self):
+        self._fade_id = None
+        if not self._dragging:
+            self.delete("thumb")
+
+    def _on_enter(self, e):
+        self.active_color = self.hover_color
+        self._redraw()
+
+    def _on_leave(self, e):
+        self.active_color = self.thumb_color
+        self._redraw()
+
+    def _on_press(self, e):
+        self._dragging = True
+        self._drag_start_y = e.y
+        self.active_color = self.hover_color
+        self._redraw()
+
+    def _on_drag(self, e):
+        h = self.winfo_height()
+        if h > 0 and self.command:
+            frac = max(0.0, min(1.0, e.y / h))
+            self.command("moveto", frac)
+
+    def _on_release(self, e):
+        self._dragging = False
+        self._show_and_schedule_fade()
+        self._redraw()
+
+    def _redraw(self):
+        self.delete("thumb")
+        h = self.winfo_height()
+        w = self.bar_width
+        if h < 20 or (self.last - self.first) >= 0.999:
+            return
+        top = int(self.first * h)
+        bot = max(top + 20, int(self.last * h))
+        draw_round_rectangle(self, 1, top, w - 1, bot, r=min(w // 2, 4), fill=self.active_color, outline="", tags="thumb")
+
+
+class GlassSearchEntry(tk.Canvas):
+    """Refined Liquid Glass Search Capsule with inset dark glass and focus ring glow."""
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        placeholder: str = "Search downloads...",
+        on_change: Optional[Callable[[str], None]] = None,
+        width: int = 220,
+        height: int = 32,
+        **kwargs,
+    ):
+        bg = kwargs.pop("bg", THEME["surface"])
+        super().__init__(parent, width=width, height=height, bg=bg, highlightthickness=0, **kwargs)
+        self.entry_width = width
+        self.entry_height = height
+        self.placeholder = placeholder
+        self.on_change = on_change
+        self.is_focused = False
+
+        self._draw_bg()
+
+        # Inset search icon
+        self.lbl_icon = tk.Label(self, text="⌕", font=(FONT_DISPLAY, 11, "bold"), bg=THEME["input_bg"], fg=THEME["text_secondary"])
+        self.create_window(16, height // 2, window=self.lbl_icon)
+
+        # Embedded text entry
+        self.entry_var = tk.StringVar(self)
+        self.entry = tk.Entry(
+            self,
+            textvariable=self.entry_var,
+            bg=THEME["input_bg"],
+            fg=THEME["text_secondary"],
+            insertbackground=THEME["text_primary"],
+            relief=tk.FLAT,
+            font=FONT_BODY,
+            bd=0,
+        )
+        self.entry.insert(0, placeholder)
+        self.create_window(110, height // 2, window=self.entry, width=width - 60)
+
+        # Clear button '✕'
+        self.btn_clear = tk.Label(self, text="✕", font=(FONT_DISPLAY, 8), bg=THEME["input_bg"], fg=THEME["text_tertiary"], cursor="hand2")
+        self.clear_win = self.create_window(width - 16, height // 2, window=self.btn_clear, state="hidden")
+
+        self.btn_clear.bind("<Button-1>", lambda e: self.clear(), add="+")
+        self.entry.bind("<FocusIn>", self._on_focus_in, add="+")
+        self.entry.bind("<FocusOut>", self._on_focus_out, add="+")
+        self.entry_var.trace_add("write", self._on_text_change)
+
+    def _draw_bg(self):
+        self.delete("glass_bg")
+        border_col = THEME["focus_ring"] if self.is_focused else THEME["glass_border"]
+        draw_liquid_glass_panel(
+            self,
+            1,
+            1,
+            self.entry_width - 1,
+            self.entry_height - 1,
+            r=RADIUS_MD,
+            fill=THEME["input_bg"],
+            border=border_col,
+            rim_highlight="#2a3d5b" if not self.is_focused else THEME["focus_ring"],
+            refraction=THEME["glass_refraction"],
+            shadow=False,
+            tags="glass_bg",
+        )
+        self.tag_lower("glass_bg")
+
+    def _on_focus_in(self, e):
+        self.is_focused = True
+        self._draw_bg()
+        if self.entry.get() == self.placeholder:
+            self.entry.delete(0, tk.END)
+            self.entry.config(fg=THEME["text_primary"])
+
+    def _on_focus_out(self, e):
+        self.is_focused = False
+        self._draw_bg()
+        if not self.entry.get().strip():
+            self.entry.insert(0, self.placeholder)
+            self.entry.config(fg=THEME["text_secondary"])
+
+    def _on_text_change(self, *args):
+        txt = self.get().strip()
+        if txt and txt != self.placeholder:
+            self.itemconfigure(self.clear_win, state="normal")
+        else:
+            self.itemconfigure(self.clear_win, state="hidden")
+        if self.on_change:
+            self.on_change(txt)
+
+    def clear(self):
+        self.entry.delete(0, tk.END)
+        self.itemconfigure(self.clear_win, state="hidden")
+        if self.on_change:
+            self.on_change("")
+
+    def get(self) -> str:
+        val = self.entry_var.get()
+        return "" if val == self.placeholder else val
+
+
+class AmbientMeshEngine:
+    """Pre-rendered blurred ambient mesh engine for Liquid Glass interfaces.
+    Uses coordinate translation at ~15 FPS with automatic 0 FPS sleep during idle / tray.
+    """
+
+    _instance: Optional["AmbientMeshEngine"] = None
+
+    def __init__(self, width: int = 1600, height: int = 1200):
+        self.width = width
+        self.height = height
+        self._mesh_img: Optional[Any] = None
+        self._mesh_photo: Optional[Any] = None
+        self._anim_id: Optional[str] = None
+        self._t: float = 0.0
+        self._is_running: bool = False
+        self._last_interaction_time: float = time.time()
+        self._idle_threshold_s: float = 5.0
+        self._fps_delay_ms: int = 66  # ~15 FPS cap
+        self.enabled: bool = True
+
+    @classmethod
+    def get_shared(cls) -> "AmbientMeshEngine":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def get_mesh_image(self) -> Any:
+        if self._mesh_img is None:
+            from PIL import Image, ImageDraw, ImageFilter
+            w, h = self.width, self.height
+            bg = Image.new("RGB", (w, h), THEME["bg_dark"])
+            d = ImageDraw.Draw(bg)
+            # Sapphire glow upper-left
+            d.ellipse([int(w * 0.08), -int(h * 0.15), int(w * 0.45), int(h * 0.45)], fill=THEME["mesh_sapphire"])
+            # Prism violet glow lower-right
+            d.ellipse([int(w * 0.55), int(h * 0.35), int(w * 1.05), int(h * 0.95)], fill=THEME["mesh_violet"])
+            # Ocean teal glow center
+            d.ellipse([int(w * 0.28), int(h * 0.22), int(w * 0.68), int(h * 0.72)], fill=THEME["mesh_teal"])
+            self._mesh_img = bg.filter(ImageFilter.GaussianBlur(radius=80))
+        return self._mesh_img
+
+    def get_mesh_photo(self, master: Optional[tk.Misc] = None) -> Any:
+        if self._mesh_photo is None:
+            from PIL import ImageTk
+            self._mesh_photo = ImageTk.PhotoImage(self.get_mesh_image(), master=master)
+        return self._mesh_photo
+
+    def notify_interaction(self):
+        self._last_interaction_time = time.time()
+
+    def start_animation(self, canvas: tk.Canvas, img_id: int):
+        self._is_running = True
+        self.notify_interaction()
+
+        def _step():
+            self._anim_id = None
+            if not self._is_running or not canvas.winfo_exists():
+                return
+
+            if not self.enabled or is_reduced_motion():
+                return
+
+            try:
+                top = canvas.winfo_toplevel()
+                state = top.state()
+                if state in ("withdrawn", "iconic"):
+                    self._anim_id = canvas.after(2000, _step)
+                    return
+            except Exception:
+                pass
+
+            # Smart sleep when idle (>5s without interaction)
+            if time.time() - self._last_interaction_time > self._idle_threshold_s:
+                self._anim_id = canvas.after(1000, _step)
+                return
+
+            # 15 FPS organic drifting
+            self._t += 0.035
+            import math
+            dx = -100 + int(35 * math.sin(self._t))
+            dy = -100 + int(25 * math.cos(self._t * 0.7))
+            try:
+                canvas.coords(img_id, dx, dy)
+            except Exception:
+                pass
+
+            self._anim_id = canvas.after(self._fps_delay_ms, _step)
+
+        _step()
+
+    def stop_animation(self, canvas: Optional[tk.Canvas] = None):
+        self._is_running = False
+        if self._anim_id is not None and canvas:
+            try:
+                canvas.after_cancel(self._anim_id)
+            except Exception:
+                pass
+            self._anim_id = None
+

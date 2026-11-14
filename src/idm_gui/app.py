@@ -42,6 +42,11 @@ from idm_gui.theme import (
     _apply_win32_native_icon,
     get_app_png_path,
     interpolate_color,
+    is_reduced_motion,
+    AmbientMeshEngine,
+    GlassSearchEntry,
+    GlassThinScrollbar,
+    scale_px,
     Tooltip,
     FONT_DISPLAY,
     FONT_FAMILY,
@@ -84,11 +89,14 @@ def get_file_type_glyph(category: str, filename: str = "") -> str:
 
 
 class _CanvasTextAdapter:
-    """Lightweight adapter mimicking a tk.Label interface for pure Canvas text items."""
+    """Lightweight adapter mimicking a tk.Label interface for pure Canvas text items,
+    with built-in smooth rolling / count-up animation for numeric stats."""
 
     def __init__(self, canvas: tk.Canvas, item_id: int):
         self.canvas = canvas
         self.item_id = item_id
+        self._cur_val = ""
+        self._anim_id: Optional[str] = None
 
     def config(self, **kwargs):
         self.configure(**kwargs)
@@ -96,15 +104,76 @@ class _CanvasTextAdapter:
     def configure(self, **kwargs):
         for k, v in kwargs.items():
             if k == "text":
-                self.canvas.itemconfigure(self.item_id, text=v)
+                new_str = str(v)
+                old_str = self._cur_val or (self.canvas.itemcget(self.item_id, "text") if self.canvas.winfo_exists() else "")
+                self._cur_val = new_str
+                if is_reduced_motion() or os.environ.get("PYTEST_CURRENT_TEST") or not self.canvas.winfo_exists():
+                    self.canvas.itemconfigure(self.item_id, text=new_str)
+                else:
+                    self._animate_rolling_text(old_str, new_str)
             elif k in ("fg", "foreground", "val_fg"):
                 self.canvas.itemconfigure(self.item_id, fill=v)
             elif k == "font":
                 self.canvas.itemconfigure(self.item_id, font=v)
 
+    def _animate_rolling_text(self, old_text: str, new_text: str):
+        if self._anim_id is not None:
+            try:
+                self.canvas.after_cancel(self._anim_id)
+            except Exception:
+                pass
+            self._anim_id = None
+
+        if old_text == new_text:
+            self.canvas.itemconfigure(self.item_id, text=new_text)
+            return
+
+        import re
+        old_m = re.search(r"(\d+(?:\.\d+)?)", old_text)
+        new_m = re.search(r"(\d+(?:\.\d+)?)", new_text)
+
+        if not old_m or not new_m:
+            self.canvas.itemconfigure(self.item_id, text=new_text)
+            return
+
+        try:
+            start_num = float(old_m.group(1))
+            target_num = float(new_m.group(1))
+        except ValueError:
+            self.canvas.itemconfigure(self.item_id, text=new_text)
+            return
+
+        prefix = new_text[: new_m.start(1)]
+        suffix = new_text[new_m.end(1) :]
+        is_float = "." in new_m.group(1)
+
+        steps = 5
+
+        def _step(step_idx: int):
+            self._anim_id = None
+            if not self.canvas.winfo_exists():
+                return
+            t = (step_idx + 1) / steps
+            cur_num = start_num + (target_num - start_num) * t
+            fmt_num = f"{cur_num:.1f}" if is_float else f"{int(round(cur_num))}"
+            interp_text = f"{prefix}{fmt_num}{suffix}"
+            try:
+                self.canvas.itemconfigure(self.item_id, text=interp_text)
+            except Exception:
+                pass
+            if step_idx + 1 < steps:
+                self._anim_id = self.canvas.after(30, lambda: _step(step_idx + 1))
+            else:
+                try:
+                    self.canvas.itemconfigure(self.item_id, text=new_text)
+                except Exception:
+                    pass
+
+        _step(0)
+
     def cget(self, key: str):
         if key == "text":
-            return self.canvas.itemcget(self.item_id, "text")
+            return self._cur_val or (self.canvas.itemcget(self.item_id, "text") if self.canvas.winfo_exists() else "")
         elif key in ("fg", "foreground"):
             return self.canvas.itemcget(self.item_id, "fill")
         return ""
@@ -1294,59 +1363,20 @@ class IDMGUIApp:
             tooltip=tr("tb_more"),
         )
 
-        # Search pill bar on the right side of toolbar with SF Pro font and 3D elevation
-        self.search_canvas = tk.Canvas(self.toolbar_frame, width=200, height=32, bg=THEME["surface"], highlightthickness=0)
-        self.search_canvas.pack(side=tk.RIGHT, padx=4)
-        draw_liquid_glass_panel(
-            self.search_canvas,
-            x1=1,
-            y1=1,
-            x2=199,
-            y2=31,
-            r=RADIUS_MD,
-            fill=THEME["input_bg"],
-            border=THEME["glass_border"],
-            rim_highlight="#2a3d5b",
-            refraction=THEME["glass_refraction"],
-            shadow=False,
+        # Liquid Glass Search Capsule on the right side of toolbar
+        self.search_entry_capsule = GlassSearchEntry(
+            self.toolbar_frame,
+            placeholder=tr("tb_search_placeholder"),
+            on_change=lambda text: self._tick_ui(),
+            width=210,
+            height=32,
         )
+        self.search_entry_capsule.pack(side=tk.RIGHT, padx=4)
 
-        lbl_search = tk.Label(self.search_canvas, text="⌕", font=(FONT_DISPLAY, 11, "bold"), bg=THEME["input_bg"], fg=THEME["text_secondary"])
-        self.search_canvas.create_window(16, 16, window=lbl_search)
-
-        try:
-            self.search_var = tk.StringVar(master=self.root)
-        except Exception:
-            self.search_var = None
-
-        entry_kwargs = {
-            "bg": THEME["input_bg"],
-            "fg": THEME["text_secondary"],
-            "insertbackground": THEME["text_primary"],
-            "relief": tk.FLAT,
-            "font": FONT_BODY,
-            "bd": 0,
-        }
-        if self.search_var:
-            entry_kwargs["textvariable"] = self.search_var
-        self.search_entry = tk.Entry(self.search_canvas, **entry_kwargs)
-        self.search_entry.insert(0, tr("tb_search_placeholder"))
-        self.search_canvas.create_window(110, 16, window=self.search_entry, width=150)
-
-        def _on_search_focus_in(e):
-            if self.search_entry.get() in ("Cari unduhan...", "Search downloads..."):
-                self.search_entry.delete(0, tk.END)
-                self.search_entry.config(fg=THEME["text_primary"])
-
-        def _on_search_focus_out(e):
-            if not self.search_entry.get().strip():
-                self.search_entry.insert(0, tr("tb_search_placeholder"))
-                self.search_entry.config(fg=THEME["text_secondary"])
-
-        self.search_entry.bind("<FocusIn>", _on_search_focus_in)
-        self.search_entry.bind("<FocusOut>", _on_search_focus_out)
-        if self.search_var:
-            self.search_var.trace_add("write", lambda *args: self._tick_ui())
+        # Aliases for 100% backward compatibility
+        self.search_canvas = self.search_entry_capsule
+        self.search_entry = self.search_entry_capsule.entry
+        self.search_var = self.search_entry_capsule.entry_var
 
         self.root.bind("<Configure>", self._on_window_configure, add="+")
 
@@ -1538,8 +1568,11 @@ class IDMGUIApp:
             item.pack(fill=tk.X)
             self.sidebar_items[key] = item
 
-        # Activate 'all' item by default
+        # Activate 'all' item by default with animated glide indicator
+        self.sidebar_glide_bar = tk.Frame(self.sidebar_frame, bg=THEME["accent_glow"], width=3)
         self.sidebar_items["all"].set_active(True)
+        self.sidebar_glide_bar.place(x=2, y=28, width=3, height=24)
+        self.sidebar_glide_bar.lift()
 
         # Dummy hidden category_tree for total backward compatibility
         self.category_tree = ttk.Treeview(self.sidebar_frame)
@@ -1730,7 +1763,56 @@ class IDMGUIApp:
         self.active_category_filter = key
         for k, item in self.sidebar_items.items():
             item.set_active(k == key)
+        self._animate_sidebar_glide_to_active(key)
         self._tick_ui()
+
+    def _animate_sidebar_glide_to_active(self, key: str):
+        if not hasattr(self, "sidebar_glide_bar") or key not in self.sidebar_items:
+            return
+        target_item = self.sidebar_items[key]
+        try:
+            target_y = target_item.winfo_y() + 4
+        except Exception:
+            return
+
+        if is_reduced_motion() or os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                self.sidebar_glide_bar.place(x=2, y=target_y, width=3, height=24)
+                self.sidebar_glide_bar.lift()
+            except Exception:
+                pass
+            return
+
+        try:
+            start_y = self.sidebar_glide_bar.winfo_y()
+        except Exception:
+            start_y = target_y
+        if start_y <= 0:
+            start_y = target_y
+
+        duration = 0.18
+        start_time = time.perf_counter()
+
+        def _step():
+            elapsed = time.perf_counter() - start_time
+            t = min(1.0, elapsed / duration)
+            progress = 1.0 - (1.0 - t) ** 3  # Cubic ease-out
+            cur_y = int(start_y + (target_y - start_y) * progress)
+            try:
+                self.sidebar_glide_bar.place(x=2, y=cur_y, width=3, height=24)
+                self.sidebar_glide_bar.lift()
+            except Exception:
+                return
+            if t < 1.0:
+                self.root.after(16, _step)
+            else:
+                try:
+                    self.sidebar_glide_bar.place(x=2, y=target_y, width=3, height=24)
+                    self.sidebar_glide_bar.lift()
+                except Exception:
+                    pass
+
+        _step()
 
     def _on_sidebar_item_double_click(self, key: str):
         cat_map = {
