@@ -1388,8 +1388,8 @@ class AmbientMeshEngine:
         tint = Image.new("RGBA", (w, h), tint_rgba)
         glass = Image.alpha_composite(crop, tint)
 
-        # 3x supersampling for razor sharp curves
-        scale = 3
+        # Adaptive supersampling: 3x for compact pods/cards, 2x for large table surfaces
+        scale = 2 if (w * h > 120_000) else 3
         sw, sh, sr = w * scale, h * scale, r * scale
 
         # Anti-aliased rounded rectangle mask
@@ -1403,7 +1403,7 @@ class AmbientMeshEngine:
         border_img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
         d_b = ImageDraw.Draw(border_img)
         d_b.rounded_rectangle([0, 0, sw - 1, sh - 1], radius=sr, outline=border_rgba, width=scale)
-        border_img = border_img.resize((w, h), Image.Resampling.LANCZOS)
+        border_img = border_img.resize((w, h), Image.Resampling.BILINEAR)
         glass = Image.alpha_composite(glass, border_img)
 
         strip_1x = min(h, r + 2)
@@ -1425,7 +1425,7 @@ class AmbientMeshEngine:
                 spec_mask.paste(tr_mask, (sw - sr + 1, 0))
 
             spec_img.putalpha(ImageChops.multiply(spec_img.getchannel("A"), spec_mask))
-            spec_curved = spec_img.resize((w, strip_1x), Image.Resampling.LANCZOS)
+            spec_curved = spec_img.resize((w, strip_1x), Image.Resampling.BILINEAR)
             glass.alpha_composite(spec_curved, dest=(0, 0))
 
         # Physical Normal-Based Caustic Refraction (Bottom Edge & Bottom Corners only)
@@ -1445,7 +1445,7 @@ class AmbientMeshEngine:
                 caust_mask.paste(br_mask, (sw - sr + 1, y_off))
 
             caust_img.putalpha(ImageChops.multiply(caust_img.getchannel("A"), caust_mask))
-            caust_curved = caust_img.resize((w, strip_1x), Image.Resampling.LANCZOS)
+            caust_curved = caust_img.resize((w, strip_1x), Image.Resampling.BILINEAR)
             glass.alpha_composite(caust_curved, dest=(0, h - strip_1x))
 
         self._panel_img_cache[cache_key] = glass

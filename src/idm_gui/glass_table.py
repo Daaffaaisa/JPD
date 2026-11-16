@@ -145,7 +145,6 @@ class GlassTableView(tk.Frame):
     # =========================================================================
 
     def _setup_events(self):
-        self.bind("<Configure>", self._on_resize, add="+")
         self.viewport.bind("<Configure>", self._on_resize, add="+")
         self.header_canvas.bind("<Configure>", self._redraw_header, add="+")
 
@@ -177,6 +176,11 @@ class GlassTableView(tk.Frame):
         self.header_canvas.bind("<Button-1>", self._on_header_click, add="+")
 
     def _on_resize(self, event=None):
+        if event is not None:
+            dims = (self.viewport.winfo_width(), self.viewport.winfo_height())
+            if dims == getattr(self, "_last_resize_dims", None):
+                return
+            self._last_resize_dims = dims
         self._responsive_fit_columns()
         self._update_scroll_bounds()
         self._redraw_header()

@@ -335,6 +335,7 @@ class GlassButtonCanvas(tk.Canvas):
         self.border_hover = border_hover
         self._hovered = False
         self._pressed = False
+        self._fade_alpha: Optional[float] = None
         self.tooltip_obj: Optional[Tooltip] = Tooltip(self, tooltip) if tooltip else None
 
         self.bind("<Configure>", lambda e: self._redraw(), add="+")
@@ -342,6 +343,13 @@ class GlassButtonCanvas(tk.Canvas):
         self.bind("<Leave>", self._on_leave, add="+")
         self.bind("<ButtonPress-1>", self._on_press, add="+")
         self.bind("<ButtonRelease-1>", self._on_release, add="+")
+        self._redraw()
+
+    def set_fade(self, alpha: Optional[float]):
+        new_alpha = None if (alpha is None or alpha >= 0.99) else max(0.0, min(1.0, float(alpha)))
+        if new_alpha == self._fade_alpha:
+            return
+        self._fade_alpha = new_alpha
         self._redraw()
 
     def _redraw(self):
@@ -352,14 +360,27 @@ class GlassButtonCanvas(tk.Canvas):
         self.delete("btn_fg")
         _apply_canvas_glass_backdrop(self, tint_rgba=self.tint_rgba)
 
+        a = self._fade_alpha
+        if a is not None and a <= 0.03:
+            return
+
         fill = self.fill_hover if (self._hovered or self._pressed) else self.fill_normal
         border = self.border_hover if (self._hovered or self._pressed) else self.border_normal
+        glint_col = "#64748b" if not self._hovered else "#93c5fd"
+        text_col = "#ffffff"
+        if a is not None:
+            base = "#0a1222"
+            fill = interpolate_color(base, fill, a)
+            border = interpolate_color(base, border, a)
+            glint_col = interpolate_color(base, glint_col, a)
+            text_col = interpolate_color(base, text_col, a)
+
         r = min(self.radius, (w - 2) // 2, (h - 2) // 2)
         draw_round_rectangle(self, 1, 1, w - 1, h - 1, r=r, fill=fill, outline=border, width=1, tags="btn_fg")
         # Subtle top specular glint
-        if w > 2 * r + 4:
-            self.create_line(r + 2, 2, w - r - 2, 2, fill="#64748b" if not self._hovered else "#93c5fd", width=1, tags="btn_fg")
-        self.create_text(w // 2, h // 2, text=self._text, fill="#ffffff", font=self.font, anchor=tk.CENTER, tags="btn_fg")
+        if w > 2 * r + 4 and (a is None or a > 0.15):
+            self.create_line(r + 2, 2, w - r - 2, 2, fill=glint_col, width=1, tags="btn_fg")
+        self.create_text(w // 2, h // 2, text=self._text, fill=text_col, font=self.font, anchor=tk.CENTER, tags="btn_fg")
 
     def _on_enter(self, _e=None):
         self._hovered = True
@@ -597,8 +618,36 @@ class TactileStorageCard(tk.Canvas):
         )
         self.tooltip_open = self.btn_open.tooltip_obj
         self.btn_win_id = self.create_window(10, 48, window=self.btn_open, anchor=tk.NW, width=180, height=26)
+        self._fade_alpha: Optional[float] = None
 
         self.bind("<Configure>", self._schedule_redraw, add="+")
+
+    def set_fade(self, alpha: Optional[float]):
+        new_alpha = None if (alpha is None or alpha >= 0.99) else max(0.0, min(1.0, float(alpha)))
+        self._fade_alpha = new_alpha
+        try:
+            if new_alpha is None:
+                self.itemconfigure("card_bg", state="normal")
+                self.itemconfigure("card_fg", state="normal")
+                self.itemconfigure(self.btn_win_id, state="normal")
+                self.itemconfigure(self.item_title, fill=self.lbl_title.cget("fg"))
+                self.itemconfigure(self.item_path, fill=self.lbl_path.cget("fg"))
+                self.btn_open.set_fade(None)
+            elif new_alpha <= 0.03:
+                self.itemconfigure("card_bg", state="hidden")
+                self.itemconfigure("card_fg", state="hidden")
+                self.itemconfigure(self.btn_win_id, state="hidden")
+                self.btn_open.set_fade(0.0)
+            else:
+                self.itemconfigure("card_bg", state="normal")
+                self.itemconfigure("card_fg", state="normal")
+                self.itemconfigure(self.btn_win_id, state="normal")
+                base = "#0a1222"
+                self.itemconfigure(self.item_title, fill=interpolate_color(base, self.lbl_title.cget("fg"), new_alpha))
+                self.itemconfigure(self.item_path, fill=interpolate_color(base, self.lbl_path.cget("fg"), new_alpha))
+                self.btn_open.set_fade(new_alpha)
+        except Exception:
+            pass
 
     def _schedule_redraw(self, _event=None):
         self._redraw()
@@ -663,6 +712,8 @@ class TactileStorageCard(tk.Canvas):
         self.itemconfigure(self.btn_win_id, width=btn_w, height=26)
         self.btn_open.configure(width=btn_w, height=26)
         self.btn_open._redraw()
+        if self._fade_alpha is not None:
+            self.set_fade(self._fade_alpha)
 
 
 class SidebarGlassContainer(tk.Canvas):
@@ -781,6 +832,7 @@ class SidebarSectionCanvas(tk.Canvas):
     def __init__(self, parent: tk.Widget, text: str, height: int = 22, show_divider: bool = False):
         super().__init__(parent, height=height, bg=THEME["tree_bg"], highlightthickness=0, bd=0)
         self.show_divider = show_divider
+        self._fade_alpha: Optional[float] = None
         text_y = 12 if show_divider else 3
         self.item_text = self.create_text(
             10,
@@ -794,6 +846,39 @@ class SidebarSectionCanvas(tk.Canvas):
         self.label_adapter = _CanvasTextWidgetAdapter(self, self.item_text, text=text, fg=THEME["text_tertiary"])
         self.bind("<Configure>", lambda e: self._redraw(), add="+")
 
+    def set_fade(self, alpha: Optional[float]):
+        new_alpha = None if (alpha is None or alpha >= 0.99) else max(0.0, min(1.0, float(alpha)))
+        self._fade_alpha = new_alpha
+        self._apply_fade_colors()
+
+    def _apply_fade_colors(self):
+        a = self._fade_alpha
+        label_visible = getattr(self.label_adapter, "_visible", True)
+        try:
+            base = "#0d1b32"
+            if a is None:
+                self.itemconfigure(
+                    self.item_text,
+                    fill=self.label_adapter.cget("fg"),
+                    state="normal" if label_visible else "hidden",
+                )
+                self.itemconfigure("sec_div", fill=THEME["glass_border"], state="normal")
+            elif a <= 0.04:
+                self.itemconfigure("sec_div", state="hidden")
+                self.itemconfigure(self.item_text, state="hidden")
+            else:
+                self.itemconfigure("sec_div", state="normal", fill=interpolate_color(base, THEME["glass_border"], a))
+                if label_visible:
+                    self.itemconfigure(
+                        self.item_text,
+                        state="normal",
+                        fill=interpolate_color(base, self.label_adapter.cget("fg"), a),
+                    )
+                else:
+                    self.itemconfigure(self.item_text, state="hidden")
+        except Exception:
+            pass
+
     def _redraw(self, force: bool = False):
         if force:
             self._bg_mesh_key = None  # type: ignore[attr-defined]
@@ -804,6 +889,7 @@ class SidebarSectionCanvas(tk.Canvas):
             self.create_line(10, 5, w - 10, 5, fill=THEME["glass_border"], width=1, tags="sec_div")
         self.tag_raise("sec_div")
         self.tag_raise("sec_fg")
+        self._apply_fade_colors()
 
 
 class TactileTableContainer(tk.Canvas):
@@ -826,7 +912,16 @@ class TactileTableContainer(tk.Canvas):
 
         self._panel_cache_key: Optional[tuple[int, int, int, int]] = None
         self._redraw_debounce_id: Optional[str] = None
-        self.bind("<Configure>", self._schedule_redraw)
+        self.bind("<Configure>", self._on_configure)
+
+    def _on_configure(self, _event=None):
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w >= 20 and h >= 20:
+            pad = self._calc_pad()
+            self.coords(self.win_id, pad, pad)
+            self.itemconfigure(self.win_id, width=max(10, w - (pad * 2)), height=max(10, h - (pad * 2)))
+        self._schedule_redraw()
 
     def _schedule_redraw(self, event=None):
         if self._redraw_debounce_id is not None:
@@ -1100,6 +1195,7 @@ class SidebarNavItem(tk.Canvas):
         self.is_compact = False
         self.is_hovered = False
         self.count = 0
+        self._fade_alpha: Optional[float] = None
         self._fade_fg_override: Optional[str] = None
         self._fade_badge_bg_override: Optional[str] = None
         self._fade_badge_fg_override: Optional[str] = None
@@ -1128,6 +1224,8 @@ class SidebarNavItem(tk.Canvas):
 
         mid_y = h // 2
         compact_layout = self.is_compact or w < 100
+        a = self._fade_alpha
+        fade_base = "#0a1222"
 
         # 1. Translucent rounded glass pill for active or hovered state
         if compact_layout:
@@ -1135,29 +1233,39 @@ class SidebarNavItem(tk.Canvas):
             px1, py1, px2, py2 = max(4, cx - 17), 2, min(w - 4, cx + 17), h - 2
         else:
             px1, py1, px2, py2 = 4, 2, w - 4, h - 2
-        if self.is_active:
-            draw_round_rectangle(self, px1, py1, px2, py2, r=10, fill="#132b4f", outline=THEME["accent_glow"], width=1, tags="nav_fg")
-            if px2 - px1 > 24:
-                self.create_line(px1 + 10, py1 + 1, px2 - 10, py1 + 1, fill="#93c5fd", width=1, tags="nav_fg")
+        if self.is_active and (a is None or a > 0.03):
+            pill_fill = interpolate_color(fade_base, "#132b4f", a) if a is not None else "#132b4f"
+            pill_outline = interpolate_color(fade_base, THEME["accent_glow"], a) if a is not None else THEME["accent_glow"]
+            pill_rim = interpolate_color(fade_base, "#93c5fd", a) if a is not None else "#93c5fd"
+            draw_round_rectangle(self, px1, py1, px2, py2, r=10, fill=pill_fill, outline=pill_outline, width=1, tags="nav_fg")
+            if px2 - px1 > 24 and (a is None or a > 0.15):
+                self.create_line(px1 + 10, py1 + 1, px2 - 10, py1 + 1, fill=pill_rim, width=1, tags="nav_fg")
             if not compact_layout:
                 # Subtle glowing cyan capsule indicator inside the left edge of the pill
-                draw_round_rectangle(self, px1 + 5, 7, px1 + 8, h - 7, r=1, fill=THEME["accent_glow"], outline="", tags="nav_fg")
-        elif self.is_hovered:
-            draw_round_rectangle(self, px1, py1, px2, py2, r=10, fill="#10203a", outline="#284268", width=1, tags="nav_fg")
+                draw_round_rectangle(self, px1 + 5, 7, px1 + 8, h - 7, r=1, fill=pill_outline, outline="", tags="nav_fg")
+        elif self.is_hovered and (a is None or a > 0.05):
+            hov_fill = interpolate_color(fade_base, "#10203a", a) if a is not None else "#10203a"
+            hov_outline = interpolate_color(fade_base, "#284268", a) if a is not None else "#284268"
+            draw_round_rectangle(self, px1, py1, px2, py2, r=10, fill=hov_fill, outline=hov_outline, width=1, tags="nav_fg")
 
-        # 2. Category / library icon
+        # 2. Category / library icon (stays visible cleanly as visual anchor during cross-fade)
         icon_x = (w // 2) if compact_layout else 24
         icon_fg = THEME["accent_glow"] if self.is_active else THEME["text_secondary"]
+        if a is not None and self.is_active:
+            icon_fg = interpolate_color(THEME["text_secondary"], THEME["accent_glow"], a)
         self.create_text(icon_x, mid_y, text=self.icon_glyph, fill=icon_fg, font=(FONT_DISPLAY, 10), anchor=tk.CENTER, tags="nav_fg")
 
         # 3. Compact mode red notification dot (only when count > 0)
         if compact_layout:
-            if self.count > 0:
+            if self.count > 0 and (a is None or a > 0.04):
+                pip_fill = interpolate_color(fade_base, THEME["danger"], a) if a is not None else THEME["danger"]
                 dx = icon_x + 7
-                self.create_oval(dx, 5, dx + 7, 12, fill=THEME["danger"], outline="#080c14", width=1, tags="nav_fg")
+                self.create_oval(dx, 5, dx + 7, 12, fill=pip_fill, outline="#080c14", width=1, tags="nav_fg")
             return
 
         # 4. Expanded label text + always-visible rounded count badge capsule
+        if a is not None and a <= 0.03:
+            return
         badge_str = str(self.count)
         badge_w = max(24, len(badge_str) * 7 + 12)
         bx2 = w - 12
@@ -1166,6 +1274,10 @@ class SidebarNavItem(tk.Canvas):
         badge_bg = self._fade_badge_bg_override or "#09111f"
         badge_outline = THEME["accent_glow"] if self.is_active else "#203452"
         badge_fg = self._fade_badge_fg_override or (THEME["accent_glow"] if self.is_active else THEME["text_tertiary"])
+        if a is not None:
+            badge_bg = self._fade_badge_bg_override or interpolate_color(fade_base, "#09111f", a)
+            badge_outline = interpolate_color(fade_base, badge_outline, a)
+            badge_fg = self._fade_badge_fg_override or interpolate_color(fade_base, badge_fg, a)
 
         draw_round_rectangle(self, bx1, by1, bx2, by2, r=7, fill=badge_bg, outline=badge_outline, width=1, tags="nav_fg")
         self.create_text((bx1 + bx2) // 2, mid_y, text=badge_str, fill=badge_fg, font=(FONT_DISPLAY, 8, "bold"), anchor=tk.CENTER, tags="nav_fg")
@@ -1175,6 +1287,8 @@ class SidebarNavItem(tk.Canvas):
         txt_font = (FONT_DISPLAY if self.is_active else FONT_FAMILY, 9, "bold" if self.is_active else "normal")
         disp_text = self._fit_label(self.raw_text, avail_w, txt_font)
         text_fg = self._fade_fg_override or ("#ffffff" if self.is_active else THEME["text_secondary"])
+        if a is not None and not self._fade_fg_override:
+            text_fg = interpolate_color(fade_base, text_fg, a)
         self.create_text(text_x, mid_y, text=disp_text, fill=text_fg, font=txt_font, anchor=tk.W, tags="nav_fg")
 
     def _fit_label(self, text: str, max_w: int, font_spec: Any) -> str:
@@ -1199,12 +1313,20 @@ class SidebarNavItem(tk.Canvas):
             self._redraw(force=True)
 
     def set_text_fade(self, alpha: float):
-        bg_col = "#132b4f" if self.is_active else THEME["tree_bg"]
-        target_fg = "#ffffff" if self.is_active else THEME["text_secondary"]
-        target_badge_fg = THEME["accent_glow"] if self.is_active else THEME["text_tertiary"]
-        self._fade_fg_override = interpolate_color(bg_col, target_fg, alpha)
-        self._fade_badge_fg_override = interpolate_color(bg_col, target_badge_fg, alpha)
-        self._fade_badge_bg_override = interpolate_color(bg_col, "#09111f", alpha)
+        if alpha >= 0.99:
+            self._fade_alpha = None
+            self._fade_fg_override = None
+            self._fade_badge_bg_override = None
+            self._fade_badge_fg_override = None
+        else:
+            a = max(0.0, min(1.0, float(alpha)))
+            self._fade_alpha = a
+            bg_col = "#132b4f" if self.is_active else "#0a1222"
+            target_fg = "#ffffff" if self.is_active else THEME["text_secondary"]
+            target_badge_fg = THEME["accent_glow"] if self.is_active else THEME["text_tertiary"]
+            self._fade_fg_override = interpolate_color(bg_col, target_fg, a)
+            self._fade_badge_fg_override = interpolate_color(bg_col, target_badge_fg, a)
+            self._fade_badge_bg_override = interpolate_color(bg_col, "#09111f", a)
         self._redraw()
 
     def _handle_click(self):
@@ -3407,15 +3529,70 @@ class IDMGUIApp:
         if not self.sidebar_compact and width >= 120:
             self.storage_card.place(x=0, y=3, width=width, height=84)
 
-    def _apply_sidebar_layout(self):
-        anim_id = getattr(self, "_sidebar_anim_id", None)
-        if anim_id is not None:
-            try:
-                self.root.after_cancel(anim_id)
-            except Exception:
-                pass
-            self._sidebar_anim_id = None
+    def _flush_paned_geometry(self):
+        """Synchronously flush pack -> Canvas.create_window -> GlassTableView resize cascade."""
+        try:
+            self.root.update_idletasks()
+            if hasattr(self, "sidebar_frame") and self.sidebar_visible:
+                sw = self.sidebar_frame.winfo_width()
+                if sw >= 20:
+                    pad_x, pad_y = self.sidebar_frame._calc_pads(sw)
+                    inner_w = max(10, sw - (pad_x * 2))
+                    inner_h = max(10, self.sidebar_frame.winfo_height() - (pad_y * 2))
+                    self.sidebar_frame.coords(self.sidebar_frame.win_id, pad_x, pad_y)
+                    self.sidebar_frame.itemconfigure(self.sidebar_frame.win_id, width=inner_w, height=inner_h)
+                    self.root.update_idletasks()
+                    nav_w = self.nav_scroller.canvas.winfo_width()
+                    if nav_w >= 10:
+                        self.nav_scroller.canvas.itemconfigure(self.nav_scroller._win, width=nav_w)
+            if hasattr(self, "table_container"):
+                tw = self.table_container.winfo_width()
+                th = self.table_container.winfo_height()
+                if tw >= 50 and th >= 50:
+                    tpad = self.table_container._calc_pad()
+                    self.table_container.coords(self.table_container.win_id, tpad, tpad)
+                    self.table_container.itemconfigure(
+                        self.table_container.win_id,
+                        width=max(10, tw - (tpad * 2)),
+                        height=max(10, th - (tpad * 2)),
+                    )
+            self.root.update_idletasks()
+        except Exception:
+            pass
 
+    def _set_sidebar_content_fade(self, alpha: Optional[float]):
+        """Interpolate all sidebar labels, dividers, pills, badges, and storage card smoothly."""
+        a = None if (alpha is None or alpha >= 0.99) else max(0.0, min(1.0, float(alpha)))
+        expanded_on_screen = getattr(self.lbl_sidebar_title, "_visible", True) if hasattr(self, "lbl_sidebar_title") else True
+        try:
+            if hasattr(self, "lbl_sidebar_title") and hasattr(self, "sidebar_header"):
+                target_fg = self.lbl_sidebar_title.cget("fg")
+                if expanded_on_screen:
+                    if a is None:
+                        self.sidebar_header.itemconfigure(self.lbl_sidebar_title.item_id, fill=target_fg, state="normal")
+                    elif a <= 0.04:
+                        self.sidebar_header.itemconfigure(self.lbl_sidebar_title.item_id, state="hidden")
+                    else:
+                        self.sidebar_header.itemconfigure(
+                            self.lbl_sidebar_title.item_id,
+                            state="normal",
+                            fill=interpolate_color("#0d1b32", target_fg, a),
+                        )
+            if hasattr(self, "frame_sec_pustaka"):
+                self.frame_sec_pustaka.set_fade(a)
+            if hasattr(self, "frame_sec_kategori"):
+                self.frame_sec_kategori.set_fade(a)
+            if hasattr(self, "storage_card") and expanded_on_screen:
+                self.storage_card.set_fade(None if a is None else a)
+            if hasattr(self, "btn_compact_folder") and not expanded_on_screen:
+                self.btn_compact_folder.set_fade(None if a is None else a)
+            fade_val = 1.0 if a is None else a
+            for item in self.sidebar_items.values():
+                item.set_text_fade(fade_val)
+        except Exception:
+            pass
+
+    def _apply_sidebar_layout(self, initial_fade: Optional[float] = None):
         target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
         try:
             if hasattr(self.sidebar_frame, "set_animating"):
@@ -3451,14 +3628,43 @@ class IDMGUIApp:
             for item in self.sidebar_items.values():
                 item.set_compact(False, redraw=False)
 
-        # Flush geometry once so all left/right Liquid Glass panels render at final coordinates
-        try:
-            self.paned.container.update_idletasks()
-        except Exception:
-            pass
+        # Apply fade state before redraws so initial frame renders directly at target alpha
+        self._set_sidebar_content_fade(initial_fade)
 
+        # Propagate final sizes through every nested Canvas container before painting glass
+        self._flush_paned_geometry()
         self._refresh_sidebar_glass()
         self._refresh_right_glass()
+        try:
+            if hasattr(self, "tree") and hasattr(self.tree, "viewport"):
+                dims = (self.tree.viewport.winfo_width(), self.tree.viewport.winfo_height())
+                if dims != getattr(self.tree, "_last_resize_dims", None):
+                    self.tree._on_resize()
+            self.root.update_idletasks()
+        except Exception:
+            pass
+        self._flush_win32_paint()
+
+    def _flush_win32_paint(self):
+        """Force synchronous Win32 WM_ERASEBKGND + WM_PAINT and drain Tk DisplayFrame."""
+        if sys.platform != "win32":
+            return
+        try:
+            if not self.paned.container.winfo_ismapped() or self.root.state() in ("withdrawn", "iconic"):
+                return
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = ctypes.windll.user32
+            user32.RedrawWindow.argtypes = [wintypes.HWND, ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT]
+            user32.RedrawWindow.restype = wintypes.BOOL
+            hwnd = int(self.paned.container.winfo_id())
+            if hwnd:
+                # RDW_INVALIDATE (0x1) | RDW_ERASE (0x4) | RDW_ALLCHILDREN (0x80) | RDW_UPDATENOW (0x100) | RDW_ERASENOW (0x200)
+                user32.RedrawWindow(hwnd, None, None, 0x0385)
+                self.root.update_idletasks()
+        except Exception:
+            pass
 
     def _refresh_right_glass(self):
         for attr in ("card_speed", "card_active", "card_total", "table_container"):
@@ -3487,20 +3693,9 @@ class IDMGUIApp:
         except Exception:
             pass
 
-    def toggle_sidebar_compact(self):
-        """Toggle between expanded sidebar with labels and compact sidebar with icons and phone notification badges."""
-        self.sidebar_compact = not self.sidebar_compact
-        self._apply_sidebar_compact_state(animated=True)
-
-    def _apply_sidebar_compact_state(self, animated: bool = True):
-        # Single atomic layout + synchronized glass redraw prevents multi-frame reflow lag and intermediate glitches
-        self._apply_sidebar_compact_immediate()
-
-    def _finish_sidebar_animation(self):
-        self._sidebar_anim_id = None
-        self._apply_sidebar_layout()
-
-    def _apply_sidebar_compact_immediate(self):
+    def _cancel_sidebar_anim(self) -> int:
+        gen = getattr(self, "_sidebar_anim_gen", 0) + 1
+        self._sidebar_anim_gen = gen
         anim_id = getattr(self, "_sidebar_anim_id", None)
         if anim_id is not None:
             try:
@@ -3508,17 +3703,108 @@ class IDMGUIApp:
             except Exception:
                 pass
             self._sidebar_anim_id = None
-        self._apply_sidebar_layout()
+        return gen
 
-    def toggle_sidebar(self):
-        if self.sidebar_visible:
-            self.paned.forget(self.sidebar_frame)
-            self.sidebar_visible = False
+    def _run_sidebar_fade(
+        self,
+        start_a: float,
+        end_a: float,
+        duration_s: float,
+        on_done: Any,
+        gen: int,
+        defer_start: bool = False,
+    ):
+        start_t: list[Optional[float]] = [None if defer_start else time.perf_counter()]
+
+        def _tick():
+            if getattr(self, "_sidebar_anim_gen", 0) != gen or not self.root.winfo_exists():
+                return
+            self._sidebar_anim_id = None
+            if start_t[0] is None:
+                start_t[0] = time.perf_counter()
+            t = min(1.0, (time.perf_counter() - start_t[0]) / max(0.01, duration_s))
+            ease = 1.0 - (1.0 - t) ** 2.2
+            alpha = start_a + (end_a - start_a) * ease
+            self._set_sidebar_content_fade(alpha)
             try:
-                self.paned.container.update_idletasks()
+                self.root.update_idletasks()
             except Exception:
                 pass
+            if t < 1.0:
+                self._sidebar_anim_id = self.root.after(12, _tick)
+            else:
+                on_done()
+
+        if defer_start:
+            self._sidebar_anim_id = self.root.after(12, _tick)
+        else:
+            _tick()
+
+    def toggle_sidebar_compact(self):
+        """Toggle between expanded sidebar with labels and compact sidebar with icons and phone notification badges."""
+        self.sidebar_compact = not self.sidebar_compact
+        self._apply_sidebar_compact_state(animated=True)
+
+    def _apply_sidebar_compact_state(self, animated: bool = True):
+        gen = self._cancel_sidebar_anim()
+        if not animated or os.environ.get("PYTEST_CURRENT_TEST") or is_reduced_motion() or not self.sidebar_visible:
+            self._apply_sidebar_compact_immediate()
+            return
+
+        # Smooth 2-phase Liquid Glass cross-fade:
+        # 1) Fade out old labels/pills without shifting window widths (0 tearing)
+        # 2) Perform 1 atomic geometry + glass flush with new content starting at alpha=0
+        # 3) Defer clock start by 1 tick so Win32 repaint settles, then smoothly fade in
+        fade_out_s = 0.085 if self.sidebar_compact else 0.075
+        fade_in_s = 0.12 if self.sidebar_compact else 0.14
+
+        def _after_fade_in():
+            if getattr(self, "_sidebar_anim_gen", 0) == gen:
+                self._set_sidebar_content_fade(None)
+
+        def _switch_and_fade_in():
+            if getattr(self, "_sidebar_anim_gen", 0) != gen:
+                return
+            self._apply_sidebar_layout(initial_fade=0.0)
+            self._run_sidebar_fade(0.0, 1.0, fade_in_s, _after_fade_in, gen, defer_start=True)
+
+        self._run_sidebar_fade(1.0, 0.0, fade_out_s, _switch_and_fade_in, gen)
+
+    def _finish_sidebar_animation(self):
+        self._sidebar_anim_id = None
+        self._apply_sidebar_layout(initial_fade=None)
+
+    def _apply_sidebar_compact_immediate(self):
+        self._cancel_sidebar_anim()
+        self._apply_sidebar_layout(initial_fade=None)
+
+    def toggle_sidebar(self):
+        gen = self._cancel_sidebar_anim()
+        immediate = bool(os.environ.get("PYTEST_CURRENT_TEST") or is_reduced_motion())
+
+        def _complete_hide():
+            if getattr(self, "_sidebar_anim_gen", 0) != gen:
+                return
+            self.paned.forget(self.sidebar_frame)
+            self.sidebar_visible = False
+            self._set_sidebar_content_fade(None)
+            self._flush_paned_geometry()
             self._refresh_right_glass()
+            try:
+                if hasattr(self, "tree") and hasattr(self.tree, "viewport"):
+                    dims = (self.tree.viewport.winfo_width(), self.tree.viewport.winfo_height())
+                    if dims != getattr(self.tree, "_last_resize_dims", None):
+                        self.tree._on_resize()
+                self.root.update_idletasks()
+            except Exception:
+                pass
+            self._flush_win32_paint()
+
+        if self.sidebar_visible:
+            if immediate:
+                _complete_hide()
+            else:
+                self._run_sidebar_fade(1.0, 0.0, 0.075, _complete_hide, gen)
         else:
             panes = self.paned.panes()
             min_s = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
@@ -3528,7 +3814,11 @@ class IDMGUIApp:
             else:
                 self.paned.add(self.sidebar_frame, minsize=min_s)
             self.sidebar_visible = True
-            self._apply_sidebar_layout()
+            if immediate:
+                self._apply_sidebar_layout(initial_fade=None)
+            else:
+                self._apply_sidebar_layout(initial_fade=0.0)
+                self._run_sidebar_fade(0.0, 1.0, 0.12, lambda: self._set_sidebar_content_fade(None), gen, defer_start=True)
 
     def set_language(self, lang: str):
         """Sets the application language ('id' or 'en') and dynamically updates UI strings."""
