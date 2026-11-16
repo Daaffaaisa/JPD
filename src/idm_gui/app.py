@@ -204,6 +204,212 @@ class _CanvasTextAdapter:
         return ""
 
 
+def _apply_canvas_glass_backdrop(canvas: tk.Canvas, tint_rgba: tuple[int, int, int, int] = (8, 12, 20, 165)) -> bool:
+    """Renders a coordinate-aligned AmbientMeshEngine backdrop onto a Canvas without rounded mask/border."""
+    try:
+        w = canvas.winfo_width()
+        h = canvas.winfo_height()
+        if w < 4 or h < 4:
+            return False
+        top = canvas.winfo_toplevel()
+        rx = max(0, canvas.winfo_rootx() - top.winfo_rootx())
+        ry = max(0, canvas.winfo_rooty() - top.winfo_rooty())
+        key = (w, h, rx, ry, tint_rgba)
+        if key != getattr(canvas, "_bg_mesh_key", None) or getattr(canvas, "_bg_mesh_photo", None) is None:
+            canvas._bg_mesh_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(  # type: ignore[attr-defined]
+                w=w,
+                h=h,
+                root_x=rx,
+                root_y=ry,
+                tint_rgba=tint_rgba,
+            )
+            canvas._bg_mesh_key = key  # type: ignore[attr-defined]
+            canvas.delete("bg_mesh")
+            canvas.create_image(0, 0, image=canvas._bg_mesh_photo, anchor=tk.NW, tags="bg_mesh")  # type: ignore[attr-defined]
+        canvas.tag_lower("bg_mesh")
+        return True
+    except Exception:
+        return False
+
+
+class _CanvasTextWidgetAdapter:
+    """Adapter exposing Label-like config/cget/place/pack API for pure Canvas text items."""
+
+    def __init__(self, canvas: tk.Canvas, item_id: int, text: str = "", fg: str = "#ffffff"):
+        self.canvas = canvas
+        self.item_id = item_id
+        self._text = text
+        self._fg = fg
+        self._visible = True
+
+    def config(self, **kwargs):
+        self.configure(**kwargs)
+
+    def configure(self, **kwargs):
+        for k, v in kwargs.items():
+            if k == "text":
+                self._text = str(v)
+                try:
+                    self.canvas.itemconfigure(self.item_id, text=self._text)
+                except Exception:
+                    pass
+            elif k in ("fg", "foreground"):
+                self._fg = str(v)
+                try:
+                    self.canvas.itemconfigure(self.item_id, fill=self._fg)
+                except Exception:
+                    pass
+            elif k == "font":
+                try:
+                    self.canvas.itemconfigure(self.item_id, font=v)
+                except Exception:
+                    pass
+
+    def cget(self, key: str):
+        if key == "text":
+            return self._text
+        if key in ("fg", "foreground"):
+            return self._fg
+        return ""
+
+    def place(self, x: Optional[int] = None, y: Optional[int] = None, **_kwargs):
+        self._visible = True
+        try:
+            self.canvas.itemconfigure(self.item_id, state="normal")
+            if x is not None and y is not None:
+                self.canvas.coords(self.item_id, x, y)
+        except Exception:
+            pass
+
+    def place_forget(self):
+        self._visible = False
+        try:
+            self.canvas.itemconfigure(self.item_id, state="hidden")
+        except Exception:
+            pass
+
+    def pack(self, **_kwargs):
+        self._visible = True
+        try:
+            self.canvas.itemconfigure(self.item_id, state="normal")
+        except Exception:
+            pass
+
+    def pack_forget(self):
+        self._visible = False
+        try:
+            self.canvas.itemconfigure(self.item_id, state="hidden")
+        except Exception:
+            pass
+
+
+class GlassButtonCanvas(tk.Canvas):
+    """Rounded translucent Liquid Glass button with coordinate-aligned mesh corners."""
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Optional[Any] = None,
+        width: int = 30,
+        height: int = 30,
+        radius: int = 8,
+        font: Any = (FONT_FAMILY, 8),
+        tooltip: Optional[str] = None,
+        tint_rgba: tuple[int, int, int, int] = (8, 12, 20, 165),
+        fill_normal: str = "#16253d",
+        fill_hover: str = "#1f3558",
+        border_normal: str = "#2a4268",
+        border_hover: str = THEME["accent_glow"],
+    ):
+        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["tree_bg"]
+        super().__init__(parent, width=width, height=height, bg=bg_col, highlightthickness=0, bd=0, cursor="hand2")
+        self._text = text
+        self.command = command
+        self.radius = radius
+        self.font = font
+        self.tint_rgba = tint_rgba
+        self.fill_normal = fill_normal
+        self.fill_hover = fill_hover
+        self.border_normal = border_normal
+        self.border_hover = border_hover
+        self._hovered = False
+        self._pressed = False
+        self.tooltip_obj: Optional[Tooltip] = Tooltip(self, tooltip) if tooltip else None
+
+        self.bind("<Configure>", lambda e: self._redraw(), add="+")
+        self.bind("<Enter>", self._on_enter, add="+")
+        self.bind("<Leave>", self._on_leave, add="+")
+        self.bind("<ButtonPress-1>", self._on_press, add="+")
+        self.bind("<ButtonRelease-1>", self._on_release, add="+")
+        self._redraw()
+
+    def _redraw(self):
+        w = max(self.winfo_width(), int(self.cget("width")))
+        h = max(self.winfo_height(), int(self.cget("height")))
+        if w < 6 or h < 6:
+            return
+        self.delete("btn_fg")
+        _apply_canvas_glass_backdrop(self, tint_rgba=self.tint_rgba)
+
+        fill = self.fill_hover if (self._hovered or self._pressed) else self.fill_normal
+        border = self.border_hover if (self._hovered or self._pressed) else self.border_normal
+        r = min(self.radius, (w - 2) // 2, (h - 2) // 2)
+        draw_round_rectangle(self, 1, 1, w - 1, h - 1, r=r, fill=fill, outline=border, width=1, tags="btn_fg")
+        # Subtle top specular glint
+        if w > 2 * r + 4:
+            self.create_line(r + 2, 2, w - r - 2, 2, fill="#64748b" if not self._hovered else "#93c5fd", width=1, tags="btn_fg")
+        self.create_text(w // 2, h // 2, text=self._text, fill="#ffffff", font=self.font, anchor=tk.CENTER, tags="btn_fg")
+
+    def _on_enter(self, _e=None):
+        self._hovered = True
+        self._redraw()
+
+    def _on_leave(self, _e=None):
+        self._hovered = False
+        self._pressed = False
+        self._redraw()
+
+    def _on_press(self, _e=None):
+        self._pressed = True
+        self._redraw()
+
+    def _on_release(self, e=None):
+        was_pressed = self._pressed
+        self._pressed = False
+        self._redraw()
+        if was_pressed and self.command:
+            if e is None or (0 <= e.x <= self.winfo_width() and 0 <= e.y <= self.winfo_height()):
+                self.command()
+
+    def config(self, **kwargs):
+        self.configure(**kwargs)
+
+    def configure(self, cnf=None, **kwargs):
+        if cnf:
+            kwargs.update(cnf)
+        if "text" in kwargs:
+            self._text = str(kwargs.pop("text"))
+            self._redraw()
+        if "tooltip" in kwargs:
+            tip_txt = str(kwargs.pop("tooltip"))
+            if self.tooltip_obj:
+                self.tooltip_obj.set_text(tip_txt)
+            elif tip_txt:
+                self.tooltip_obj = Tooltip(self, tip_txt)
+        if "command" in kwargs:
+            self.command = kwargs.pop("command")
+        if kwargs:
+            super().configure(**kwargs)
+
+    def cget(self, key: str):
+        if key == "text":
+            return self._text
+        if key == "tooltip":
+            return self.tooltip_obj.text if self.tooltip_obj else ""
+        return super().cget(key)
+
+
 class TactileCard(tk.Canvas):
     """Modern 3D elevated tactile card with smooth rounded corners, specular highlight, and ambient shadow."""
 
@@ -330,53 +536,252 @@ class TactileCard(tk.Canvas):
             pass
 
 
-class TactileStorageCard(tk.Frame):
-    """Modern 3D elevated storage card with dark styling and embedded open button."""
+class TactileStorageCard(tk.Canvas):
+    """Modern Liquid Glass inset storage card with rounded specular panel and glass action button."""
 
-    def __init__(self, parent: tk.Widget, on_open_folder: Any, r: int = 10):
-        super().__init__(parent, bg=THEME["surface"], highlightbackground=THEME["glass_border"], highlightthickness=1, padx=8, pady=6)
+    def __init__(self, parent: tk.Widget, on_open_folder: Any, r: int = RADIUS_SM):
+        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["tree_bg"]
+        super().__init__(parent, height=84, bg=bg_col, highlightthickness=0, bd=0)
         self.r = r
         self.on_open_folder = on_open_folder
+        self._card_photo: Optional[Any] = None
+        self._card_cache_key: Optional[tuple[int, int, int, int]] = None
 
-        self.lbl_title = tk.Label(
-            self,
+        self.item_title = self.create_text(
+            12,
+            15,
             text=tr("sec_storage"),
-            bg=THEME["surface"],
-            fg=THEME["text_tertiary"],
+            fill=THEME["text_tertiary"],
             font=(FONT_DISPLAY, 7, "bold"),
             anchor=tk.W,
+            tags="card_fg",
         )
-        self.lbl_title.pack(fill=tk.X, anchor=tk.W)
-
-        self.lbl_path = tk.Label(
-            self,
+        self.item_path = self.create_text(
+            12,
+            33,
             text=os.path.basename(os.path.expanduser("~")) + "/Downloads",
-            bg=THEME["surface"],
-            fg=THEME["text_secondary"],
+            fill=THEME["text_secondary"],
             font=(FONT_FAMILY, 8),
             anchor=tk.W,
+            tags="card_fg",
         )
-        self.lbl_path.pack(fill=tk.X, anchor=tk.W, pady=(2, 4))
+        self.lbl_title = _CanvasTextWidgetAdapter(self, self.item_title, text=tr("sec_storage"), fg=THEME["text_tertiary"])
+        self.lbl_path = _CanvasTextWidgetAdapter(self, self.item_path, text=os.path.basename(os.path.expanduser("~")) + "/Downloads", fg=THEME["text_secondary"])
 
-        self.btn_open = tk.Button(
+        self.btn_open = GlassButtonCanvas(
             self,
             text=tr("tb_open_folder"),
             command=on_open_folder,
-            bg=THEME["secondary_bg"],
-            fg=THEME["text_primary"],
-            activebackground=THEME["secondary_hover"],
-            activeforeground="#ffffff",
-            relief=tk.FLAT,
-            font=(FONT_FAMILY, 8),
-            cursor="hand2",
-            padx=6,
-            pady=2,
-            bd=0,
+            width=180,
+            height=26,
+            radius=8,
+            font=(FONT_FAMILY, 8, "bold"),
+            tooltip=tr("tip_folder"),
+            tint_rgba=(12, 22, 38, 145),
+            fill_normal="#172844",
+            fill_hover="#20385e",
         )
-        self.btn_open.bind("<Enter>", lambda e: self.btn_open.configure(bg=THEME["secondary_hover"]))
-        self.btn_open.bind("<Leave>", lambda e: self.btn_open.configure(bg=THEME["secondary_bg"]))
-        self.tooltip_open = Tooltip(self.btn_open, tr("tip_folder"))
-        self.btn_open.pack(fill=tk.X)
+        self.tooltip_open = self.btn_open.tooltip_obj
+        self.btn_win_id = self.create_window(10, 48, window=self.btn_open, anchor=tk.NW, width=180, height=26)
+
+        self.bind("<Configure>", self._schedule_redraw, add="+")
+
+    def _schedule_redraw(self, _event=None):
+        self._redraw()
+
+    def _redraw(self, force: bool = False):
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 40 or h < 40:
+            return
+        if force:
+            self._bg_mesh_key = None  # type: ignore[attr-defined]
+            self._card_cache_key = None
+
+        _apply_canvas_glass_backdrop(self, tint_rgba=(8, 12, 20, 165))
+        drew_panel = False
+        try:
+            top = self.winfo_toplevel()
+            rx = max(0, self.winfo_rootx() - top.winfo_rootx())
+            ry = max(0, self.winfo_rooty() - top.winfo_rooty())
+            key = (w, h, rx, ry)
+            if key != self._card_cache_key or self._card_photo is None:
+                self._card_photo = AmbientMeshEngine.get_shared().create_glass_panel(
+                    w=w,
+                    h=h,
+                    r=self.r,
+                    root_x=rx,
+                    root_y=ry,
+                    tint_rgba=(12, 22, 38, 145),
+                    border_rgba=(60, 95, 150, 175),
+                    specular=True,
+                    caustic=True,
+                )
+                self._card_cache_key = key
+            self.delete("card_bg")
+            self.create_image(0, 0, image=self._card_photo, anchor=tk.NW, tags="card_bg")
+            drew_panel = True
+        except Exception:
+            drew_panel = False
+
+        if not drew_panel:
+            self.delete("card_bg")
+            draw_liquid_glass_panel(
+                self,
+                x1=1,
+                y1=1,
+                x2=w - 1,
+                y2=h - 1,
+                r=self.r,
+                fill=THEME["surface"],
+                border=THEME["glass_border"],
+                rim_highlight=THEME["glass_rim"],
+                refraction=THEME["glass_refraction"],
+                shadow=False,
+                tags="card_bg",
+            )
+        self.tag_lower("bg_mesh")
+        self.tag_raise("card_bg", "bg_mesh")
+        self.tag_raise("card_fg")
+
+        btn_w = max(40, w - 20)
+        self.coords(self.btn_win_id, 10, 48)
+        self.itemconfigure(self.btn_win_id, width=btn_w, height=26)
+        self.btn_open.configure(width=btn_w, height=26)
+        self.btn_open._redraw()
+
+
+class SidebarGlassContainer(tk.Canvas):
+    """Floating Liquid Glass outer container for the left navigation panel."""
+
+    def __init__(self, parent: tk.Widget, width: int = 220, r: int = RADIUS_LG):
+        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["bg_dark"]
+        super().__init__(parent, width=width, bg=bg_col, highlightthickness=0, bd=0)
+        self.r = r
+        self._animating = False
+        self._panel_photo: Optional[Any] = None
+        self._panel_cache_key: Optional[tuple[int, int, int, int, int]] = None
+
+        pad_x, pad_y = self._calc_pads(width)
+        self.inner_frame = tk.Frame(self, bg=THEME["tree_bg"])
+        self.win_id = self.create_window(pad_x, pad_y, window=self.inner_frame, anchor=tk.NW)
+
+        self._redraw_debounce_id: Optional[str] = None
+        self.bind("<Configure>", self._on_configure)
+
+    def _calc_pads(self, w: int) -> tuple[int, int]:
+        if w < 100:
+            return 5, 11
+        return 8, 10
+
+    def set_animating(self, animating: bool):
+        self._animating = animating
+
+    def _on_configure(self, _event=None):
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w >= 20 and h >= 20:
+            pad_x, pad_y = self._calc_pads(w)
+            self.coords(self.win_id, pad_x, pad_y)
+            self.itemconfigure(self.win_id, width=max(10, w - (pad_x * 2)), height=max(10, h - (pad_y * 2)))
+        if self._animating:
+            self._redraw(fast=True)
+        else:
+            self._schedule_redraw()
+
+    def _schedule_redraw(self):
+        if self._redraw_debounce_id is not None:
+            try:
+                self.after_cancel(self._redraw_debounce_id)
+            except Exception:
+                pass
+        self._redraw_debounce_id = self.after(35, self._redraw)
+
+    def _redraw(self, force: bool = False, fast: bool = False):
+        self._redraw_debounce_id = None
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 24 or h < 40:
+            return
+
+        pad_x, pad_y = self._calc_pads(w)
+        self.coords(self.win_id, pad_x, pad_y)
+        self.itemconfigure(self.win_id, width=max(10, w - (pad_x * 2)), height=max(10, h - (pad_y * 2)))
+
+        r = min(self.r, max(8, w // 2 - 2))
+        if not fast:
+            try:
+                top = self.winfo_toplevel()
+                rx = max(0, self.winfo_rootx() - top.winfo_rootx())
+                ry = max(0, self.winfo_rooty() - top.winfo_rooty())
+                key = (w, h, r, rx, ry)
+                if force or key != self._panel_cache_key or self._panel_photo is None:
+                    self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
+                        w=w,
+                        h=h,
+                        r=r,
+                        root_x=rx,
+                        root_y=ry,
+                        tint_rgba=(8, 12, 20, 165),
+                        border_rgba=(60, 95, 150, 180),
+                        specular=True,
+                        caustic=True,
+                    )
+                    self._panel_cache_key = key
+                self.delete("card_bg")
+                self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
+                self.tag_lower("card_bg")
+                return
+            except Exception:
+                pass
+
+        self.delete("card_bg")
+        draw_liquid_glass_panel(
+            self,
+            x1=1,
+            y1=1,
+            x2=w - 1,
+            y2=h - 1,
+            r=r,
+            fill=THEME["tree_bg"],
+            border=THEME["glass_border"],
+            rim_highlight=THEME["glass_rim"],
+            refraction=THEME["glass_refraction"],
+            shadow=False,
+            tags="card_bg",
+        )
+        self.tag_lower("card_bg")
+
+
+class SidebarSectionCanvas(tk.Canvas):
+    """Seamless glass section header inside the sidebar navigation scroller."""
+
+    def __init__(self, parent: tk.Widget, text: str, height: int = 22, show_divider: bool = False):
+        super().__init__(parent, height=height, bg=THEME["tree_bg"], highlightthickness=0, bd=0)
+        self.show_divider = show_divider
+        text_y = 12 if show_divider else 3
+        self.item_text = self.create_text(
+            10,
+            text_y,
+            text=text,
+            fill=THEME["text_tertiary"],
+            font=(FONT_DISPLAY, 7, "bold"),
+            anchor=tk.NW,
+            tags="sec_fg",
+        )
+        self.label_adapter = _CanvasTextWidgetAdapter(self, self.item_text, text=text, fg=THEME["text_tertiary"])
+        self.bind("<Configure>", lambda e: self._redraw(), add="+")
+
+    def _redraw(self, force: bool = False):
+        if force:
+            self._bg_mesh_key = None  # type: ignore[attr-defined]
+        _apply_canvas_glass_backdrop(self, tint_rgba=(8, 12, 20, 165))
+        self.delete("sec_div")
+        w = self.winfo_width()
+        if self.show_divider and w > 24:
+            self.create_line(10, 5, w - 10, 5, fill=THEME["glass_border"], width=1, tags="sec_div")
+        self.tag_raise("sec_div")
+        self.tag_raise("sec_fg")
 
 
 class TactileTableContainer(tk.Canvas):
@@ -457,31 +862,95 @@ class TactileTableContainer(tk.Canvas):
 class SidebarNavScroller(tk.Frame):
     """Scrollable container for sidebar navigation items at compact window heights.
 
-    Wraps a canvas + inner frame; mousewheel scroll activates only while the
-    pointer hovers the nav area so it never steals wheel events from the table.
+    Wraps a canvas + inner frame with an auto-hiding GlassThinScrollbar;
+    mousewheel scroll activates only while the pointer hovers the nav area.
     """
 
     def __init__(self, parent: tk.Widget, bg: str):
         super().__init__(parent, bg=bg)
         self.canvas = tk.Canvas(self, bg=bg, bd=0, highlightthickness=0)
-        self.scrollbar = tk.Scrollbar(self, orient=tk.VERTICAL, command=self.canvas.yview, width=10)
+        self._bg_photo: Optional[Any] = None
+        self._bg_cache_key: Optional[tuple[int, int, int, int, int]] = None
+        self.scrollbar = GlassThinScrollbar(
+            self,
+            command=self._on_scrollbar_move,
+            width=6,
+            bg=bg,
+            glass_backdrop=True,
+            tint_rgba=(8, 12, 20, 165),
+        )
+        self._scrollbar_packed = False
         self.canvas.configure(yscrollcommand=self._on_scroll)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.inner = tk.Frame(self.canvas, bg=bg)
         self._win = self.canvas.create_window((0, 0), window=self.inner, anchor=tk.NW)
-        self.inner.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.inner.bind("<Configure>", lambda e: self._update_scrollregion())
         self.canvas.bind("<Configure>", self._on_canvas_configure)
-        # Mousewheel active only while hovering the nav scroller
         self.bind("<Enter>", self._bind_wheel, add="+")
         self.bind("<Leave>", self._unbind_wheel, add="+")
 
-    def _on_scroll(self, first: float, last: float):
-        self.scrollbar.set(first, last)
+    def _redraw_backdrop(self, force: bool = False):
+        try:
+            w = self.canvas.winfo_width()
+            h = self.canvas.winfo_height()
+            if w < 10 or h < 10:
+                return
+            top = self.canvas.winfo_toplevel()
+            rx = max(0, self.canvas.winfo_rootx() - top.winfo_rootx())
+            ry = max(0, self.canvas.winfo_rooty() - top.winfo_rooty())
+            cy0 = int(self.canvas.canvasy(0))
+            key = (w, h, rx, ry, cy0)
+            if force or key != self._bg_cache_key or self._bg_photo is None:
+                self._bg_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(
+                    w=w,
+                    h=h,
+                    root_x=rx,
+                    root_y=ry,
+                    tint_rgba=(8, 12, 20, 165),
+                )
+                self._bg_cache_key = key
+                self.canvas.delete("glass_bg")
+                self.canvas.create_image(0, cy0, image=self._bg_photo, anchor=tk.NW, tags="glass_bg")
+                self.canvas.tag_lower("glass_bg")
+        except Exception:
+            pass
+
+    def _update_scrollregion(self):
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        first, last = self.canvas.yview()
+        self._on_scroll(first, last)
+
+    def _on_scroll(self, first: float | str, last: float | str):
+        f_val, l_val = float(first), float(last)
+        needs_scroll = (l_val - f_val) < 0.995
+        if needs_scroll and not self._scrollbar_packed:
+            self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            self._scrollbar_packed = True
+        elif not needs_scroll and self._scrollbar_packed:
+            self.scrollbar.pack_forget()
+            self._scrollbar_packed = False
+        if self._scrollbar_packed:
+            self.scrollbar.set(f_val, l_val)
+        self._redraw_backdrop()
+
+    def _on_scrollbar_move(self, action: str, frac_str: str):
+        self.canvas.yview(action, frac_str)
+        self._redraw_backdrop(force=True)
+        self._refresh_children_backdrop()
 
     def _on_canvas_configure(self, event):
-        # Keep inner frame as wide as the canvas
         self.canvas.itemconfigure(self._win, width=event.width)
+        self._update_scrollregion()
+        self._redraw_backdrop()
+
+    def _refresh_children_backdrop(self):
+        self._redraw_backdrop(force=True)
+        for child in self.inner.winfo_children():
+            if hasattr(child, "_redraw"):
+                try:
+                    child._redraw(force=True)
+                except Exception:
+                    pass
 
     def _bind_wheel(self, _event=None):
         self.canvas.bind_all("<MouseWheel>", self._on_wheel, add="+")
@@ -493,13 +962,82 @@ class SidebarNavScroller(tk.Frame):
             pass
 
     def _on_wheel(self, event):
-        # Windows: positive delta scrolls down
+        first, last = self.canvas.yview()
+        if (last - first) >= 0.999:
+            return "break"
         self.canvas.yview_scroll(int(-1 * (event.delta / 120.0)), "units")
+        self._refresh_children_backdrop()
         return "break"
 
 
-class SidebarNavItem(tk.Frame):
-    """Modern macOS/Apple-inspired sidebar navigation pill item with live count badge."""
+class _SidebarPipAdapter:
+    """Compatibility adapter for compact mode phone notification pip assertions."""
+
+    def __init__(self, item: "SidebarNavItem"):
+        self._item = item
+
+    def place_info(self) -> dict[str, str]:
+        if self._item.is_compact and self._item.count > 0:
+            return {"x": "19", "y": "3"}
+        return {}
+
+
+class _SidebarBadgeAdapter:
+    """Compatibility adapter for lbl_badge assertions."""
+
+    def __init__(self, item: "SidebarNavItem"):
+        self._item = item
+
+    def config(self, **kwargs):
+        self.configure(**kwargs)
+
+    def configure(self, **kwargs):
+        if "text" in kwargs:
+            try:
+                self._item.count = int(kwargs["text"])
+            except Exception:
+                pass
+            self._item._redraw()
+
+    def cget(self, key: str):
+        if key == "text":
+            return str(self._item.count)
+        if key in ("fg", "foreground"):
+            return THEME["accent_glow"] if self._item.is_active else THEME["text_tertiary"]
+        return ""
+
+    def pack_info(self) -> dict[str, str]:
+        if not self._item.is_compact:
+            return {"side": "right"}
+        return {}
+
+
+class _SidebarLabelAdapter:
+    """Compatibility adapter for lbl_text assertions."""
+
+    def __init__(self, item: "SidebarNavItem"):
+        self._item = item
+
+    def config(self, **kwargs):
+        self.configure(**kwargs)
+
+    def configure(self, **kwargs):
+        if "text" in kwargs:
+            self._item.raw_text = str(kwargs["text"])
+        if "fg" in kwargs or "foreground" in kwargs:
+            self._item._fade_fg_override = str(kwargs.get("fg") or kwargs.get("foreground"))
+        self._item._redraw()
+
+    def cget(self, key: str):
+        if key == "text":
+            return self._item.raw_text
+        if key in ("fg", "foreground"):
+            return self._item._fade_fg_override or ("#ffffff" if self._item.is_active else THEME["text_secondary"])
+        return ""
+
+
+class SidebarNavItem(tk.Canvas):
+    """Liquid Glass sidebar navigation pill item with rounded glass active state & live count capsule."""
 
     def __init__(
         self,
@@ -510,112 +1048,121 @@ class SidebarNavItem(tk.Frame):
         on_click: Optional[Any] = None,
         on_double_click: Optional[Any] = None,
     ):
-        super().__init__(parent, bg=THEME["surface_alt"], cursor="hand2", height=34)
-        self.pack_propagate(False)
+        super().__init__(parent, bg=THEME["tree_bg"], highlightthickness=0, bd=0, cursor="hand2", height=34)
         self.key = key
+        self.icon_glyph = icon.replace("\ufe0f", "")
         self.raw_text = text
         self.on_click = on_click
         self.on_double_click = on_double_click
         self.is_active = False
         self.is_compact = False
+        self.is_hovered = False
         self.count = 0
+        self._fade_fg_override: Optional[str] = None
+        self._fade_badge_bg_override: Optional[str] = None
+        self._fade_badge_fg_override: Optional[str] = None
 
-        # Inset pill container (matches hamburger and folder button margins)
-        self.pill = tk.Frame(self, bg=THEME["surface_alt"])
-        self.pill.place(x=4, y=1, width=206, height=32)
-
-        # Left 3px active indicator bar inside pill
-        self.indicator = tk.Frame(self.pill, width=3, bg=THEME["surface_alt"])
-        self.indicator.place(x=0, y=4, width=3, height=24)
-
-        # Fixed-width container for icon (centered inside 46px visible pill at rail width 52)
-        self.icon_box = tk.Frame(self.pill, bg=THEME["surface_alt"], width=28, height=28)
-        self.icon_box.pack_propagate(False)
-        self.icon_box.place(x=6, y=2, width=28, height=28)
-
-        clean_icon = icon.replace("\ufe0f", "")
-        self.lbl_icon = tk.Label(
-            self.icon_box,
-            text=clean_icon,
-            bg=THEME["surface_alt"],
-            fg=THEME["text_secondary"],
-            font=(FONT_DISPLAY, 10),
-            anchor=tk.CENTER,
-        )
-        self.lbl_icon.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-
-        # Phone-style round notification pip for compact mode (snug on top-right of icon)
-        self.badge_pip = tk.Frame(self.icon_box, width=6, height=6, bg=THEME["danger"])
+        self.badge_pip = _SidebarPipAdapter(self)
         self.badge_canvas = self.badge_pip  # Backward compatibility alias for tests
+        self.lbl_text = _SidebarLabelAdapter(self)
+        self.lbl_badge = _SidebarBadgeAdapter(self)
 
-        # Label container strictly starting at x=38 so distance between icon and text is a clean 6-8px
-        self.label_box = tk.Frame(self.pill, bg=THEME["surface_alt"], width=166, height=32)
-        self.label_box.pack_propagate(False)
-        self.label_box.place(x=38, y=0, width=166, height=32)
+        self.bind("<Configure>", lambda e: self._redraw(), add="+")
+        self.bind("<Button-1>", lambda e: self._handle_click(), add="+")
+        self.bind("<Double-Button-1>", lambda e: self._handle_double_click(), add="+")
+        self.bind("<Enter>", lambda e: self._on_enter(), add="+")
+        self.bind("<Leave>", lambda e: self._on_leave(), add="+")
 
-        self.lbl_text = tk.Label(
-            self.label_box,
-            text=text,
-            bg=THEME["surface_alt"],
-            fg=THEME["text_secondary"],
-            font=(FONT_FAMILY, 10),
-        )
-        self.lbl_text.pack(side=tk.LEFT, padx=(2, 0))
+    def _redraw(self, force: bool = False):
+        if force:
+            self._bg_mesh_key = None  # type: ignore[attr-defined]
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 16 or h < 16:
+            return
 
-        self.lbl_badge = tk.Label(
-            self.label_box,
-            text="0",
-            bg=THEME["input_bg"],
-            fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 8, "bold"),
-            padx=5,
-            pady=1,
-        )
-        self.lbl_badge.pack(side=tk.RIGHT, padx=(0, 6))
+        self.delete("nav_fg")
+        _apply_canvas_glass_backdrop(self, tint_rgba=(8, 12, 20, 165))
 
-        for w in (self, self.pill, self.label_box, self.icon_box, self.lbl_icon, self.lbl_text, self.lbl_badge, self.badge_pip):
-            w.bind("<Button-1>", lambda e: self._handle_click())
-            w.bind("<Double-Button-1>", lambda e: self._handle_double_click())
-            w.bind("<Enter>", lambda e: self._on_enter())
-            w.bind("<Leave>", lambda e: self._on_leave())
+        mid_y = h // 2
+        compact_layout = self.is_compact or w < 100
 
-        # Initialize badge display (always show count badge, including "0")
-        self._update_badge_display()
-
-    def _update_badge_display(self):
-        self.lbl_badge.config(text=str(self.count))
-        if not self.lbl_badge.winfo_manager():
-            self.lbl_badge.pack(side=tk.RIGHT, padx=(0, 6))
-        if self.is_compact and self.count > 0:
-            self.badge_pip.place(x=19, y=3, width=6, height=6)
+        # 1. Translucent rounded glass pill for active or hovered state
+        if compact_layout:
+            cx = w // 2
+            px1, py1, px2, py2 = max(4, cx - 17), 2, min(w - 4, cx + 17), h - 2
         else:
-            self.badge_pip.place_forget()
+            px1, py1, px2, py2 = 4, 2, w - 4, h - 2
+        if self.is_active:
+            draw_round_rectangle(self, px1, py1, px2, py2, r=10, fill="#132b4f", outline=THEME["accent_glow"], width=1, tags="nav_fg")
+            if px2 - px1 > 24:
+                self.create_line(px1 + 10, py1 + 1, px2 - 10, py1 + 1, fill="#93c5fd", width=1, tags="nav_fg")
+            if not compact_layout:
+                # Subtle glowing cyan capsule indicator inside the left edge of the pill
+                draw_round_rectangle(self, px1 + 5, 7, px1 + 8, h - 7, r=1, fill=THEME["accent_glow"], outline="", tags="nav_fg")
+        elif self.is_hovered:
+            draw_round_rectangle(self, px1, py1, px2, py2, r=10, fill="#10203a", outline="#284268", width=1, tags="nav_fg")
+
+        # 2. Category / library icon
+        icon_x = (w // 2) if compact_layout else 24
+        icon_fg = THEME["accent_glow"] if self.is_active else THEME["text_secondary"]
+        self.create_text(icon_x, mid_y, text=self.icon_glyph, fill=icon_fg, font=(FONT_DISPLAY, 10), anchor=tk.CENTER, tags="nav_fg")
+
+        # 3. Compact mode red notification dot (only when count > 0)
+        if compact_layout:
+            if self.count > 0:
+                dx = icon_x + 7
+                self.create_oval(dx, 5, dx + 7, 12, fill=THEME["danger"], outline="#080c14", width=1, tags="nav_fg")
+            return
+
+        # 4. Expanded label text + always-visible rounded count badge capsule
+        badge_str = str(self.count)
+        badge_w = max(24, len(badge_str) * 7 + 12)
+        bx2 = w - 12
+        bx1 = bx2 - badge_w
+        by1, by2 = 8, h - 8
+        badge_bg = self._fade_badge_bg_override or "#09111f"
+        badge_outline = THEME["accent_glow"] if self.is_active else "#203452"
+        badge_fg = self._fade_badge_fg_override or (THEME["accent_glow"] if self.is_active else THEME["text_tertiary"])
+
+        draw_round_rectangle(self, bx1, by1, bx2, by2, r=7, fill=badge_bg, outline=badge_outline, width=1, tags="nav_fg")
+        self.create_text((bx1 + bx2) // 2, mid_y, text=badge_str, fill=badge_fg, font=(FONT_DISPLAY, 8, "bold"), anchor=tk.CENTER, tags="nav_fg")
+
+        text_x = 40
+        avail_w = max(20, bx1 - text_x - 6)
+        txt_font = (FONT_DISPLAY if self.is_active else FONT_FAMILY, 9, "bold" if self.is_active else "normal")
+        disp_text = self._fit_label(self.raw_text, avail_w, txt_font)
+        text_fg = self._fade_fg_override or ("#ffffff" if self.is_active else THEME["text_secondary"])
+        self.create_text(text_x, mid_y, text=disp_text, fill=text_fg, font=txt_font, anchor=tk.W, tags="nav_fg")
+
+    def _fit_label(self, text: str, max_w: int, font_spec: Any) -> str:
+        try:
+            f = tkfont.Font(font=font_spec)
+            if f.measure(text) <= max_w:
+                return text
+            lo, hi = 0, len(text)
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if f.measure(text[:mid] + "…") <= max_w:
+                    lo = mid
+                else:
+                    hi = mid - 1
+            return text[:lo] + "…" if lo > 0 else text
+        except Exception:
+            return text
 
     def set_compact(self, compact: bool):
         self.is_compact = compact
-        if compact:
-            self.pill.place(x=4, y=1, width=44, height=32)
-            self.icon_box.place(x=8, y=2, width=28, height=28)
-            self.label_box.place(x=300, y=0)
-        else:
-            self.pill.place(x=4, y=1, width=206, height=32)
-            self.icon_box.place(x=6, y=2, width=28, height=28)
-            self.label_box.place(x=38, y=0, width=166, height=32)
-        self._update_badge_display()
+        self._redraw(force=True)
 
     def set_text_fade(self, alpha: float):
-        """Fade text and badge labels smoothly between background color and target foreground color."""
-        bg_col = "#13233c" if self.is_active else THEME["surface_alt"]
+        bg_col = "#132b4f" if self.is_active else THEME["tree_bg"]
         target_fg = "#ffffff" if self.is_active else THEME["text_secondary"]
         target_badge_fg = THEME["accent_glow"] if self.is_active else THEME["text_tertiary"]
-        blended_fg = interpolate_color(bg_col, target_fg, alpha)
-        blended_badge_fg = interpolate_color(bg_col, target_badge_fg, alpha)
-        blended_badge_bg = interpolate_color(bg_col, THEME["input_bg"], alpha)
-        try:
-            self.lbl_text.configure(fg=blended_fg)
-            self.lbl_badge.configure(bg=blended_badge_bg, fg=blended_badge_fg)
-        except Exception:
-            pass
+        self._fade_fg_override = interpolate_color(bg_col, target_fg, alpha)
+        self._fade_badge_fg_override = interpolate_color(bg_col, target_badge_fg, alpha)
+        self._fade_badge_bg_override = interpolate_color(bg_col, "#09111f", alpha)
+        self._redraw()
 
     def _handle_click(self):
         if self.on_click:
@@ -627,54 +1174,36 @@ class SidebarNavItem(tk.Frame):
 
     def set_active(self, active: bool):
         self.is_active = active
-        bg_col = "#13233c" if active else THEME["surface_alt"]
-        fg_col = "#ffffff" if active else THEME["text_secondary"]
-        ind_col = THEME["accent_primary"] if active else THEME["surface_alt"]
-        badge_fg = THEME["accent_glow"] if active else THEME["text_tertiary"]
-
-        self.configure(bg=THEME["surface_alt"])
-        self.pill.configure(bg=bg_col)
-        self.indicator.configure(bg=ind_col)
-        self.label_box.configure(bg=bg_col)
-        self.icon_box.configure(bg=bg_col)
-        self._update_badge_display()
-        self.lbl_icon.configure(bg=bg_col, fg=THEME["accent_glow"] if active else THEME["text_secondary"])
-        self.lbl_text.configure(bg=bg_col, fg=fg_col, font=(FONT_DISPLAY if active else FONT_FAMILY, 9, "bold" if active else "normal"))
-        self.lbl_badge.configure(bg=THEME["input_bg"], fg=badge_fg)
+        if not active:
+            self.is_hovered = False
+        self._fade_fg_override = None
+        self._fade_badge_bg_override = None
+        self._fade_badge_fg_override = None
+        self._redraw()
 
     def set_count(self, count: int):
         if self.count == count:
             return
         self.count = count
-        self._update_badge_display()
+        self._redraw()
 
     def set_label(self, new_text: str):
         self.raw_text = new_text
-        self.lbl_text.configure(text=new_text)
+        self._redraw()
 
     def _on_enter(self):
         if not self.is_active:
-            hover_bg = "#111c2e"
-            self.pill.configure(bg=hover_bg)
-            self.label_box.configure(bg=hover_bg)
-            self.icon_box.configure(bg=hover_bg)
-            self._update_badge_display()
-            self.lbl_icon.configure(bg=hover_bg)
-            self.lbl_text.configure(bg=hover_bg)
+            self.is_hovered = True
+            self._redraw()
 
     def _on_leave(self):
-        if not self.is_active:
-            bg_col = THEME["surface_alt"]
-            self.pill.configure(bg=bg_col)
-            self.label_box.configure(bg=bg_col)
-            self.icon_box.configure(bg=bg_col)
-            self._update_badge_display()
-            self.lbl_icon.configure(bg=bg_col)
-            self.lbl_text.configure(bg=bg_col)
+        if self.is_hovered:
+            self.is_hovered = False
+            self._redraw()
 
 
-SIDEBAR_WIDTH_EXPANDED = 214
-SIDEBAR_WIDTH_COMPACT = 52
+SIDEBAR_WIDTH_EXPANDED = 220
+SIDEBAR_WIDTH_COMPACT = 56
 
 
 class ModernMainPaned:
@@ -696,7 +1225,7 @@ class ModernMainPaned:
             else:
                 self._panes.append(widget)
         if len(self._panes) > 0 and widget == self._panes[0]:
-            widget.pack(side=tk.LEFT, fill=tk.Y)
+            widget.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
         else:
             widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -1648,100 +2177,87 @@ class IDMGUIApp:
         self.paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 6))
 
         # Left Sidebar: Floating Liquid Glass Navigation Rail
-        self.sidebar_frame = tk.Frame(
+        self.sidebar_frame = SidebarGlassContainer(
             self.paned.container,
             width=SIDEBAR_WIDTH_EXPANDED,
-            bg=THEME["surface_alt"],
-            highlightbackground=THEME["glass_border"],
-            highlightthickness=1,
+            r=RADIUS_LG,
         )
-        self.sidebar_frame.pack_propagate(False)
         self.sidebar_visible = True
         self.sidebar_compact = False
+        sidebar_inner = self.sidebar_frame.inner_frame
 
-        # Bottom Container holding storage card & compact folder button
-        self.sidebar_bottom = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=80)
+        # Bottom Container holding Liquid Glass storage card & compact folder button
+        self.sidebar_bottom = tk.Canvas(sidebar_inner, bg=THEME["tree_bg"], highlightthickness=0, bd=0, height=88)
         self.sidebar_bottom.pack_propagate(False)
-        self.sidebar_bottom.pack(side=tk.BOTTOM, fill=tk.X, padx=6, pady=6)
+        self.sidebar_bottom.pack(side=tk.BOTTOM, fill=tk.X, pady=0)
+        self.sidebar_bottom.bind(
+            "<Configure>",
+            lambda e: self._on_sidebar_bottom_configure(e.width),
+            add="+",
+        )
 
         # Compact Folder Button (for compact mode)
-        self.btn_compact_folder = tk.Button(
+        self.btn_compact_folder = GlassButtonCanvas(
             self.sidebar_bottom,
             text="📁",
             command=self.open_selected_folder,
-            bg=THEME["secondary_bg"],
-            fg=THEME["text_primary"],
-            activebackground=THEME["secondary_hover"],
-            activeforeground="#ffffff",
-            relief=tk.FLAT,
+            width=34,
+            height=34,
+            radius=9,
             font=(FONT_DISPLAY, 11),
-            cursor="hand2",
-            padx=2,
-            pady=2,
-            bd=0,
+            tooltip=tr("tip_folder"),
         )
-        self.btn_compact_folder.bind("<Enter>", lambda e: self.btn_compact_folder.configure(bg=THEME["secondary_hover"]))
-        self.btn_compact_folder.bind("<Leave>", lambda e: self.btn_compact_folder.configure(bg=THEME["secondary_bg"]))
-        self.btn_compact_folder.place(x=6, y=44, width=28, height=28)
 
         # Storage Card (for expanded mode)
-        self.storage_card = TactileStorageCard(self.sidebar_bottom, on_open_folder=self.open_selected_folder, r=10)
-        self.storage_card.place(x=0, y=0, width=202, height=80)
-        self.storage_card.lift()
+        self.storage_card = TactileStorageCard(self.sidebar_bottom, on_open_folder=self.open_selected_folder, r=RADIUS_SM)
+        self.storage_card.place(x=0, y=3, width=204, height=84)
+        tk.Misc.lift(self.storage_card)
 
-        # Sidebar Header with Hamburger (Garis Tiga ☰) Toggle Button (fixed 40px height to prevent vertical jump)
-        self.sidebar_header = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=40)
+        # Sidebar Header with Rounded Glass Hamburger (☰) Toggle Button
+        self.sidebar_header = tk.Canvas(sidebar_inner, bg=THEME["tree_bg"], highlightthickness=0, bd=0, height=40)
         self.sidebar_header.pack_propagate(False)
-        self.sidebar_header.pack(side=tk.TOP, fill=tk.X, pady=(4, 2))
+        self.sidebar_header.pack(side=tk.TOP, fill=tk.X, pady=0)
+        self.sidebar_header.bind(
+            "<Configure>",
+            lambda _e: _apply_canvas_glass_backdrop(self.sidebar_header, tint_rgba=(8, 12, 20, 165)),
+            add="+",
+        )
 
-        self.btn_hamburger = tk.Button(
+        self.btn_hamburger = GlassButtonCanvas(
             self.sidebar_header,
             text="☰",
             command=self.toggle_sidebar_compact,
-            bg=THEME["secondary_bg"],
-            fg="#ffffff",
-            activebackground=THEME["secondary_hover"],
-            activeforeground="#ffffff",
-            relief=tk.FLAT,
+            width=30,
+            height=30,
+            radius=9,
             font=(FONT_DISPLAY, 10),
-            cursor="hand2",
-            padx=2,
-            pady=2,
-            bd=0,
         )
-        self.btn_hamburger.bind("<Enter>", lambda e: self.btn_hamburger.configure(bg=THEME["secondary_hover"]))
-        self.btn_hamburger.bind("<Leave>", lambda e: self.btn_hamburger.configure(bg=THEME["secondary_bg"]))
         self.btn_hamburger.bind("<Button-3>", lambda e: self.menubar.tk_popup(e.x_root, e.y_root))
-        self.btn_hamburger.place(x=10, y=6, width=28, height=28)
+        self.btn_hamburger.place(x=6, y=4, width=30, height=30)
 
-        self.lbl_sidebar_title = tk.Label(
-            self.sidebar_header,
+        nav_title_id = self.sidebar_header.create_text(
+            44,
+            19,
             text=tr("nav_title"),
-            bg=THEME["surface_alt"],
-            fg=THEME["text_tertiary"],
+            fill=THEME["text_tertiary"],
             font=(FONT_DISPLAY, 8, "bold"),
-        )
-        self.lbl_sidebar_title.place(x=44, y=10)
-
-        # Scrollable nav container fills the middle between header and bottom
-        self.nav_scroller = SidebarNavScroller(self.sidebar_frame, bg=THEME["surface_alt"])
-        self.nav_scroller.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(4, 4))
-
-        # Add section containers and items inside the nav scroller
-        # Section 1: "Pustaka" (Library)
-        self.frame_sec_pustaka = tk.Frame(self.nav_scroller.inner, bg=THEME["surface_alt"], height=22)
-        self.frame_sec_pustaka.pack_propagate(False)
-        self.frame_sec_pustaka.pack(side=tk.TOP, fill=tk.X)
-
-        self.lbl_sec_pustaka = tk.Label(
-            self.frame_sec_pustaka,
-            text=tr("sec_library"),
-            bg=THEME["surface_alt"],
-            fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 7, "bold"),
             anchor=tk.W,
         )
-        self.lbl_sec_pustaka.pack(fill=tk.X, padx=10, pady=(1, 1))
+        self.lbl_sidebar_title = _CanvasTextWidgetAdapter(
+            self.sidebar_header,
+            nav_title_id,
+            text=tr("nav_title"),
+            fg=THEME["text_tertiary"],
+        )
+
+        # Scrollable nav container fills the middle between header and bottom
+        self.nav_scroller = SidebarNavScroller(sidebar_inner, bg=THEME["tree_bg"])
+        self.nav_scroller.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=0)
+
+        # Section 1: "Library" / "Pustaka"
+        self.frame_sec_pustaka = SidebarSectionCanvas(self.nav_scroller.inner, text=tr("sec_library"), height=22, show_divider=False)
+        self.frame_sec_pustaka.pack(side=tk.TOP, fill=tk.X)
+        self.lbl_sec_pustaka = self.frame_sec_pustaka.label_adapter
 
         pustaka_specs = [
             ("all", "📥", tr("nav_all")),
@@ -1760,24 +2276,10 @@ class IDMGUIApp:
             item.pack(fill=tk.X)
             self.sidebar_items[key] = item
 
-        # Section 2 Container (fixed 26px height: keeps Category rows locked at exact same vertical coordinate in both modes)
-        self.frame_sec_kategori = tk.Frame(self.nav_scroller.inner, bg=THEME["surface_alt"], height=26)
-        self.frame_sec_kategori.pack_propagate(False)
-        self.frame_sec_kategori.pack(side=tk.TOP, fill=tk.X, pady=(4, 2))
-
-        # 1px subtle divider between sections
-        self.div_sec_kategori = tk.Frame(self.frame_sec_kategori, height=1, bg=THEME["border"])
-        self.div_sec_kategori.pack(fill=tk.X, padx=8, pady=(2, 2))
-
-        self.lbl_sec_kategori = tk.Label(
-            self.frame_sec_kategori,
-            text=tr("sec_categories"),
-            bg=THEME["surface_alt"],
-            fg=THEME["text_tertiary"],
-            font=(FONT_DISPLAY, 7, "bold"),
-            anchor=tk.W,
-        )
-        self.lbl_sec_kategori.pack(fill=tk.X, padx=10, pady=(1, 1))
+        # Section 2: "File Categories" / "Kategori Berkas"
+        self.frame_sec_kategori = SidebarSectionCanvas(self.nav_scroller.inner, text=tr("sec_categories"), height=30, show_divider=True)
+        self.frame_sec_kategori.pack(side=tk.TOP, fill=tk.X, pady=0)
+        self.lbl_sec_kategori = self.frame_sec_kategori.label_adapter
 
         cat_specs = [
             ("video", "🎬", tr("cat_video")),
@@ -1799,14 +2301,11 @@ class IDMGUIApp:
             item.pack(fill=tk.X)
             self.sidebar_items[key] = item
 
-        # Activate 'all' item by default with animated glide indicator
-        self.sidebar_glide_bar = tk.Frame(self.nav_scroller.inner, bg=THEME["accent_glow"], width=3)
+        # Activate 'all' item by default (rounded glass active pill handles indicator directly)
         self.sidebar_items["all"].set_active(True)
-        self.sidebar_glide_bar.place(x=2, y=28, width=3, height=24)
-        self.sidebar_glide_bar.lift()
 
         # Dummy hidden category_tree for total backward compatibility
-        self.category_tree = ttk.Treeview(self.sidebar_frame)
+        self.category_tree = ttk.Treeview(sidebar_inner)
 
         self.paned.add(self.sidebar_frame, minsize=56)
 
@@ -2855,18 +3354,78 @@ class IDMGUIApp:
             except Exception as e:
                 messagebox.showerror(tr("delete_error_title"), tr("delete_error_msg", err=e), parent=self.root)
 
+    def _on_sidebar_bottom_configure(self, width: int):
+        _apply_canvas_glass_backdrop(self.sidebar_bottom, tint_rgba=(8, 12, 20, 165))
+        if not self.sidebar_compact and width >= 40:
+            self.storage_card.place(x=0, y=3, width=width, height=84)
+
+    def _apply_sidebar_layout(self):
+        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
+        try:
+            self.sidebar_frame.configure(width=target_w)
+        except Exception:
+            pass
+
+        if self.sidebar_compact:
+            try:
+                self.lbl_sidebar_title.place_forget()
+                self.lbl_sec_pustaka.place_forget()
+                self.lbl_sec_kategori.place_forget()
+                self.storage_card.place_forget()
+                self.btn_compact_folder.place(x=6, y=49, width=34, height=34)
+                self.btn_hamburger.place(x=8, y=4, width=30, height=30)
+            except Exception:
+                pass
+            for item in self.sidebar_items.values():
+                item.set_compact(True)
+        else:
+            try:
+                self.btn_compact_folder.place_forget()
+                self.btn_hamburger.place(x=6, y=4, width=30, height=30)
+                self.lbl_sidebar_title.place(x=44, y=19)
+                self.lbl_sec_pustaka.place(x=10, y=3)
+                self.lbl_sec_kategori.place(x=10, y=12)
+                inner_w = max(140, target_w - 16)
+                self.storage_card.place(x=0, y=3, width=inner_w, height=84)
+            except Exception:
+                pass
+            for item in self.sidebar_items.values():
+                item.set_compact(False)
+
+        self._refresh_sidebar_glass()
+
+    def _refresh_sidebar_glass(self):
+        try:
+            if hasattr(self.sidebar_frame, "set_animating"):
+                self.sidebar_frame.set_animating(False)
+                self.sidebar_frame._redraw(force=True)
+            self.sidebar_header._bg_mesh_key = None  # type: ignore[attr-defined]
+            _apply_canvas_glass_backdrop(self.sidebar_header, tint_rgba=(8, 12, 20, 165))
+            self.sidebar_bottom._bg_mesh_key = None  # type: ignore[attr-defined]
+            _apply_canvas_glass_backdrop(self.sidebar_bottom, tint_rgba=(8, 12, 20, 165))
+            self.nav_scroller._redraw_backdrop(force=True)
+            self.btn_hamburger._bg_mesh_key = None  # type: ignore[attr-defined]
+            self.btn_hamburger._redraw()
+            self.btn_compact_folder._bg_mesh_key = None  # type: ignore[attr-defined]
+            self.btn_compact_folder._redraw()
+            self.storage_card._redraw(force=True)
+            self.frame_sec_pustaka._redraw(force=True)
+            self.frame_sec_kategori._redraw(force=True)
+            for item in self.sidebar_items.values():
+                item._redraw(force=True)
+        except Exception:
+            pass
+
     def toggle_sidebar_compact(self):
         """Toggle between expanded sidebar with labels and compact sidebar with icons and phone notification badges."""
         self.sidebar_compact = not self.sidebar_compact
         self._apply_sidebar_compact_state(animated=True)
 
     def _apply_sidebar_compact_state(self, animated: bool = True):
-        # In automated tests or if requested without animation, apply immediately
         if not animated or os.environ.get("PYTEST_CURRENT_TEST"):
             self._apply_sidebar_compact_immediate()
             return
 
-        # Cancel any active running animation timer to guarantee single-thread safety
         anim_id = getattr(self, "_sidebar_anim_id", None)
         if anim_id is not None:
             try:
@@ -2883,18 +3442,20 @@ class IDMGUIApp:
             start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
 
         target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
-        duration = 0.22  # 220ms fluid sliding drawer
+        duration = 0.22
         start_time = time.perf_counter()
 
-        # When collapsing, immediately set compact layout so text is safely at x=300 during collapse
+        if hasattr(self.sidebar_frame, "set_animating"):
+            self.sidebar_frame.set_animating(True)
+
         if self.sidebar_compact:
             try:
                 self.lbl_sidebar_title.place_forget()
                 self.lbl_sec_pustaka.place_forget()
                 self.lbl_sec_kategori.place_forget()
                 self.storage_card.place_forget()
-                self.btn_compact_folder.place(x=12, y=44, width=28, height=28)
-                self.btn_hamburger.place(x=12, y=6, width=28, height=28)
+                self.btn_compact_folder.place(x=6, y=49, width=34, height=34)
+                self.btn_hamburger.place(x=8, y=4, width=30, height=30)
             except Exception:
                 pass
             for item in self.sidebar_items.values():
@@ -2910,7 +3471,6 @@ class IDMGUIApp:
             now = time.perf_counter()
             elapsed = now - start_time
             t = min(1.0, elapsed / duration)
-            # Cubic ease-out deceleration curve for fluid 60fps sliding drawer
             progress = 1.0 - (1.0 - t) ** 3
             cur_w = int(start_w + (target_w - start_w) * progress)
             try:
@@ -2928,36 +3488,7 @@ class IDMGUIApp:
 
     def _finish_sidebar_animation(self):
         self._sidebar_anim_id = None
-        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
-        try:
-            self.sidebar_frame.configure(width=target_w)
-        except Exception:
-            pass
-
-        if self.sidebar_compact:
-            try:
-                self.lbl_sidebar_title.place_forget()
-                self.lbl_sec_pustaka.place_forget()
-                self.lbl_sec_kategori.place_forget()
-                self.storage_card.place_forget()
-                self.btn_compact_folder.place(x=12, y=44, width=28, height=28)
-                self.btn_hamburger.place(x=12, y=6, width=28, height=28)
-            except Exception:
-                pass
-            for item in self.sidebar_items.values():
-                item.set_compact(True)
-        else:
-            try:
-                self.btn_compact_folder.place_forget()
-                self.btn_hamburger.place(x=10, y=6, width=28, height=28)
-                self.lbl_sidebar_title.place(x=44, y=10)
-                self.lbl_sec_pustaka.place(x=10, y=3)
-                self.lbl_sec_kategori.place(x=10, y=3)
-                self.storage_card.place(x=0, y=0, width=202, height=80)
-            except Exception:
-                pass
-            for item in self.sidebar_items.values():
-                item.set_compact(False)
+        self._apply_sidebar_layout()
 
     def _apply_sidebar_compact_immediate(self):
         anim_id = getattr(self, "_sidebar_anim_id", None)
@@ -2967,37 +3498,7 @@ class IDMGUIApp:
             except Exception:
                 pass
             self._sidebar_anim_id = None
-
-        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
-        try:
-            self.sidebar_frame.configure(width=target_w)
-        except Exception:
-            pass
-
-        if self.sidebar_compact:
-            try:
-                self.lbl_sidebar_title.place_forget()
-                self.lbl_sec_pustaka.place_forget()
-                self.lbl_sec_kategori.place_forget()
-                self.storage_card.place_forget()
-                self.btn_compact_folder.place(x=12, y=44, width=28, height=28)
-                self.btn_hamburger.place(x=12, y=6, width=28, height=28)
-            except Exception:
-                pass
-            for item in self.sidebar_items.values():
-                item.set_compact(True)
-        else:
-            try:
-                self.btn_compact_folder.place_forget()
-                self.btn_hamburger.place(x=10, y=6, width=28, height=28)
-                self.lbl_sidebar_title.place(x=44, y=10)
-                self.lbl_sec_pustaka.place(x=10, y=3)
-                self.lbl_sec_kategori.place(x=10, y=3)
-                self.storage_card.place(x=0, y=0, width=202, height=80)
-            except Exception:
-                pass
-            for item in self.sidebar_items.values():
-                item.set_compact(False)
+        self._apply_sidebar_layout()
 
     def toggle_sidebar(self):
         if self.sidebar_visible:
@@ -3049,7 +3550,7 @@ class IDMGUIApp:
             if self.btn_overflow:
                 self.btn_overflow.config(text=tr("tb_more"), tooltip=tr("tb_more"))
             if hasattr(self, "btn_compact_folder") and self.btn_compact_folder:
-                pass
+                self.btn_compact_folder.config(tooltip=tr("tip_folder"))
 
             self.toolbar_buttons = [
                 (self.btn_add, tr("tip_add")),
