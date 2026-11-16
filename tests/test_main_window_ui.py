@@ -19,14 +19,19 @@ def tk_root():
 def test_main_window_empty_state_card(tk_root):
     app = IDMGUIApp(tk_root)
     assert hasattr(app, "empty_state_frame")
-    # Initially empty queue -> empty state card should be placed
+    # Initially empty queue -> GlassTableView renders the single native empty state card
+    # and legacy empty_state_frame is NOT placed over it (zero card overlap).
     app._tick_ui()
-    assert bool(app.empty_state_frame.place_info())
+    tk_root.update_idletasks()
+    assert not bool(app.empty_state_frame.place_info())
+    assert len(app.tree.viewport.find_withtag("empty_state")) > 0
 
-    # Add a task -> empty state should hide (place_forget)
+    # Add a task -> GlassTableView empty state hides cleanly
     t = app.queue.add_task("https://example.com/test.zip", "test.zip")
     app._tick_ui()
+    tk_root.update_idletasks()
     assert not bool(app.empty_state_frame.place_info())
+    assert len(app.tree.viewport.find_withtag("empty_state")) == 0
 
 
 def test_main_window_column_headers_in_indonesian(tk_root):

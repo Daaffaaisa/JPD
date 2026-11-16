@@ -29,6 +29,7 @@ from idm_gui.theme import (
     RADIUS_SM,
     RADIUS_MD,
     RADIUS_LG,
+    AmbientMeshEngine,
     draw_liquid_glass_panel,
     draw_round_rectangle,
     interpolate_color,
@@ -86,6 +87,13 @@ class GlassTableView(tk.Frame):
 
         # Coalesced rendering: batch rapid item()/insert() updates into ONE viewport render
         self._render_scheduled: bool = False
+        self._header_glass_photo: Optional[Any] = None
+        self._header_glass_key: Optional[tuple[int, int, int, int]] = None
+        self._viewport_glass_photo: Optional[Any] = None
+        self._viewport_glass_key: Optional[tuple[int, int, int, int]] = None
+        self._empty_card_photo: Optional[Any] = None
+        self._empty_card_key: Optional[tuple[int, int, int, int]] = None
+        self._empty_btn_bounds: Optional[tuple[int, int, int, int]] = None
 
         # Event callbacks registered via bind()
         self._custom_bindings: dict[str, list[Callable]] = {}
@@ -118,6 +126,8 @@ class GlassTableView(tk.Frame):
             command=self._on_scrollbar_move,
             width=8,
             bg=THEME["tree_bg"],  # Match container
+            glass_backdrop=True,
+            tint_rgba=(8, 12, 20, 165),
         )
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -248,14 +258,14 @@ class GlassTableView(tk.Frame):
         self.viewport.focus_set()
         if not self._items:
             # Check if clicked on empty state "+ Add URL" button
-            vw = self.viewport.winfo_width()
-            vh = self.viewport.winfo_height()
-            cx = vw // 2
-            cy = vh // 2
-            bx1 = cx - 60
-            bx2 = cx + 60
-            by1 = cy + 38
-            by2 = cy + 66
+            if self._empty_btn_bounds:
+                bx1, by1, bx2, by2 = self._empty_btn_bounds
+            else:
+                vw = self.viewport.winfo_width()
+                vh = self.viewport.winfo_height()
+                cx = vw // 2
+                cy = vh // 2
+                bx1, by1, bx2, by2 = cx - 90, cy + 42, cx + 90, cy + 72
             if bx1 <= event.x <= bx2 and by1 <= event.y <= by2:
                 if self.on_add_url_click:
                     self.on_add_url_click()
@@ -399,6 +409,14 @@ class GlassTableView(tk.Frame):
         self._update_scroll_bounds()
 
     def _on_mouse_move(self, event):
+        if not self._items:
+            if self._empty_btn_bounds:
+                bx1, by1, bx2, by2 = self._empty_btn_bounds
+                over_btn = bx1 <= event.x <= bx2 and by1 <= event.y <= by2
+                self.viewport.configure(cursor="hand2" if over_btn else "")
+            return
+
+        self.viewport.configure(cursor="")
         row_id = self._get_row_at_y(event.y)
         if row_id != self._hover_id:
             self._hover_id = row_id
@@ -416,6 +434,7 @@ class GlassTableView(tk.Frame):
         self._hide_url_tooltip()
 
     def _on_mouse_leave(self, event):
+        self.viewport.configure(cursor="")
         if self._hover_id is not None:
             self._hover_id = None
             self._schedule_coalesced_render()
@@ -477,10 +496,33 @@ class GlassTableView(tk.Frame):
         hw = self.header_canvas.winfo_width()
         hh = 32
 
-        # Header background: match container tree_bg
-        self.header_canvas.create_rectangle(0, 0, hw, hh, fill=THEME["tree_bg"], outline="")
-        # Specular bottom hairline
-        self.header_canvas.create_line(0, hh - 1, hw, hh - 1, fill=THEME["glass_border"], width=1)
+        # Header background: coordinate-aligned glass backdrop matching TactileTableContainer
+        drew_glass = False
+        if hw >= 10:
+            try:
+                top_w = self.header_canvas.winfo_toplevel()
+                rx = max(0, self.header_canvas.winfo_rootx() - top_w.winfo_rootx())
+                ry = max(0, self.header_canvas.winfo_rooty() - top_w.winfo_rooty())
+                key = (hw, hh, rx, ry)
+                if key != self._header_glass_key or self._header_glass_photo is None:
+                    self._header_glass_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(
+                        w=hw,
+                        h=hh,
+                        root_x=rx,
+                        root_y=ry,
+                        tint_rgba=(8, 12, 20, 165),
+                    )
+                    self._header_glass_key = key
+                self.header_canvas.create_image(0, 0, image=self._header_glass_photo, anchor=tk.NW)
+                drew_glass = True
+            except Exception:
+                drew_glass = False
+
+        if not drew_glass:
+            self.header_canvas.create_rectangle(0, 0, hw, hh, fill=THEME["tree_bg"], outline="")
+
+        # Specular bottom hairline inset cleanly inside container
+        self.header_canvas.create_line(4, hh - 1, max(4, hw - 4), hh - 1, fill=THEME["glass_border"], width=1)
 
         cur_x = 0
         for k in self.columns_keys:
@@ -536,6 +578,7 @@ class GlassTableView(tk.Frame):
             self._render_empty_state(vw, vh)
             return
 
+        self._empty_btn_bounds = None
         total_rows = len(self._items)
         start_idx = max(0, self._scroll_offset_y // self.row_height)
         end_idx = min(total_rows, (self._scroll_offset_y + vh) // self.row_height + 1)
@@ -546,14 +589,29 @@ class GlassTableView(tk.Frame):
             self._render_row(item_id, idx, y, vw)
 
     def _ensure_viewport_glass_photo(self, vw: int, vh: int):
-        """Generates a translucent Liquid Glass mesh photo as the backdrop of the table viewport.
-        
-        NOTE: The TactileTableContainer already draws a full glass panel background.
-        This method is kept for compatibility but does nothing - the container's
-        background shows through the transparent viewport.
-        """
-        # Viewport is transparent; container's glass panel provides the background
-        pass
+        """Renders a coordinate-aligned Liquid Glass mesh backdrop behind table rows
+        and empty state so the interior blends seamlessly with TactileTableContainer."""
+        if vw < 10 or vh < 10:
+            return
+        try:
+            top_w = self.viewport.winfo_toplevel()
+            rx = max(0, self.viewport.winfo_rootx() - top_w.winfo_rootx())
+            ry = max(0, self.viewport.winfo_rooty() - top_w.winfo_rooty())
+            key = (vw, vh, rx, ry)
+            if key != self._viewport_glass_key or self._viewport_glass_photo is None:
+                self._viewport_glass_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(
+                    w=vw,
+                    h=vh,
+                    root_x=rx,
+                    root_y=ry,
+                    tint_rgba=(8, 12, 20, 165),
+                )
+                self._viewport_glass_key = key
+                self.viewport.delete("bg_mesh")
+                self.viewport.create_image(0, 0, image=self._viewport_glass_photo, anchor=tk.NW, tags="bg_mesh")
+            self.viewport.tag_lower("bg_mesh")
+        except Exception:
+            pass
 
     def _render_row(self, item_id: str, row_idx: int, y: int, vw: int):
         data = self._data.get(item_id, {})
@@ -665,37 +723,65 @@ class GlassTableView(tk.Frame):
         cy = vh // 2
 
         card_w = min(420, max(280, vw - 60))
-        card_h = 160
+        card_h = 176
         x1 = cx - (card_w // 2)
         y1 = cy - (card_h // 2)
         x2 = x1 + card_w
         y2 = y1 + card_h
 
-        # Empty state card: match container's mesh panel style
-        # Use tree_bg with glass panel for seamless integration
-        draw_liquid_glass_panel(
-            self.viewport,
-            x1, y1, x2, y2,
-            r=RADIUS_LG,
-            fill=THEME["tree_bg"],        # Match container base
-            border=THEME["glass_border"],
-            rim_highlight=THEME["glass_rim"],
-            refraction=THEME["glass_refraction"],
-            shadow=True,
-            tags="empty_state",
-        )
+        # Render smooth supersampled Liquid Glass empty state pod
+        drew_glass_card = False
+        if vw >= 60 and vh >= 60:
+            try:
+                top_w = self.viewport.winfo_toplevel()
+                rx = max(0, self.viewport.winfo_rootx() - top_w.winfo_rootx() + x1)
+                ry = max(0, self.viewport.winfo_rooty() - top_w.winfo_rooty() + y1)
+                key = (card_w, card_h, rx, ry)
+                if key != self._empty_card_key or self._empty_card_photo is None:
+                    self._empty_card_photo = AmbientMeshEngine.get_shared().create_glass_panel(
+                        w=card_w,
+                        h=card_h,
+                        r=RADIUS_LG,
+                        root_x=rx,
+                        root_y=ry,
+                        tint_rgba=(12, 20, 34, 155),
+                        border_rgba=(70, 110, 170, 190),
+                        specular=True,
+                        caustic=True,
+                    )
+                    self._empty_card_key = key
+                self.viewport.create_image(x1, y1, image=self._empty_card_photo, anchor=tk.NW, tags="empty_state")
+                drew_glass_card = True
+            except Exception:
+                drew_glass_card = False
+
+        if not drew_glass_card:
+            draw_liquid_glass_panel(
+                self.viewport,
+                x1, y1, x2, y2,
+                r=RADIUS_LG,
+                fill=THEME["tree_bg"],
+                border=THEME["glass_border"],
+                rim_highlight=THEME["glass_rim"],
+                refraction=THEME["glass_refraction"],
+                shadow=True,
+                tags="empty_state",
+            )
 
         # Vector Download Tray Glyph
-        self.viewport.create_text(cx, cy - 38, text="📥", font=(FONT_DISPLAY, 24), fill=THEME["accent_glow"], anchor=tk.CENTER, tags="empty_state")
-        self.viewport.create_text(cx, cy - 6, text=tr("empty_title"), font=(FONT_DISPLAY, 11, "bold"), fill=THEME["text_primary"], anchor=tk.CENTER, tags="empty_state")
-        self.viewport.create_text(cx, cy + 16, text=tr("empty_desc"), font=(FONT_DISPLAY, 8), fill=THEME["text_tertiary"], anchor=tk.CENTER, width=card_w - 40, justify=tk.CENTER, tags="empty_state")
+        self.viewport.create_text(cx, cy - 44, text="📥", font=(FONT_DISPLAY, 24), fill=THEME["accent_glow"], anchor=tk.CENTER, tags="empty_state")
+        self.viewport.create_text(cx, cy - 10, text=tr("empty_title"), font=(FONT_DISPLAY, 11, "bold"), fill=THEME["text_primary"], anchor=tk.CENTER, tags="empty_state")
+        self.viewport.create_text(cx, cy + 15, text=tr("empty_desc"), font=(FONT_DISPLAY, 8), fill=THEME["text_tertiary"], anchor=tk.CENTER, width=card_w - 48, justify=tk.CENTER, tags="empty_state")
 
         # Quick Action Button
-        btn_w = 160
-        btn_h = 28
+        btn_w = 180
+        btn_h = 30
         bx1 = cx - (btn_w // 2)
-        by1 = cy + 40
-        draw_round_rectangle(self.viewport, bx1, by1, bx1 + btn_w, by1 + btn_h, r=14, fill=THEME["accent_primary"], outline=THEME["accent_glow"], tags=("empty_state", "empty_btn"))
+        by1 = cy + 42
+        bx2 = bx1 + btn_w
+        by2 = by1 + btn_h
+        self._empty_btn_bounds = (bx1, by1, bx2, by2)
+        draw_round_rectangle(self.viewport, bx1, by1, bx2, by2, r=15, fill=THEME["accent_primary"], outline=THEME["accent_glow"], tags=("empty_state", "empty_btn"))
         self.viewport.create_text(cx, by1 + (btn_h // 2), text=tr("empty_btn"), font=(FONT_DISPLAY, 8, "bold"), fill="#ffffff", anchor=tk.CENTER, tags=("empty_state", "empty_btn"))
 
     # =========================================================================

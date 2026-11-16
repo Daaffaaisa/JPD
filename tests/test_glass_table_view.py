@@ -121,3 +121,41 @@ def test_glass_table_headings_and_columns():
         assert table._col_config["status"]["width"] == 145
     finally:
         root.destroy()
+
+
+def test_glass_table_empty_state_button_and_container_clearance():
+    """Verify empty state renders once with clickable button and TactileTableContainer inset clears rounded corners."""
+    import math
+    from idm_gui.app import TactileTableContainer
+    from idm_gui.theme import RADIUS_LG
+
+    root = tk.Tk()
+    root.geometry("900x520+50+50")
+    root.withdraw()
+    try:
+        clicked = []
+        container = TactileTableContainer(root, r=RADIUS_LG)
+        container.pack(fill=tk.BOTH, expand=True)
+        table = GlassTableView(container.inner_frame, on_add_url_click=lambda: clicked.append(True))
+        table.pack(fill=tk.BOTH, expand=True)
+        root.update()
+        container._redraw()
+        table._render_viewport()
+
+        # Verify inner_frame corner is strictly inside the rounded arc of radius r
+        x_pad, y_pad = container.coords(container.win_id)
+        r = container.r
+        dist_from_arc_center = math.hypot(r - x_pad, r - y_pad)
+        assert dist_from_arc_center <= (r - 2), f"Inner frame overlaps rounded corner: pad=({x_pad},{y_pad}), r={r}"
+
+        # Verify empty state rendered and button click triggers callback
+        assert len(table.viewport.find_withtag("empty_state")) > 0
+        assert table._empty_btn_bounds is not None
+        bx1, by1, bx2, by2 = table._empty_btn_bounds
+        ev = tk.Event()
+        ev.x = (bx1 + bx2) // 2
+        ev.y = (by1 + by2) // 2
+        table._on_click(ev)
+        assert clicked == [True]
+    finally:
+        root.destroy()

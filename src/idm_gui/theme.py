@@ -1039,11 +1039,23 @@ def setup_global_ttk_theme():
 class GlassThinScrollbar(tk.Canvas):
     """Ultra-sleek auto-hiding floating scrollbar for Liquid Glass surfaces."""
 
-    def __init__(self, parent: tk.Widget, command: Optional[Callable] = None, width: int = 6, **kwargs):
+    def __init__(
+        self,
+        parent: tk.Widget,
+        command: Optional[Callable] = None,
+        width: int = 6,
+        glass_backdrop: bool = False,
+        tint_rgba: tuple[int, int, int, int] = (8, 12, 20, 165),
+        **kwargs,
+    ):
         bg = kwargs.pop("bg", THEME["tree_bg"])  # Match table container background
         super().__init__(parent, width=width, bg=bg, highlightthickness=0, **kwargs)
         self.command = command
         self.bar_width = width
+        self.glass_backdrop = glass_backdrop
+        self.tint_rgba = tint_rgba
+        self._bg_photo: Optional[Any] = None
+        self._bg_cache_key: Optional[tuple[int, int, int, int]] = None
         self.first = 0.0
         self.last = 1.0
         self.thumb_color = "#1e3a5f"
@@ -1107,6 +1119,29 @@ class GlassThinScrollbar(tk.Canvas):
         self._redraw()
 
     def _redraw(self):
+        if self.glass_backdrop:
+            try:
+                w_cur = self.winfo_width()
+                h_cur = self.winfo_height()
+                if w_cur >= 2 and h_cur >= 10:
+                    top_w = self.winfo_toplevel()
+                    rx = max(0, self.winfo_rootx() - top_w.winfo_rootx())
+                    ry = max(0, self.winfo_rooty() - top_w.winfo_rooty())
+                    key = (w_cur, h_cur, rx, ry)
+                    if key != self._bg_cache_key:
+                        self._bg_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(
+                            w=w_cur,
+                            h=h_cur,
+                            root_x=rx,
+                            root_y=ry,
+                            tint_rgba=self.tint_rgba,
+                        )
+                        self._bg_cache_key = key
+                        self.delete("bg_mesh")
+                        self.create_image(0, 0, image=self._bg_photo, anchor=tk.NW, tags="bg_mesh")
+                        self.tag_lower("bg_mesh")
+            except Exception:
+                pass
         self.delete("thumb")
         h = self.winfo_height()
         w = self.bar_width
@@ -1403,6 +1438,33 @@ class AmbientMeshEngine:
             caust_curved = caust_img.resize((w, h), Image.Resampling.LANCZOS)
             glass = Image.alpha_composite(glass, caust_curved)
 
+        return ImageTk.PhotoImage(glass)
+
+    def create_glass_backdrop(
+        self,
+        w: int,
+        h: int,
+        root_x: int = 0,
+        root_y: int = 0,
+        tint_rgba: tuple[int, int, int, int] = (8, 12, 20, 165),
+    ) -> Any:
+        """Generates a coordinate-aligned rectangular frosted mesh backdrop (no border/mask)
+        so inner table widgets seamlessly blend with an enclosing Liquid Glass container."""
+        from PIL import Image, ImageTk
+
+        w = max(2, int(w))
+        h = max(2, int(h))
+        mesh = self.get_mesh_image()
+        mw, mh = mesh.size
+        cx1 = max(0, min(mw - w, root_x % (mw - w) if mw > w else 0))
+        cy1 = max(0, min(mh - h, root_y % (mh - h) if mh > h else 0))
+        cx2 = min(mw, cx1 + w)
+        cy2 = min(mh, cy1 + h)
+        crop = mesh.crop((cx1, cy1, cx2, cy2)).convert("RGBA")
+        if crop.size != (w, h):
+            crop = crop.resize((w, h), Image.Resampling.BILINEAR)
+        tint = Image.new("RGBA", (w, h), tint_rgba)
+        glass = Image.alpha_composite(crop, tint)
         return ImageTk.PhotoImage(glass)
 
     def get_mesh_photo(self, master: Optional[tk.Misc] = None) -> Any:

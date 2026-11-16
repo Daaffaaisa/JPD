@@ -382,15 +382,20 @@ class TactileStorageCard(tk.Frame):
 class TactileTableContainer(tk.Canvas):
     """3D tactile rounded container for the downloads table with drop shadow and specular highlight."""
 
+    INNER_PAD = 10
+
+    def _calc_pad(self) -> int:
+        return max(self.INNER_PAD, int(math.ceil(self.r * (1.0 - 1.0 / math.sqrt(2.0)))) + 3)
+
     def __init__(self, parent: tk.Widget, r: int = 14):
-        # Match inner_frame/tree_bg so the glass panel blends seamlessly
-        bg_col = THEME["tree_bg"]
+        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["bg_dark"]
         super().__init__(parent, bg=bg_col, highlightthickness=0)
         self.r = r
 
-        # Inner frame to hold treeview and scrollbar
+        # Inner frame to hold treeview and scrollbar, inset cleanly from rounded rim
+        pad = self._calc_pad()
         self.inner_frame = tk.Frame(self, bg=THEME["tree_bg"])
-        self.win_id = self.create_window(0, 0, window=self.inner_frame, anchor=tk.NW)
+        self.win_id = self.create_window(pad, pad, window=self.inner_frame, anchor=tk.NW)
 
         self._redraw_debounce_id: Optional[str] = None
         self.bind("<Configure>", self._schedule_redraw)
@@ -420,7 +425,7 @@ class TactileTableContainer(tk.Canvas):
                 r=r,
                 root_x=root_x,
                 root_y=root_y,
-                tint_rgba=(8, 12, 20, 125),
+                tint_rgba=(8, 12, 20, 165),
                 border_rgba=(60, 95, 150, 180),
                 specular=True,
                 caustic=True,
@@ -443,7 +448,8 @@ class TactileTableContainer(tk.Canvas):
             )
         self.tag_lower("card_bg")
 
-        pad = 4
+        # Inset enough to clear the rounded corner arc and rim completely
+        pad = self._calc_pad()
         self.coords(self.win_id, pad, pad)
         self.itemconfigure(self.win_id, width=max(10, w - (pad * 2)), height=max(10, h - (pad * 2)))
 
@@ -2712,14 +2718,11 @@ class IDMGUIApp:
             if item_id not in current_task_ids:
                 self.tree.delete(item_id)
 
-        # Toggle empty state card
+        # Empty state is rendered directly inside GlassTableView._render_empty_state;
+        # never place legacy empty_state_frame over it so there is zero card overlap.
         if hasattr(self, "empty_state_frame") and self.empty_state_frame:
-            if len(tasks) == 0:
-                if not bool(self.empty_state_frame.place_info()):
-                    self.empty_state_frame.place(relx=0.5, rely=0.45, anchor=tk.CENTER)
-            else:
-                if bool(self.empty_state_frame.place_info()):
-                    self.empty_state_frame.place_forget()
+            if bool(self.empty_state_frame.place_info()):
+                self.empty_state_frame.place_forget()
 
         # Update Live Dashboard Metric Cards
         if hasattr(self, "lbl_stat_speed") and self.lbl_stat_speed:
@@ -3126,7 +3129,9 @@ class IDMGUIApp:
             except Exception:
                 pass
 
-        # 8. Re-render UI table rows, status bar, and telemetry
+        # 8. Re-render UI table rows, empty state, status bar, and telemetry
+        if hasattr(self, "tree") and hasattr(self.tree, "_schedule_coalesced_render"):
+            self.tree._schedule_coalesced_render()
         self._tick_ui()
 
     def sort_by_column(self, col: str):
