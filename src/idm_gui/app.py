@@ -573,17 +573,13 @@ class SidebarNavItem(tk.Frame):
             w.bind("<Enter>", lambda e: self._on_enter())
             w.bind("<Leave>", lambda e: self._on_leave())
 
-        # Initialize badge display (hides "0" for empty categories)
+        # Initialize badge display (always show count badge, including "0")
         self._update_badge_display()
 
     def _update_badge_display(self):
-        # Only show badge text when count > 0 to avoid "0" boxes on empty categories
-        if self.count > 0:
-            self.lbl_badge.config(text=str(self.count))
+        self.lbl_badge.config(text=str(self.count))
+        if not self.lbl_badge.winfo_manager():
             self.lbl_badge.pack(side=tk.RIGHT, padx=(0, 6))
-        else:
-            self.lbl_badge.config(text="")
-            self.lbl_badge.pack_forget()
         if self.is_compact and self.count > 0:
             self.badge_pip.place(x=19, y=3, width=6, height=6)
         else:

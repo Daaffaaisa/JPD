@@ -338,6 +338,30 @@ def test_tray_minimize_restore_and_navbar_spam(tk_root):
     assert app.sidebar_frame.winfo_exists()
 
 
+def test_sidebar_shows_zero_badge_when_empty(tk_root):
+    """Verify sidebar items still display a '0' badge when count is 0 (and after returning to 0)."""
+    app = IDMGUIApp(tk_root)
+    app._tick_ui()
 
+    # Empty items should display "0" and stay packed
+    for key in ("all", "downloading", "finished", "video", "music", "pictures", "programs", "documents", "compressed"):
+        item = app.sidebar_items[key]
+        assert item.count == 0
+        assert item.lbl_badge.cget("text") == "0"
+        assert bool(item.lbl_badge.pack_info()) is True
 
+    # Transition count > 0 then back to 0 keeps "0" badge visible
+    vid_item = app.sidebar_items["video"]
+    vid_item.set_count(3)
+    assert vid_item.lbl_badge.cget("text") == "3"
+    vid_item.set_count(0)
+    assert vid_item.lbl_badge.cget("text") == "0"
+    assert bool(vid_item.lbl_badge.pack_info()) is True
+
+    # Compact mode: red dot pip stays hidden for 0, expanded restores "0" badge
+    app.toggle_sidebar_compact()
+    assert bool(vid_item.badge_canvas.place_info()) is False
+    app.toggle_sidebar_compact()
+    assert vid_item.lbl_badge.cget("text") == "0"
+    assert bool(vid_item.lbl_badge.pack_info()) is True
 
