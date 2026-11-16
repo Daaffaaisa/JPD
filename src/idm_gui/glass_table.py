@@ -175,12 +175,27 @@ class GlassTableView(tk.Frame):
         # Header sorting clicks
         self.header_canvas.bind("<Button-1>", self._on_header_click, add="+")
 
+    def set_sliding(self, sliding: bool):
+        self._sliding = sliding
+        if not sliding:
+            self._last_resize_dims = None
+            self._on_resize()
+
     def _on_resize(self, event=None):
+        vw = self.viewport.winfo_width()
+        vh = self.viewport.winfo_height()
         if event is not None:
-            dims = (self.viewport.winfo_width(), self.viewport.winfo_height())
+            dims = (vw, vh)
             if dims == getattr(self, "_last_resize_dims", None):
                 return
             self._last_resize_dims = dims
+        if getattr(self, "_sliding", False):
+            self._redraw_header()
+            self._ensure_viewport_glass_photo(vw, vh)
+            if not self._items:
+                self.viewport.delete("empty_state")
+                self._render_empty_state(vw, vh)
+            return
         self._responsive_fit_columns()
         self._update_scroll_bounds()
         self._redraw_header()
@@ -507,17 +522,29 @@ class GlassTableView(tk.Frame):
                 top_w = self.header_canvas.winfo_toplevel()
                 rx = max(0, self.header_canvas.winfo_rootx() - top_w.winfo_rootx())
                 ry = max(0, self.header_canvas.winfo_rooty() - top_w.winfo_rooty())
-                key = (hw, hh, rx, ry)
-                if key != self._header_glass_key or self._header_glass_photo is None:
+                sliding = getattr(self, "_sliding", False)
+                req_rx = 0 if sliding else rx
+                req_w = max(hw + rx, top_w.winfo_width() + 240) if sliding else hw
+                key = (req_w, hh, req_rx, ry)
+                reuse_ok = (
+                    sliding
+                    and self._header_glass_key is not None
+                    and self._header_glass_photo is not None
+                    and self._header_glass_key[0] >= hw + rx
+                    and self._header_glass_key[1] == hh
+                    and self._header_glass_key[2] == 0
+                    and abs(self._header_glass_key[3] - ry) <= 2
+                )
+                if not reuse_ok and (key != self._header_glass_key or self._header_glass_photo is None):
                     self._header_glass_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(
-                        w=hw,
+                        w=req_w,
                         h=hh,
-                        root_x=rx,
+                        root_x=req_rx,
                         root_y=ry,
                         tint_rgba=(8, 12, 20, 165),
                     )
                     self._header_glass_key = key
-                self.header_canvas.create_image(0, 0, image=self._header_glass_photo, anchor=tk.NW)
+                self.header_canvas.create_image(-rx if sliding else 0, 0, image=self._header_glass_photo, anchor=tk.NW)
                 drew_glass = True
             except Exception:
                 drew_glass = False
@@ -601,18 +628,30 @@ class GlassTableView(tk.Frame):
             top_w = self.viewport.winfo_toplevel()
             rx = max(0, self.viewport.winfo_rootx() - top_w.winfo_rootx())
             ry = max(0, self.viewport.winfo_rooty() - top_w.winfo_rooty())
-            key = (vw, vh, rx, ry)
-            if key != self._viewport_glass_key or self._viewport_glass_photo is None:
+            sliding = getattr(self, "_sliding", False)
+            prev_key = getattr(self, "_viewport_glass_key", None)
+            if sliding and prev_key is not None and self.viewport.find_withtag("bg_mesh"):
+                pw, ph, prx, pry = prev_key
+                if pw >= vw + rx and ph == vh and prx == 0 and abs(pry - ry) <= 2:
+                    self.viewport.coords("bg_mesh", -rx, 0)
+                    self.viewport.tag_lower("bg_mesh")
+                    return
+            req_rx = 0 if sliding else rx
+            req_w = max(vw + rx, top_w.winfo_width() + 240) if sliding else vw
+            key = (req_w, vh, req_rx, ry)
+            if key != prev_key or self._viewport_glass_photo is None:
                 self._viewport_glass_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(
-                    w=vw,
+                    w=req_w,
                     h=vh,
-                    root_x=rx,
+                    root_x=req_rx,
                     root_y=ry,
                     tint_rgba=(8, 12, 20, 165),
                 )
                 self._viewport_glass_key = key
                 self.viewport.delete("bg_mesh")
-                self.viewport.create_image(0, 0, image=self._viewport_glass_photo, anchor=tk.NW, tags="bg_mesh")
+                self.viewport.create_image(-rx if sliding else 0, 0, image=self._viewport_glass_photo, anchor=tk.NW, tags="bg_mesh")
+            else:
+                self.viewport.coords("bg_mesh", -rx if sliding else 0, 0)
             self.viewport.tag_lower("bg_mesh")
         except Exception:
             pass
@@ -859,22 +898,40 @@ class GlassTableView(tk.Frame):
     def _fit_text_with_ellipsis(self, text: str, max_w: int, font_spec: tuple) -> str:
         if not text or max_w <= 20:
             return text
+        fit_cache = getattr(self, "_fit_text_cache", None)
+        if fit_cache is None:
+            fit_cache = {}
+            self._fit_text_cache = fit_cache
+        ckey = (text, max_w, font_spec)
+        if ckey in fit_cache:
+            return fit_cache[ckey]
         try:
-            f = tkfont.Font(font=font_spec)
+            f_cache = getattr(self, "_font_obj_cache", None)
+            if f_cache is None:
+                f_cache = {}
+                self._font_obj_cache = f_cache
+            f = f_cache.get(font_spec)
+            if f is None:
+                f = tkfont.Font(font=font_spec)
+                f_cache[font_spec] = f
             if f.measure(text) <= max_w:
-                return text
-            # Binary search for max chars that fit (O(log n) instead of O(n))
-            ellipsis = "..."
-            ell_w = f.measure(ellipsis)
-            sub_w = max_w - ell_w
-            lo, hi = 0, len(text)
-            while lo < hi:
-                mid = (lo + hi + 1) // 2
-                if f.measure(text[:mid]) <= sub_w:
-                    lo = mid
-                else:
-                    hi = mid - 1
-            return text[:lo] + ellipsis if lo > 0 else text[:4] + ellipsis
+                res = text
+            else:
+                ellipsis = "..."
+                ell_w = f.measure(ellipsis)
+                sub_w = max_w - ell_w
+                lo, hi = 0, len(text)
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    if f.measure(text[:mid]) <= sub_w:
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                res = text[:lo] + ellipsis if lo > 0 else text[:4] + ellipsis
+            if len(fit_cache) > 512:
+                fit_cache.clear()
+            fit_cache[ckey] = res
+            return res
         except Exception:
             return text[:30] + "..." if len(text) > 30 else text
 

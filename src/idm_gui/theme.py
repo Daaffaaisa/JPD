@@ -1308,6 +1308,7 @@ class AmbientMeshEngine:
         self._fps_delay_ms: int = 66  # ~15 FPS cap
         self.enabled: bool = True
         self._corner_mask_cache: dict[tuple[int, int], Any] = {}
+        self._tinted_mesh_cache: dict[tuple[int, int, int, int], Any] = {}
         self._panel_img_cache: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
         self._backdrop_img_cache: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
 
@@ -1363,6 +1364,7 @@ class AmbientMeshEngine:
         border_rgba: tuple[int, int, int, int] = (70, 110, 170, 190),
         specular: bool = True,
         caustic: bool = True,
+        fast: bool = False,
     ) -> Any:
         """Generates an authentic translucent Liquid Glass PhotoImage with physical
         normal-based curved specular highlight and caustic refraction, cropping from the underlying mesh.
@@ -1373,20 +1375,33 @@ class AmbientMeshEngine:
         h = max(10, int(h))
         r = max(2, min(int(r), min(w, h) // 2))
 
-        cache_key = (w, h, r, root_x, root_y, tint_rgba, border_rgba, specular, caustic)
+        cache_key = (w, h, r, root_x, root_y, tint_rgba, border_rgba, specular, caustic, fast)
         cached_img = self._panel_img_cache.get(cache_key)
         if cached_img is not None:
             self._panel_img_cache.move_to_end(cache_key)
             return ImageTk.PhotoImage(cached_img)
 
-        mesh = self.get_mesh_image()
-        mw, mh = mesh.size
+        tinted = self._get_tinted_mesh(tint_rgba)
+        mw, mh = tinted.size
         cx1 = max(0, min(mw - w, root_x % (mw - w) if mw > w else 0))
         cy1 = max(0, min(mh - h, root_y % (mh - h) if mh > h else 0))
-        crop = mesh.crop((cx1, cy1, cx1 + w, cy1 + h)).convert("RGBA")
+        glass = tinted.crop((cx1, cy1, cx1 + w, cy1 + h)).copy()
 
-        tint = Image.new("RGBA", (w, h), tint_rgba)
-        glass = Image.alpha_composite(crop, tint)
+        if fast:
+            # Lightweight 1x rounded silhouette + crisp rims (~1-3ms) for silky 45-60fps animations
+            mask = Image.new("L", (w, h), 0)
+            ImageDraw.Draw(mask).rounded_rectangle([0, 0, w - 1, h - 1], radius=r, fill=255)
+            glass.putalpha(mask)
+            d_f = ImageDraw.Draw(glass)
+            d_f.rounded_rectangle([0, 0, w - 1, h - 1], radius=r, outline=border_rgba, width=1)
+            if specular and w > 2 * r and h > 10:
+                d_f.line([r, 1, w - r, 1], fill=(225, 238, 255, 195), width=1)
+            if caustic and w > 2 * r and h > 10:
+                d_f.line([r, h - 2, w - r, h - 2], fill=(56, 189, 248, 170), width=1)
+            self._panel_img_cache[cache_key] = glass
+            while len(self._panel_img_cache) > 72:
+                self._panel_img_cache.popitem(last=False)
+            return ImageTk.PhotoImage(glass)
 
         # Adaptive supersampling: 3x for compact pods/cards, 2x for large table surfaces
         scale = 2 if (w * h > 120_000) else 3
@@ -1449,9 +1464,19 @@ class AmbientMeshEngine:
             glass.alpha_composite(caust_curved, dest=(0, h - strip_1x))
 
         self._panel_img_cache[cache_key] = glass
-        while len(self._panel_img_cache) > 36:
+        while len(self._panel_img_cache) > 72:
             self._panel_img_cache.popitem(last=False)
         return ImageTk.PhotoImage(glass)
+
+    def _get_tinted_mesh(self, tint_rgba: tuple[int, int, int, int]) -> Any:
+        cached = self._tinted_mesh_cache.get(tint_rgba)
+        if cached is None:
+            from PIL import Image
+            mesh = self.get_mesh_image().convert("RGBA")
+            tint = Image.new("RGBA", mesh.size, tint_rgba)
+            cached = Image.alpha_composite(mesh, tint)
+            self._tinted_mesh_cache[tint_rgba] = cached
+        return cached
 
     def create_glass_backdrop(
         self,
@@ -1474,17 +1499,17 @@ class AmbientMeshEngine:
             self._backdrop_img_cache.move_to_end(bkey)
             return ImageTk.PhotoImage(cached_img)
 
-        mesh = self.get_mesh_image()
-        mw, mh = mesh.size
+        tinted = self._get_tinted_mesh(tint_rgba)
+        mw, mh = tinted.size
         cx1 = max(0, min(mw - w, root_x % (mw - w) if mw > w else 0))
         cy1 = max(0, min(mh - h, root_y % (mh - h) if mh > h else 0))
         cx2 = min(mw, cx1 + w)
         cy2 = min(mh, cy1 + h)
-        crop = mesh.crop((cx1, cy1, cx2, cy2)).convert("RGBA")
-        if crop.size != (w, h):
-            crop = crop.resize((w, h), Image.Resampling.BILINEAR)
-        tint = Image.new("RGBA", (w, h), tint_rgba)
-        glass = Image.alpha_composite(crop, tint)
+        glass = tinted.crop((cx1, cy1, cx2, cy2))
+        if glass.size != (w, h):
+            glass = glass.resize((w, h), Image.Resampling.BILINEAR)
+        else:
+            glass = glass.copy()
         self._backdrop_img_cache[bkey] = glass
         while len(self._backdrop_img_cache) > 64:
             self._backdrop_img_cache.popitem(last=False)

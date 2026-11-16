@@ -8,6 +8,7 @@ from typing import Optional, Any
 
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+import tkinter.font as tkfont
 
 from idm_core.engine import DownloadEngine, DownloadResult
 from idm_scheduler.queue import DownloadQueue, DownloadTask, TaskStatus
@@ -214,10 +215,18 @@ def _apply_canvas_glass_backdrop(canvas: tk.Canvas, tint_rgba: tuple[int, int, i
         top = canvas.winfo_toplevel()
         rx = max(0, canvas.winfo_rootx() - top.winfo_rootx())
         ry = max(0, canvas.winfo_rooty() - top.winfo_rooty())
-        key = (w, h, rx, ry, tint_rgba)
-        if key != getattr(canvas, "_bg_mesh_key", None) or getattr(canvas, "_bg_mesh_photo", None) is None:
+        sliding = bool(getattr(top, "_sidebar_animating", False))
+        prev_key = getattr(canvas, "_bg_mesh_key", None)
+        if sliding and prev_key is not None and canvas.find_withtag("bg_mesh"):
+            pw, ph, prx, pry, ptint = prev_key
+            if pw >= w and ph == h and abs(prx - rx) <= 16 and abs(pry - ry) <= 4 and ptint == tint_rgba:
+                canvas.tag_lower("bg_mesh")
+                return True
+        req_w = max(w, 210) if sliding else w
+        key = (req_w, h, rx, ry, tint_rgba)
+        if key != prev_key or getattr(canvas, "_bg_mesh_photo", None) is None:
             canvas._bg_mesh_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(  # type: ignore[attr-defined]
-                w=w,
+                w=req_w,
                 h=h,
                 root_x=rx,
                 root_y=ry,
@@ -345,12 +354,13 @@ class GlassButtonCanvas(tk.Canvas):
         self.bind("<ButtonRelease-1>", self._on_release, add="+")
         self._redraw()
 
-    def set_fade(self, alpha: Optional[float]):
+    def set_fade(self, alpha: Optional[float], redraw: bool = True):
         new_alpha = None if (alpha is None or alpha >= 0.99) else max(0.0, min(1.0, float(alpha)))
         if new_alpha == self._fade_alpha:
             return
         self._fade_alpha = new_alpha
-        self._redraw()
+        if redraw:
+            self._redraw()
 
     def _redraw(self):
         w = max(self.winfo_width(), int(self.cget("width")))
@@ -472,19 +482,28 @@ class TactileCard(tk.Canvas):
         self.lbl_title = _CanvasTextAdapter(self, self.item_title)
         self.lbl_val = _CanvasTextAdapter(self, self.item_val)
 
-        self._panel_cache_key: Optional[tuple[int, int, int, int]] = None
+        self._panel_cache_key: Optional[tuple[int, int, int, int, bool]] = None
+        self._sliding = False
         self._redraw_debounce_id: Optional[str] = None
         self.bind("<Configure>", self._schedule_redraw)
 
+    def set_sliding(self, sliding: bool):
+        self._sliding = sliding
+        if not sliding:
+            self._redraw(force=True, fast=False)
+
     def _schedule_redraw(self, event=None):
+        if self._sliding:
+            self._redraw(fast=True)
+            return
         if self._redraw_debounce_id is not None:
             try:
                 self.after_cancel(self._redraw_debounce_id)
             except Exception:
                 pass
-        self._redraw_debounce_id = self.after(50, self._redraw)
+        self._redraw_debounce_id = self.after(35, self._redraw)
 
-    def _redraw(self, event=None, force: bool = False):
+    def _redraw(self, event=None, force: bool = False, fast: bool = False):
         if self._redraw_debounce_id is not None:
             try:
                 self.after_cancel(self._redraw_debounce_id)
@@ -501,7 +520,7 @@ class TactileCard(tk.Canvas):
             root_y = max(0, self.winfo_rooty() - top.winfo_rooty())
         except Exception:
             root_x, root_y = 0, 0
-        key = (w, h, root_x, root_y)
+        key = (w, h, root_x, root_y, fast)
         if not force and key == self._panel_cache_key and getattr(self, "_panel_photo", None) is not None and self.find_withtag("card_bg"):
             return
         self._panel_cache_key = key
@@ -518,6 +537,7 @@ class TactileCard(tk.Canvas):
                 border_rgba=(70, 110, 170, 190),
                 specular=True,
                 caustic=True,
+                fast=fast,
             )
             self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
         except Exception:
@@ -667,8 +687,9 @@ class TactileStorageCard(tk.Canvas):
             top = self.winfo_toplevel()
             rx = max(0, self.winfo_rootx() - top.winfo_rootx())
             ry = max(0, self.winfo_rooty() - top.winfo_rooty())
-            key = (w, h, rx, ry)
-            if key != self._card_cache_key or self._card_photo is None:
+            fast_mode = bool(getattr(top, "_sidebar_animating", False))
+            key = (w, h, rx, ry, fast_mode)
+            if force or key != self._card_cache_key or self._card_photo is None or not self.find_withtag("card_bg"):
                 self._card_photo = AmbientMeshEngine.get_shared().create_glass_panel(
                     w=w,
                     h=h,
@@ -679,10 +700,11 @@ class TactileStorageCard(tk.Canvas):
                     border_rgba=(60, 95, 150, 175),
                     specular=True,
                     caustic=True,
+                    fast=fast_mode,
                 )
                 self._card_cache_key = key
-            self.delete("card_bg")
-            self.create_image(0, 0, image=self._card_photo, anchor=tk.NW, tags="card_bg")
+                self.delete("card_bg")
+                self.create_image(0, 0, image=self._card_photo, anchor=tk.NW, tags="card_bg")
             drew_panel = True
         except Exception:
             drew_panel = False
@@ -711,7 +733,15 @@ class TactileStorageCard(tk.Canvas):
         self.coords(self.btn_win_id, 10, 48)
         self.itemconfigure(self.btn_win_id, width=btn_w, height=26)
         self.btn_open.configure(width=btn_w, height=26)
-        self.btn_open._redraw()
+        if self._fade_alpha is not None and self._fade_alpha <= 0.03:
+            self.itemconfigure("card_bg", state="hidden")
+            self.itemconfigure("card_fg", state="hidden")
+            self.itemconfigure(self.btn_win_id, state="hidden")
+        else:
+            self.itemconfigure("card_bg", state="normal")
+            self.itemconfigure("card_fg", state="normal")
+            self.itemconfigure(self.btn_win_id, state="normal")
+            self.btn_open._redraw()
         if self._fade_alpha is not None:
             self.set_fade(self._fade_alpha)
 
@@ -779,33 +809,33 @@ class SidebarGlassContainer(tk.Canvas):
         self.itemconfigure(self.win_id, width=max(10, w - (pad_x * 2)), height=max(10, h - (pad_y * 2)))
 
         r = min(self.r, max(8, w // 2 - 2))
-        if not fast:
-            try:
-                top = self.winfo_toplevel()
-                rx = max(0, self.winfo_rootx() - top.winfo_rootx())
-                ry = max(0, self.winfo_rooty() - top.winfo_rooty())
-                key = (w, h, r, rx, ry)
-                if not force and key == self._panel_cache_key and self._panel_photo is not None and self.find_withtag("card_bg"):
-                    return
-                if force or key != self._panel_cache_key or self._panel_photo is None:
-                    self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
-                        w=w,
-                        h=h,
-                        r=r,
-                        root_x=rx,
-                        root_y=ry,
-                        tint_rgba=(8, 12, 20, 165),
-                        border_rgba=(60, 95, 150, 180),
-                        specular=True,
-                        caustic=True,
-                    )
-                    self._panel_cache_key = key
-                self.delete("card_bg")
-                self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
-                self.tag_lower("card_bg")
+        try:
+            top = self.winfo_toplevel()
+            rx = max(0, self.winfo_rootx() - top.winfo_rootx())
+            ry = max(0, self.winfo_rooty() - top.winfo_rooty())
+            key = (w, h, r, rx, ry, fast)
+            if not force and key == self._panel_cache_key and self._panel_photo is not None and self.find_withtag("card_bg"):
                 return
-            except Exception:
-                pass
+            if force or key != self._panel_cache_key or self._panel_photo is None:
+                self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
+                    w=w,
+                    h=h,
+                    r=r,
+                    root_x=rx,
+                    root_y=ry,
+                    tint_rgba=(8, 12, 20, 165),
+                    border_rgba=(60, 95, 150, 180),
+                    specular=True,
+                    caustic=True,
+                    fast=fast,
+                )
+                self._panel_cache_key = key
+            self.delete("card_bg")
+            self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
+            self.tag_lower("card_bg")
+            return
+        except Exception:
+            pass
 
         self._panel_cache_key = None
         self.delete("card_bg")
@@ -910,9 +940,15 @@ class TactileTableContainer(tk.Canvas):
         self.inner_frame = tk.Frame(self, bg=THEME["tree_bg"])
         self.win_id = self.create_window(pad, pad, window=self.inner_frame, anchor=tk.NW)
 
-        self._panel_cache_key: Optional[tuple[int, int, int, int]] = None
+        self._panel_cache_key: Optional[tuple[int, int, int, int, bool]] = None
+        self._sliding = False
         self._redraw_debounce_id: Optional[str] = None
         self.bind("<Configure>", self._on_configure)
+
+    def set_sliding(self, sliding: bool):
+        self._sliding = sliding
+        if not sliding:
+            self._redraw(force=True, fast=False)
 
     def _on_configure(self, _event=None):
         w = self.winfo_width()
@@ -921,7 +957,10 @@ class TactileTableContainer(tk.Canvas):
             pad = self._calc_pad()
             self.coords(self.win_id, pad, pad)
             self.itemconfigure(self.win_id, width=max(10, w - (pad * 2)), height=max(10, h - (pad * 2)))
-        self._schedule_redraw()
+        if self._sliding:
+            self._redraw(fast=True)
+        else:
+            self._schedule_redraw()
 
     def _schedule_redraw(self, event=None):
         if self._redraw_debounce_id is not None:
@@ -929,9 +968,9 @@ class TactileTableContainer(tk.Canvas):
                 self.after_cancel(self._redraw_debounce_id)
             except Exception:
                 pass
-        self._redraw_debounce_id = self.after(50, self._redraw)
+        self._redraw_debounce_id = self.after(35, self._redraw)
 
-    def _redraw(self, event=None, force: bool = False):
+    def _redraw(self, event=None, force: bool = False, fast: bool = False):
         if self._redraw_debounce_id is not None:
             try:
                 self.after_cancel(self._redraw_debounce_id)
@@ -954,7 +993,7 @@ class TactileTableContainer(tk.Canvas):
             root_y = max(0, self.winfo_rooty() - top.winfo_rooty())
         except Exception:
             root_x, root_y = 0, 0
-        key = (w, h, root_x, root_y)
+        key = (w, h, root_x, root_y, fast)
         if not force and key == self._panel_cache_key and getattr(self, "_panel_photo", None) is not None and self.find_withtag("card_bg"):
             return
         self._panel_cache_key = key
@@ -971,6 +1010,7 @@ class TactileTableContainer(tk.Canvas):
                 border_rgba=(60, 95, 150, 180),
                 specular=True,
                 caustic=True,
+                fast=fast,
             )
             self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
         except Exception:
@@ -1036,10 +1076,17 @@ class SidebarNavScroller(tk.Frame):
             rx = max(0, self.canvas.winfo_rootx() - top.winfo_rootx())
             ry = max(0, self.canvas.winfo_rooty() - top.winfo_rooty())
             cy0 = int(self.canvas.canvasy(0))
-            key = (w, h, rx, ry, cy0)
+            sliding = bool(getattr(top, "_sidebar_animating", False))
+            if sliding and self._bg_cache_key is not None and self.canvas.find_withtag("glass_bg"):
+                pw, ph, prx, pry, pcy = self._bg_cache_key
+                if pw >= w and ph == h and abs(prx - rx) <= 16 and abs(pry - ry) <= 4 and pcy == cy0:
+                    self.canvas.tag_lower("glass_bg")
+                    return
+            req_w = max(w, 210) if sliding else w
+            key = (req_w, h, rx, ry, cy0)
             if force or key != self._bg_cache_key or self._bg_photo is None:
                 self._bg_photo = AmbientMeshEngine.get_shared().create_glass_backdrop(
-                    w=w,
+                    w=req_w,
                     h=h,
                     root_x=rx,
                     root_y=ry,
@@ -1219,17 +1266,28 @@ class SidebarNavItem(tk.Canvas):
         if w < 16 or h < 16:
             return
 
-        self.delete("nav_fg")
-        _apply_canvas_glass_backdrop(self, tint_rgba=(8, 12, 20, 165))
-
         mid_y = h // 2
         compact_layout = self.is_compact or w < 100
         a = self._fade_alpha
         fade_base = "#0a1222"
 
+        sliding = False
+        try:
+            sliding = bool(getattr(self.winfo_toplevel(), "_sidebar_animating", False))
+        except Exception:
+            pass
+        nav_state = (w, compact_layout, self.is_active, self.is_hovered, self.count, a, self.raw_text)
+        if not force and sliding and nav_state == getattr(self, "_last_nav_state", None):
+            if (compact_layout or (a is not None and a <= 0.03)) and self.find_withtag("nav_fg") and self.find_withtag("bg_mesh"):
+                return
+        self._last_nav_state = nav_state
+
+        self.delete("nav_fg")
+        _apply_canvas_glass_backdrop(self, tint_rgba=(8, 12, 20, 165))
+
         # 1. Translucent rounded glass pill for active or hovered state
         if compact_layout:
-            cx = w // 2
+            cx = (w // 2) if w <= 54 else 23
             px1, py1, px2, py2 = max(4, cx - 17), 2, min(w - 4, cx + 17), h - 2
         else:
             px1, py1, px2, py2 = 4, 2, w - 4, h - 2
@@ -1248,8 +1306,8 @@ class SidebarNavItem(tk.Canvas):
             hov_outline = interpolate_color(fade_base, "#284268", a) if a is not None else "#284268"
             draw_round_rectangle(self, px1, py1, px2, py2, r=10, fill=hov_fill, outline=hov_outline, width=1, tags="nav_fg")
 
-        # 2. Category / library icon (stays visible cleanly as visual anchor during cross-fade)
-        icon_x = (w // 2) if compact_layout else 24
+        # 2. Category / library icon (stays anchored smoothly across collapse/expand glide)
+        icon_x = ((w // 2) if w <= 54 else 23) if compact_layout else 24
         icon_fg = THEME["accent_glow"] if self.is_active else THEME["text_secondary"]
         if a is not None and self.is_active:
             icon_fg = interpolate_color(THEME["text_secondary"], THEME["accent_glow"], a)
@@ -1292,18 +1350,37 @@ class SidebarNavItem(tk.Canvas):
         self.create_text(text_x, mid_y, text=disp_text, fill=text_fg, font=txt_font, anchor=tk.W, tags="nav_fg")
 
     def _fit_label(self, text: str, max_w: int, font_spec: Any) -> str:
+        cache = getattr(self, "_fit_label_cache", None)
+        if cache is None:
+            cache = {}
+            self._fit_label_cache = cache
+        ckey = (text, max_w, font_spec)
+        if ckey in cache:
+            return cache[ckey]
         try:
-            f = tkfont.Font(font=font_spec)
+            f_map = getattr(self, "_font_cache", None)
+            if f_map is None:
+                f_map = {}
+                self._font_cache = f_map
+            f = f_map.get(font_spec)
+            if f is None:
+                f = tkfont.Font(root=self, font=font_spec)
+                f_map[font_spec] = f
             if f.measure(text) <= max_w:
-                return text
-            lo, hi = 0, len(text)
-            while lo < hi:
-                mid = (lo + hi + 1) // 2
-                if f.measure(text[:mid] + "…") <= max_w:
-                    lo = mid
-                else:
-                    hi = mid - 1
-            return text[:lo] + "…" if lo > 0 else text
+                res = text
+            else:
+                lo, hi = 0, len(text)
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    if f.measure(text[:mid] + "…") <= max_w:
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                res = text[:lo] + "…" if lo > 0 else text
+            if len(cache) > 128:
+                cache.clear()
+            cache[ckey] = res
+            return res
         except Exception:
             return text
 
@@ -1312,7 +1389,7 @@ class SidebarNavItem(tk.Canvas):
         if redraw:
             self._redraw(force=True)
 
-    def set_text_fade(self, alpha: float):
+    def set_text_fade(self, alpha: float, redraw: bool = True):
         if alpha >= 0.99:
             self._fade_alpha = None
             self._fade_fg_override = None
@@ -1327,7 +1404,8 @@ class SidebarNavItem(tk.Canvas):
             self._fade_fg_override = interpolate_color(bg_col, target_fg, a)
             self._fade_badge_fg_override = interpolate_color(bg_col, target_badge_fg, a)
             self._fade_badge_bg_override = interpolate_color(bg_col, "#09111f", a)
-        self._redraw()
+        if redraw:
+            self._redraw()
 
     def _handle_click(self):
         if self.on_click:
@@ -3560,7 +3638,7 @@ class IDMGUIApp:
         except Exception:
             pass
 
-    def _set_sidebar_content_fade(self, alpha: Optional[float]):
+    def _set_sidebar_content_fade(self, alpha: Optional[float], redraw: bool = True):
         """Interpolate all sidebar labels, dividers, pills, badges, and storage card smoothly."""
         a = None if (alpha is None or alpha >= 0.99) else max(0.0, min(1.0, float(alpha)))
         expanded_on_screen = getattr(self.lbl_sidebar_title, "_visible", True) if hasattr(self, "lbl_sidebar_title") else True
@@ -3585,10 +3663,10 @@ class IDMGUIApp:
             if hasattr(self, "storage_card") and expanded_on_screen:
                 self.storage_card.set_fade(None if a is None else a)
             if hasattr(self, "btn_compact_folder") and not expanded_on_screen:
-                self.btn_compact_folder.set_fade(None if a is None else a)
+                self.btn_compact_folder.set_fade(None if a is None else a, redraw=redraw)
             fade_val = 1.0 if a is None else a
             for item in self.sidebar_items.values():
-                item.set_text_fade(fade_val)
+                item.set_text_fade(fade_val, redraw=redraw)
         except Exception:
             pass
 
@@ -3643,35 +3721,22 @@ class IDMGUIApp:
             self.root.update_idletasks()
         except Exception:
             pass
-        self._flush_win32_paint()
 
-    def _flush_win32_paint(self):
-        """Force synchronous Win32 WM_ERASEBKGND + WM_PAINT and drain Tk DisplayFrame."""
-        if sys.platform != "win32":
-            return
-        try:
-            if not self.paned.container.winfo_ismapped() or self.root.state() in ("withdrawn", "iconic"):
-                return
-            import ctypes
-            from ctypes import wintypes
-
-            user32 = ctypes.windll.user32
-            user32.RedrawWindow.argtypes = [wintypes.HWND, ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT]
-            user32.RedrawWindow.restype = wintypes.BOOL
-            hwnd = int(self.paned.container.winfo_id())
-            if hwnd:
-                # RDW_INVALIDATE (0x1) | RDW_ERASE (0x4) | RDW_ALLCHILDREN (0x80) | RDW_UPDATENOW (0x100) | RDW_ERASENOW (0x200)
-                user32.RedrawWindow(hwnd, None, None, 0x0385)
-                self.root.update_idletasks()
-        except Exception:
-            pass
+    def _set_right_sliding(self, sliding: bool):
+        for attr in ("card_speed", "card_active", "card_total", "table_container", "tree"):
+            widget = getattr(self, attr, None)
+            if widget is not None and hasattr(widget, "set_sliding"):
+                try:
+                    widget.set_sliding(sliding)
+                except Exception:
+                    pass
 
     def _refresh_right_glass(self):
         for attr in ("card_speed", "card_active", "card_total", "table_container"):
             widget = getattr(self, attr, None)
             if widget is not None and hasattr(widget, "_redraw"):
                 try:
-                    widget._redraw()
+                    widget._redraw(fast=False)
                 except Exception:
                     pass
 
@@ -3679,7 +3744,7 @@ class IDMGUIApp:
         try:
             if hasattr(self.sidebar_frame, "set_animating"):
                 self.sidebar_frame.set_animating(False)
-                self.sidebar_frame._redraw(force=False)
+                self.sidebar_frame._redraw(force=False, fast=False)
             _apply_canvas_glass_backdrop(self.sidebar_header, tint_rgba=(8, 12, 20, 165))
             _apply_canvas_glass_backdrop(self.sidebar_bottom, tint_rgba=(8, 12, 20, 165))
             self.nav_scroller._redraw_backdrop(force=False)
@@ -3705,40 +3770,146 @@ class IDMGUIApp:
             self._sidebar_anim_id = None
         return gen
 
-    def _run_sidebar_fade(
-        self,
-        start_a: float,
-        end_a: float,
-        duration_s: float,
-        on_done: Any,
-        gen: int,
-        defer_start: bool = False,
-    ):
-        start_t: list[Optional[float]] = [None if defer_start else time.perf_counter()]
+    def _end_slide_modes(self):
+        try:
+            self.root._sidebar_animating = False  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        if hasattr(self, "sidebar_frame") and hasattr(self.sidebar_frame, "set_animating"):
+            self.sidebar_frame.set_animating(False)
+        self._set_right_sliding(False)
 
-        def _tick():
-            if getattr(self, "_sidebar_anim_gen", 0) != gen or not self.root.winfo_exists():
+    def _get_right_pane(self) -> Optional[tk.Widget]:
+        try:
+            panes = self.paned.panes()
+            if len(panes) > 1:
+                return panes[1]
+            for child in self.paned.container.winfo_children():
+                if child is not self.sidebar_frame:
+                    return child
+        except Exception:
+            pass
+        return None
+
+    def _enter_place_glide_mode(self, start_w: int):
+        """Temporarily switch paned children from pack -> place so sidebar & right pane
+        translate/resize atomically in Z-order with zero pack thrash or pane overlap.
+        """
+        try:
+            container = self.paned.container
+            cw = container.winfo_width()
+            ch = container.winfo_height()
+            if cw < 100 or ch < 50:
                 return
-            self._sidebar_anim_id = None
-            if start_t[0] is None:
-                start_t[0] = time.perf_counter()
-            t = min(1.0, (time.perf_counter() - start_t[0]) / max(0.01, duration_s))
-            ease = 1.0 - (1.0 - t) ** 2.2
-            alpha = start_a + (end_a - start_a) * ease
-            self._set_sidebar_content_fade(alpha)
+            right_pane = self._get_right_pane()
+            if self.sidebar_frame.winfo_manager() == "pack":
+                self.sidebar_frame.pack_forget()
+            if right_pane is not None and right_pane.winfo_manager() == "pack":
+                right_pane.pack_forget()
+            self.sidebar_frame.place(x=0, y=0, width=start_w, height=ch)
+            if right_pane is not None:
+                right_pane.place(x=start_w + 8, y=0, width=max(100, cw - start_w - 8), height=ch)
+            tk.Misc.lift(self.sidebar_frame)
+        except Exception:
+            pass
+
+    def _exit_place_glide_mode(self, show_sidebar: bool = True):
+        """Restore standard pack layout management inside ModernMainPaned."""
+        try:
+            right_pane = self._get_right_pane()
+            if self.sidebar_frame.winfo_manager() == "place":
+                self.sidebar_frame.place_forget()
+            if right_pane is not None and right_pane.winfo_manager() == "place":
+                right_pane.place_forget()
+            if right_pane is not None and right_pane.winfo_manager() != "pack":
+                right_pane.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            if show_sidebar:
+                if self.sidebar_frame not in self.paned._panes:
+                    if right_pane is not None:
+                        self.paned._panes.insert(0, self.sidebar_frame)
+                    else:
+                        self.paned._panes.append(self.sidebar_frame)
+                if self.sidebar_frame.winfo_manager() != "pack":
+                    if right_pane is not None:
+                        self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8), before=right_pane)
+                    else:
+                        self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
+            else:
+                self.paned.forget(self.sidebar_frame)
+        except Exception:
+            pass
+
+    def _apply_glide_width(self, cur_w: int):
+        """Apply width cur_w synchronously across sidebar, right pane & inner Canvas windows during glide."""
+        try:
+            cw = self.paned.container.winfo_width()
+            ch = self.paned.container.winfo_height()
+            if self.sidebar_frame.winfo_manager() == "place" and cw >= 100 and ch >= 50:
+                self.sidebar_frame.place_configure(x=0, y=0, width=cur_w, height=ch)
+                right_pane = self._get_right_pane()
+                if right_pane is not None and right_pane.winfo_manager() == "place":
+                    right_pane.place_configure(
+                        x=cur_w + 8,
+                        y=0,
+                        width=max(100, cw - cur_w - 8),
+                        height=ch,
+                    )
+            else:
+                self.sidebar_frame.configure(width=cur_w)
+            pad_x, pad_y = self.sidebar_frame._calc_pads(cur_w)
+            inner_w = max(10, cur_w - (pad_x * 2))
+            sh = ch if ch >= 20 else self.sidebar_frame.winfo_height()
+            if sh >= 20:
+                self.sidebar_frame.coords(self.sidebar_frame.win_id, pad_x, pad_y)
+                self.sidebar_frame.itemconfigure(
+                    self.sidebar_frame.win_id,
+                    width=inner_w,
+                    height=max(10, sh - (pad_y * 2)),
+                )
+            self.nav_scroller.canvas.itemconfigure(self.nav_scroller._win, width=inner_w)
+            if not self.sidebar_compact and cur_w >= 130 and getattr(self.lbl_sidebar_title, "_visible", False):
+                self.sidebar_bottom.configure(width=inner_w)
+                self.storage_card.place(x=0, y=3, width=inner_w, height=84)
+            self.root.update_idletasks()
+            # Drain pending Win32 WM_PAINT / Expose / DisplayFrame events without running timers
+            # (TCL_WINDOW_EVENTS=4 | TCL_IDLE_EVENTS=32 | TCL_DONT_WAIT=2 = 38) so panes stay
+            # 100% crisp with zero stale trails or half-painted child windows mid-glide.
+            for _ in range(128):
+                if not self.root.tk.dooneevent(38):
+                    break
+        except Exception:
+            pass
+            pass
+
+    def _switch_sidebar_inner_mode(self, compact: bool, width: int):
+        """Switch inner sidebar content between compact and expanded cleanly at a midpoint width."""
+        inner_w = max(40, width - (10 if width < 100 else 16))
+        if compact:
             try:
-                self.root.update_idletasks()
+                self.lbl_sidebar_title.place_forget()
+                self.lbl_sec_pustaka.place_forget()
+                self.lbl_sec_kategori.place_forget()
+                self.storage_card.place_forget()
+                self.btn_compact_folder.place(x=6, y=49, width=34, height=34)
+                self.btn_hamburger.place(x=8, y=4, width=30, height=30)
             except Exception:
                 pass
-            if t < 1.0:
-                self._sidebar_anim_id = self.root.after(12, _tick)
-            else:
-                on_done()
-
-        if defer_start:
-            self._sidebar_anim_id = self.root.after(12, _tick)
+            for item in self.sidebar_items.values():
+                item.set_compact(True, redraw=False)
         else:
-            _tick()
+            try:
+                self.btn_compact_folder.place_forget()
+                self.btn_hamburger.place(x=6, y=4, width=30, height=30)
+                self.lbl_sidebar_title.place(x=44, y=19)
+                self.lbl_sec_pustaka.place(x=10, y=3)
+                self.lbl_sec_kategori.place(x=10, y=12)
+                self.sidebar_bottom.configure(width=inner_w)
+                self.storage_card.place(x=0, y=3, width=inner_w, height=84)
+                tk.Misc.lift(self.storage_card)
+            except Exception:
+                pass
+            for item in self.sidebar_items.values():
+                item.set_compact(False, redraw=False)
 
     def toggle_sidebar_compact(self):
         """Toggle between expanded sidebar with labels and compact sidebar with icons and phone notification badges."""
@@ -3751,74 +3922,202 @@ class IDMGUIApp:
             self._apply_sidebar_compact_immediate()
             return
 
-        # Smooth 2-phase Liquid Glass cross-fade:
-        # 1) Fade out old labels/pills without shifting window widths (0 tearing)
-        # 2) Perform 1 atomic geometry + glass flush with new content starting at alpha=0
-        # 3) Defer clock start by 1 tick so Win32 repaint settles, then smoothly fade in
-        fade_out_s = 0.085 if self.sidebar_compact else 0.075
-        fade_in_s = 0.12 if self.sidebar_compact else 0.14
+        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
+        try:
+            start_w = self.sidebar_frame.winfo_width()
+            if start_w < SIDEBAR_WIDTH_COMPACT or start_w > SIDEBAR_WIDTH_EXPANDED:
+                start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
+        except Exception:
+            start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
 
-        def _after_fade_in():
-            if getattr(self, "_sidebar_anim_gen", 0) == gen:
-                self._set_sidebar_content_fade(None)
+        duration = 0.35
+        start_t = time.perf_counter()
+        going_compact = self.sidebar_compact
+        last_w = [start_w]
+        first_frame = [True]
 
-        def _switch_and_fade_in():
-            if getattr(self, "_sidebar_anim_gen", 0) != gen:
+        sample_item = next(iter(self.sidebar_items.values()), None)
+        cur_fade = getattr(sample_item, "_fade_alpha", None)
+        start_fade = 1.0 if cur_fade is None else float(cur_fade)
+
+        try:
+            self.root._sidebar_animating = True  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        if hasattr(self.sidebar_frame, "set_animating"):
+            self.sidebar_frame.set_animating(True)
+        self._set_right_sliding(True)
+        self._enter_place_glide_mode(start_w)
+
+        # Anchor starting inner state in case user reversed mid-animation
+        already_switched = (
+            (going_compact and not getattr(self.lbl_sidebar_title, "_visible", True))
+            or ((not going_compact) and getattr(self.lbl_sidebar_title, "_visible", False))
+        )
+        inner_switched = [already_switched]
+
+        def _step():
+            if getattr(self, "_sidebar_anim_gen", 0) != gen or not self.root.winfo_exists():
                 return
-            self._apply_sidebar_layout(initial_fade=0.0)
-            self._run_sidebar_fade(0.0, 1.0, fade_in_s, _after_fade_in, gen, defer_start=True)
+            self._sidebar_anim_id = None
+            t = min(1.0, (time.perf_counter() - start_t) / duration)
+            # Smooth sinusoidal ease-in-out prevents mid-travel velocity spikes across frames
+            ease = 0.5 * (1.0 - math.cos(math.pi * t))
+            cur_w = int(round(start_w + (target_w - start_w) * ease))
+            will_resize = (cur_w != last_w[0])
+            last_w[0] = cur_w
 
-        self._run_sidebar_fade(1.0, 0.0, fade_out_s, _switch_and_fade_in, gen)
+            if already_switched:
+                in_a = start_fade + (1.0 - start_fade) * ease
+                self._set_sidebar_content_fade(in_a, redraw=not will_resize)
+            elif going_compact:
+                if not inner_switched[0]:
+                    out_a = max(0.0, 1.0 - (t / 0.36))
+                    if t >= 0.36 or cur_w <= 155:
+                        self._switch_sidebar_inner_mode(compact=True, width=cur_w)
+                        inner_switched[0] = True
+                        self._set_sidebar_content_fade(0.0, redraw=not will_resize)
+                    else:
+                        self._set_sidebar_content_fade(out_a, redraw=not will_resize)
+                if inner_switched[0]:
+                    in_a = max(0.0, min(1.0, (t - 0.45) / 0.55))
+                    self._set_sidebar_content_fade(in_a, redraw=not will_resize)
+            else:
+                if not inner_switched[0]:
+                    out_a = max(0.0, 1.0 - (t / 0.28))
+                    if t >= 0.34 and cur_w >= 130:
+                        self._switch_sidebar_inner_mode(compact=False, width=cur_w)
+                        inner_switched[0] = True
+                        self._set_sidebar_content_fade(0.0, redraw=not will_resize)
+                    else:
+                        self._set_sidebar_content_fade(out_a, redraw=not will_resize)
+                if inner_switched[0]:
+                    in_a = max(0.0, min(1.0, (t - 0.36) / 0.64))
+                    self._set_sidebar_content_fade(in_a, redraw=not will_resize)
+
+            if not (first_frame[0] and not will_resize):
+                self._apply_glide_width(cur_w)
+            else:
+                try:
+                    self.root.update_idletasks()
+                except Exception:
+                    pass
+            first_frame[0] = False
+
+            if t < 1.0:
+                self._sidebar_anim_id = self.root.after(1, _step)
+            else:
+                self._finish_sidebar_animation()
+
+        _step()
 
     def _finish_sidebar_animation(self):
         self._sidebar_anim_id = None
+        self._end_slide_modes()
+        self._exit_place_glide_mode(show_sidebar=True)
         self._apply_sidebar_layout(initial_fade=None)
 
     def _apply_sidebar_compact_immediate(self):
         self._cancel_sidebar_anim()
+        self._end_slide_modes()
+        self._exit_place_glide_mode(show_sidebar=self.sidebar_visible)
         self._apply_sidebar_layout(initial_fade=None)
 
     def toggle_sidebar(self):
         gen = self._cancel_sidebar_anim()
         immediate = bool(os.environ.get("PYTEST_CURRENT_TEST") or is_reduced_motion())
-
-        def _complete_hide():
-            if getattr(self, "_sidebar_anim_gen", 0) != gen:
-                return
-            self.paned.forget(self.sidebar_frame)
-            self.sidebar_visible = False
-            self._set_sidebar_content_fade(None)
-            self._flush_paned_geometry()
-            self._refresh_right_glass()
-            try:
-                if hasattr(self, "tree") and hasattr(self.tree, "viewport"):
-                    dims = (self.tree.viewport.winfo_width(), self.tree.viewport.winfo_height())
-                    if dims != getattr(self.tree, "_last_resize_dims", None):
-                        self.tree._on_resize()
-                self.root.update_idletasks()
-            except Exception:
-                pass
-            self._flush_win32_paint()
+        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
 
         if self.sidebar_visible:
+            self.sidebar_visible = False
             if immediate:
-                _complete_hide()
-            else:
-                self._run_sidebar_fade(1.0, 0.0, 0.075, _complete_hide, gen)
+                self._exit_place_glide_mode(show_sidebar=False)
+                self.paned.forget(self.sidebar_frame)
+                self._set_sidebar_content_fade(None)
+                self._flush_paned_geometry()
+                self._refresh_right_glass()
+                return
+
+            try:
+                start_w = max(24, self.sidebar_frame.winfo_width())
+            except Exception:
+                start_w = target_w
+            start_t = time.perf_counter()
+            duration = 0.22
+            try:
+                self.root._sidebar_animating = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            if hasattr(self.sidebar_frame, "set_animating"):
+                self.sidebar_frame.set_animating(True)
+            self._set_right_sliding(True)
+            self._enter_place_glide_mode(start_w)
+
+            def _hide_step():
+                if getattr(self, "_sidebar_anim_gen", 0) != gen or not self.root.winfo_exists():
+                    return
+                self._sidebar_anim_id = None
+                t = min(1.0, (time.perf_counter() - start_t) / duration)
+                ease = 0.5 * (1.0 - math.cos(math.pi * t))
+                cur_w = max(16, int(round(start_w + (16 - start_w) * ease)))
+                self._set_sidebar_content_fade(max(0.0, 1.0 - (t / 0.45)), redraw=False)
+                self._apply_glide_width(cur_w)
+                if t < 1.0:
+                    self._sidebar_anim_id = self.root.after(1, _hide_step)
+                else:
+                    self._end_slide_modes()
+                    self._set_sidebar_content_fade(None)
+                    self._exit_place_glide_mode(show_sidebar=False)
+                    self.paned.forget(self.sidebar_frame)
+                    self._flush_paned_geometry()
+                    self._refresh_right_glass()
+
+            _hide_step()
         else:
-            panes = self.paned.panes()
-            min_s = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
-            right_pane = panes[1] if len(panes) > 1 else None
-            if right_pane is not None:
-                self.paned.add(self.sidebar_frame, before=right_pane, minsize=min_s)
-            else:
-                self.paned.add(self.sidebar_frame, minsize=min_s)
             self.sidebar_visible = True
+            panes = self.paned.panes()
+            right_pane = panes[1] if len(panes) > 1 else None
             if immediate:
+                if right_pane is not None:
+                    self.paned.add(self.sidebar_frame, before=right_pane, minsize=target_w)
+                else:
+                    self.paned.add(self.sidebar_frame, minsize=target_w)
                 self._apply_sidebar_layout(initial_fade=None)
-            else:
-                self._apply_sidebar_layout(initial_fade=0.0)
-                self._run_sidebar_fade(0.0, 1.0, 0.12, lambda: self._set_sidebar_content_fade(None), gen, defer_start=True)
+                return
+
+            try:
+                cur_vis_w = self.sidebar_frame.winfo_width() if self.sidebar_frame.winfo_manager() else 16
+                start_w = max(16, min(target_w, cur_vis_w if cur_vis_w >= 16 else 16))
+            except Exception:
+                start_w = 16
+            start_t = time.perf_counter()
+            duration = 0.24
+            try:
+                self.root._sidebar_animating = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            if hasattr(self.sidebar_frame, "set_animating"):
+                self.sidebar_frame.set_animating(True)
+            self._set_right_sliding(True)
+            self._enter_place_glide_mode(start_w)
+            self._switch_sidebar_inner_mode(compact=self.sidebar_compact, width=start_w)
+            self._set_sidebar_content_fade(0.0, redraw=False)
+
+            def _show_step():
+                if getattr(self, "_sidebar_anim_gen", 0) != gen or not self.root.winfo_exists():
+                    return
+                self._sidebar_anim_id = None
+                t = min(1.0, (time.perf_counter() - start_t) / duration)
+                ease = 0.5 * (1.0 - math.cos(math.pi * t))
+                cur_w = max(16, int(round(start_w + (target_w - start_w) * ease)))
+                self._set_sidebar_content_fade(max(0.0, min(1.0, (t - 0.30) / 0.70)), redraw=False)
+                self._apply_glide_width(cur_w)
+                if t < 1.0:
+                    self._sidebar_anim_id = self.root.after(1, _show_step)
+                else:
+                    self._finish_sidebar_animation()
+
+            _show_step()
 
     def set_language(self, lang: str):
         """Sets the application language ('id' or 'en') and dynamically updates UI strings."""
