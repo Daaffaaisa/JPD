@@ -416,7 +416,8 @@ def draw_liquid_glass_panel(
     tags: str = "",
 ) -> list[int]:
     """Draws a modern Apple Liquid Glass panel with multi-layer shadow, frosted body,
-    1px top specular highlight rim, and bottom refraction glow."""
+    curved top specular highlight rim following the corner radius (fading at ends),
+    and bottom refraction glow matching curvature."""
     item_ids = []
     t_arg = (tags,) if tags else ()
     # 1. Soft layered ambient drop shadow
@@ -427,13 +428,47 @@ def draw_liquid_glass_panel(
     # 2. Main frosted glass body with structural border
     main_body = draw_round_rectangle(canvas, x1, y1, x2, y2, r=r, fill=fill, outline=border, width=width, tags=t_arg)
     item_ids.append(main_body)
-    # 3. Overhead specular reflection (frosted rim across the top curvature)
+    # 3. Curved top specular rim following corner radius with fade at ends
     if (x2 - x1) > (2 * r) and (y2 - y1) > 10:
-        top_rim = canvas.create_line(x1 + r, y1 + 1, x2 - r, y1 + 1, fill=rim_highlight, width=1, tags=t_arg)
+        # Draw top rim as an arc hugging the top-left and top-right rounded corners
+        # Left corner arc (90° to 180°)
+        canvas.create_arc(
+            x1, y1, x1 + 2 * r, y1 + 2 * r,
+            start=90, extent=90, style=tk.ARC,
+            outline=rim_highlight, width=1, tags=t_arg
+        )
+        # Right corner arc (0° to 90°)
+        canvas.create_arc(
+            x2 - 2 * r, y1, x2, y1 + 2 * r,
+            start=0, extent=90, style=tk.ARC,
+            outline=rim_highlight, width=1, tags=t_arg
+        )
+        # Straight segment across the flat top (fading towards ends via stipple)
+        top_rim = canvas.create_line(
+            x1 + r, y1 + 1, x2 - r, y1 + 1,
+            fill=rim_highlight, width=1, tags=t_arg,
+            stipple="gray25"  # subtle fade effect on the straight portion
+        )
         item_ids.append(top_rim)
-        # 4. Subtle bottom refraction sheen
+        # 4. Curved bottom refraction sheen matching corner radius with fade
         if refraction:
-            bot_rim = canvas.create_line(x1 + r, y2 - 1, x2 - r, y2 - 1, fill=refraction, width=1, tags=t_arg)
+            # Left corner arc (180° to 270°)
+            canvas.create_arc(
+                x1, y2 - 2 * r, x1 + 2 * r, y2,
+                start=180, extent=90, style=tk.ARC,
+                outline=refraction, width=1, tags=t_arg
+            )
+            # Right corner arc (270° to 360°)
+            canvas.create_arc(
+                x2 - 2 * r, y2 - 2 * r, x2, y2,
+                start=270, extent=90, style=tk.ARC,
+                outline=refraction, width=1, tags=t_arg
+            )
+            bot_rim = canvas.create_line(
+                x1 + r, y2 - 1, x2 - r, y2 - 1,
+                fill=refraction, width=1, tags=t_arg,
+                stipple="gray25"
+            )
             item_ids.append(bot_rim)
     return item_ids
 
@@ -659,6 +694,7 @@ class RoundedButton(tk.Canvas):
             bg=self.bg_parent,
             highlightthickness=0,
             cursor="hand2",
+            takefocus=True,
         )
 
         self.is_focused = False
@@ -670,6 +706,9 @@ class RoundedButton(tk.Canvas):
         self.bind("<ButtonRelease-1>", self._on_release, add="+")
         self.bind("<FocusIn>", lambda e: self._on_focus(True), add="+")
         self.bind("<FocusOut>", lambda e: self._on_focus(False), add="+")
+        # Keyboard activation
+        self.bind("<space>", lambda e: self._on_space(), add="+")
+        self.bind("<Return>", lambda e: self._on_space(), add="+")
 
         self.tooltip_obj: Optional[Tooltip] = None
         if tooltip:
@@ -810,6 +849,12 @@ class RoundedButton(tk.Canvas):
             self._draw(self.bg_hover, is_pressed=False, glow_alpha=self._glow_alpha)
             if self.command:
                 self.command()
+
+    def _on_space(self):
+        if self.state != "disabled":
+            self._draw(self.bg_active, is_pressed=True, glow_alpha=1.0)
+            # Simulate release after short delay
+            self.after(100, lambda: self._on_release(None) if self.winfo_exists() else None)
 
     def configure(self, cnf=None, **kwargs):
         if cnf:
@@ -995,7 +1040,7 @@ class GlassThinScrollbar(tk.Canvas):
     """Ultra-sleek auto-hiding floating scrollbar for Liquid Glass surfaces."""
 
     def __init__(self, parent: tk.Widget, command: Optional[Callable] = None, width: int = 6, **kwargs):
-        bg = kwargs.pop("bg", THEME["surface_canvas"])
+        bg = kwargs.pop("bg", THEME["tree_bg"])  # Match table container background
         super().__init__(parent, width=width, bg=bg, highlightthickness=0, **kwargs)
         self.command = command
         self.bar_width = width
@@ -1111,7 +1156,7 @@ class GlassSearchEntry(tk.Canvas):
             bd=0,
         )
         self.entry.insert(0, placeholder)
-        self.create_window(110, height // 2, window=self.entry, width=width - 60)
+        self.entry_win = self.create_window(110, height // 2, window=self.entry, width=width - 60)
 
         # Clear button '✕'
         self.btn_clear = tk.Label(self, text="✕", font=(FONT_DISPLAY, 8), bg=THEME["input_bg"], fg=THEME["text_tertiary"], cursor="hand2")
@@ -1173,6 +1218,38 @@ class GlassSearchEntry(tk.Canvas):
     def get(self) -> str:
         val = self.entry_var.get()
         return "" if val == self.placeholder else val
+
+    def resize(self, new_width: int):
+        """Resize capsule and re-anchor the embedded entry window."""
+        self.entry_width = new_width
+        self.config(width=new_width)
+        # Hardcoded char-width mapping to prevent overflow at small sizes
+        if new_width <= 120:
+            char_width = 8
+            short_placeholder = "Search..."
+        elif new_width <= 140:
+            char_width = 10
+            short_placeholder = "Search..."
+        elif new_width <= 175:
+            char_width = 14
+            short_placeholder = "Search downloads..."
+        else:
+            char_width = 24
+            short_placeholder = "Search downloads..."
+        self.entry.config(width=char_width)
+        # Update placeholder text to fit available space
+        if not self.is_focused:
+            self.entry.delete(0, tk.END)
+            self.entry.insert(0, short_placeholder)
+        # Re-anchor the entry window: reserve icon zone (left 32px) and clear zone (right 32px)
+        entry_left = 32
+        entry_right = new_width - 32
+        entry_w = max(24, entry_right - entry_left)
+        entry_center = (entry_left + entry_right) // 2
+        self.itemconfigure(self.entry_win, width=entry_w)
+        self.coords(self.entry_win, entry_center, self.entry_height // 2)
+        self.coords(self.clear_win, new_width - 16, self.entry_height // 2)
+        self._draw_bg()
 
 
 class AmbientMeshEngine:

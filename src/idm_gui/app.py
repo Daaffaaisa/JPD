@@ -107,6 +107,9 @@ class _CanvasTextAdapter:
             if k == "text":
                 new_str = str(v)
                 old_str = self._cur_val or (self.canvas.itemcget(self.item_id, "text") if self.canvas.winfo_exists() else "")
+                # Truncate text to fit card width (with ellipsis) if canvas is a TactileCard
+                if hasattr(self.canvas, "winfo_width") and self.canvas.winfo_width() > 0:
+                    new_str = self._truncate_for_card(new_str, self.canvas.winfo_width())
                 self._cur_val = new_str
                 if is_reduced_motion() or os.environ.get("PYTEST_CURRENT_TEST") or not self.canvas.winfo_exists():
                     self.canvas.itemconfigure(self.item_id, text=new_str)
@@ -172,6 +175,27 @@ class _CanvasTextAdapter:
 
         _step(0)
 
+    def _truncate_for_card(self, text: str, card_width: int) -> str:
+        """Truncate text with ellipsis so it fits inside the card width."""
+        try:
+            if not text or card_width < 40:
+                return text
+            max_text_width = card_width - 36  # left 18 + right 18 padding
+            import tkinter.font as tkfont
+            val_font = tkfont.Font(font=(FONT_DISPLAY, 12, "bold"))
+            if val_font.measure(text) <= max_text_width:
+                return text
+            lo, hi = 0, len(text)
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if val_font.measure(text[:mid] + "…") <= max_text_width:
+                    lo = mid
+                else:
+                    hi = mid - 1
+            return text[:lo] + "…"
+        except Exception:
+            return text
+
     def cget(self, key: str):
         if key == "text":
             return self._cur_val or (self.canvas.itemcget(self.item_id, "text") if self.canvas.winfo_exists() else "")
@@ -221,7 +245,16 @@ class TactileCard(tk.Canvas):
         self.lbl_title = _CanvasTextAdapter(self, self.item_title)
         self.lbl_val = _CanvasTextAdapter(self, self.item_val)
 
-        self.bind("<Configure>", self._redraw)
+        self._redraw_debounce_id: Optional[str] = None
+        self.bind("<Configure>", self._schedule_redraw)
+
+    def _schedule_redraw(self, event=None):
+        if self._redraw_debounce_id is not None:
+            try:
+                self.after_cancel(self._redraw_debounce_id)
+            except Exception:
+                pass
+        self._redraw_debounce_id = self.after(50, self._redraw)
 
     def _redraw(self, event=None):
         w = self.winfo_width()
@@ -263,10 +296,38 @@ class TactileCard(tk.Canvas):
             )
         self.tag_lower("card_bg")
 
-        # Perfectly center title and metric vertically
+        # Perfectly center title and metric vertically with balanced spacing
         mid_y = h / 2.0
-        self.coords(self.item_title, 18, int(mid_y - 12))
-        self.coords(self.item_val, 18, int(mid_y + 13))
+        title_y = int(mid_y - 10)
+        val_y = int(mid_y + 10)
+        self.coords(self.item_title, 18, title_y)
+        self.coords(self.item_val, 18, val_y)
+
+        # Truncate value text with ellipsis if it exceeds card width
+        self._truncate_value_text(w)
+
+    def _truncate_value_text(self, card_width: int):
+        """Truncate value text with ellipsis to fit card width."""
+        max_text_width = card_width - 36  # left 18 + right 18 padding
+        val_text = self.itemcget(self.item_val, "text")
+        # We need to measure with the value font
+        try:
+            from idm_gui.theme import FONT_DISPLAY
+            # Create a temporary font to measure
+            import tkinter.font as tkfont
+            val_font = tkfont.Font(font=(FONT_DISPLAY, 12, "bold"))
+            if val_font.measure(val_text) > max_text_width:
+                # Binary search for max chars that fit
+                lo, hi = 0, len(val_text)
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    if val_font.measure(val_text[:mid] + "…") <= max_text_width:
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                self.itemconfig(self.item_val, text=val_text[:lo] + "…")
+        except Exception:
+            pass
 
 
 class TactileStorageCard(tk.Frame):
@@ -322,7 +383,8 @@ class TactileTableContainer(tk.Canvas):
     """3D tactile rounded container for the downloads table with drop shadow and specular highlight."""
 
     def __init__(self, parent: tk.Widget, r: int = 14):
-        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["bg_dark"]
+        # Match inner_frame/tree_bg so the glass panel blends seamlessly
+        bg_col = THEME["tree_bg"]
         super().__init__(parent, bg=bg_col, highlightthickness=0)
         self.r = r
 
@@ -330,7 +392,16 @@ class TactileTableContainer(tk.Canvas):
         self.inner_frame = tk.Frame(self, bg=THEME["tree_bg"])
         self.win_id = self.create_window(0, 0, window=self.inner_frame, anchor=tk.NW)
 
-        self.bind("<Configure>", self._redraw)
+        self._redraw_debounce_id: Optional[str] = None
+        self.bind("<Configure>", self._schedule_redraw)
+
+    def _schedule_redraw(self, event=None):
+        if self._redraw_debounce_id is not None:
+            try:
+                self.after_cancel(self._redraw_debounce_id)
+            except Exception:
+                pass
+        self._redraw_debounce_id = self.after(50, self._redraw)
 
     def _redraw(self, event=None):
         w = self.winfo_width()
@@ -375,6 +446,50 @@ class TactileTableContainer(tk.Canvas):
         pad = 4
         self.coords(self.win_id, pad, pad)
         self.itemconfigure(self.win_id, width=max(10, w - (pad * 2)), height=max(10, h - (pad * 2)))
+
+
+class SidebarNavScroller(tk.Frame):
+    """Scrollable container for sidebar navigation items at compact window heights.
+
+    Wraps a canvas + inner frame; mousewheel scroll activates only while the
+    pointer hovers the nav area so it never steals wheel events from the table.
+    """
+
+    def __init__(self, parent: tk.Widget, bg: str):
+        super().__init__(parent, bg=bg)
+        self.canvas = tk.Canvas(self, bg=bg, bd=0, highlightthickness=0)
+        self.scrollbar = tk.Scrollbar(self, orient=tk.VERTICAL, command=self.canvas.yview, width=10)
+        self.canvas.configure(yscrollcommand=self._on_scroll)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.inner = tk.Frame(self.canvas, bg=bg)
+        self._win = self.canvas.create_window((0, 0), window=self.inner, anchor=tk.NW)
+        self.inner.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+        # Mousewheel active only while hovering the nav scroller
+        self.bind("<Enter>", self._bind_wheel, add="+")
+        self.bind("<Leave>", self._unbind_wheel, add="+")
+
+    def _on_scroll(self, first: float, last: float):
+        self.scrollbar.set(first, last)
+
+    def _on_canvas_configure(self, event):
+        # Keep inner frame as wide as the canvas
+        self.canvas.itemconfigure(self._win, width=event.width)
+
+    def _bind_wheel(self, _event=None):
+        self.canvas.bind_all("<MouseWheel>", self._on_wheel, add="+")
+
+    def _unbind_wheel(self, _event=None):
+        try:
+            self.canvas.unbind_all("<MouseWheel>")
+        except Exception:
+            pass
+
+    def _on_wheel(self, event):
+        # Windows: positive delta scrolls down
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120.0)), "units")
+        return "break"
 
 
 class SidebarNavItem(tk.Frame):
@@ -458,8 +573,17 @@ class SidebarNavItem(tk.Frame):
             w.bind("<Enter>", lambda e: self._on_enter())
             w.bind("<Leave>", lambda e: self._on_leave())
 
+        # Initialize badge display (hides "0" for empty categories)
+        self._update_badge_display()
+
     def _update_badge_display(self):
-        self.lbl_badge.config(text=str(self.count))
+        # Only show badge text when count > 0 to avoid "0" boxes on empty categories
+        if self.count > 0:
+            self.lbl_badge.config(text=str(self.count))
+            self.lbl_badge.pack(side=tk.RIGHT, padx=(0, 6))
+        else:
+            self.lbl_badge.config(text="")
+            self.lbl_badge.pack_forget()
         if self.is_compact and self.count > 0:
             self.badge_pip.place(x=19, y=3, width=6, height=6)
         else:
@@ -608,7 +732,7 @@ class IDMGUIApp:
         self.root = root
         self.root.title(tr("app_name"))
         self.root.geometry("1040x620")
-        self.root.minsize(820, 480)
+        self.root.minsize(640, 430)
         self.root.configure(bg=THEME["bg_dark"])
 
         # Ensure scaling matches monitor DPI for razor-sharp HD rendering on 1080p, 2K, 4K
@@ -1216,6 +1340,10 @@ class IDMGUIApp:
             bd=1,
             relief=tk.FLAT,
         )
+        self.overflow_menu.add_command(label=f"▶ {tr('ctx_resume')}", command=self.resume_selected)
+        self.overflow_menu.add_command(label=f"⏸ {tr('ctx_pause')}", command=self.pause_selected)
+        self.overflow_menu.add_command(label=f"✕ {tr('ctx_delete')}", command=self.delete_selected)
+        self.overflow_menu.add_separator()
         self.overflow_menu.add_command(label=f"■ {tr('tb_stop')}", command=self.stop_all)
         self.overflow_menu.add_command(label=f"✓ {tr('tb_clear')}", command=self.delete_completed)
         self.overflow_menu.add_command(label=f"↗ {tr('tb_open_folder')}", command=self.open_selected_folder)
@@ -1432,7 +1560,7 @@ class IDMGUIApp:
         self.search_entry_capsule = GlassSearchEntry(
             self.toolbar_frame,
             placeholder=tr("tb_search_placeholder"),
-            on_change=lambda text: self._tick_ui(),
+            on_change=lambda text: None,  # debounced; periodic _tick_ui catches it
             width=210,
             height=32,
         )
@@ -1452,20 +1580,35 @@ class IDMGUIApp:
     def _update_toolbar_overflow(self, width: Optional[int] = None):
         w = width if width is not None else self.root.winfo_width()
         # Responsive search capsule width for compact screens
+        capsule_w = 120 if w < 760 else (140 if w < 860 else (175 if w < 980 else 210))
         if hasattr(self, "search_entry_capsule"):
-            capsule_w = 140 if w < 860 else (175 if w < 1000 else 210)
             try:
-                self.search_entry_capsule.config(width=capsule_w)
-                self.search_entry_capsule.entry_width = capsule_w
-                self.search_entry_capsule._draw_bg()
-                self.search_entry_capsule.coords(self.search_entry_capsule.clear_win, capsule_w - 16, 16)
+                self.search_entry_capsule.resize(capsule_w)
             except Exception:
                 pass
 
+        # Track if transfer pod is hidden
+        self._transfer_pod_hidden = False
         if w < 760:
+            # Very compact: hide all pods (primary, transfer, tools), show only Add URL + More
             if hasattr(self, "secondary_group"):
                 self.secondary_group.pack_forget()
-            for btn in self.secondary_buttons:
+            if hasattr(self, "pod_transfer"):
+                self.pod_transfer.pack_forget()
+            self._transfer_pod_hidden = True
+            for btn in self.btn_stop, self.btn_clean, self.btn_folder, self.btn_opts, self.btn_resume, self.btn_pause, self.btn_delete:
+                try:
+                    btn.pack_forget()
+                except Exception:
+                    pass
+            if self.btn_overflow:
+                self.btn_overflow.pack(side=tk.LEFT, padx=3)
+        elif w < 980:
+            # Compact: hide management tools (Stop, Clear, Folder, Settings), keep transfer (Resume, Pause, Delete)
+            if hasattr(self, "secondary_group"):
+                self.secondary_group.pack_forget()
+            self._transfer_pod_hidden = True
+            for btn in self.btn_stop, self.btn_clean, self.btn_folder, self.btn_opts:
                 try:
                     btn.pack_forget()
                 except Exception:
@@ -1473,6 +1616,7 @@ class IDMGUIApp:
             if self.btn_overflow:
                 self.btn_overflow.pack(side=tk.LEFT, padx=3)
         else:
+            # Normal: show all buttons
             if self.btn_overflow:
                 self.btn_overflow.pack_forget()
             if hasattr(self, "secondary_group"):
@@ -1482,6 +1626,10 @@ class IDMGUIApp:
                     btn.pack(side=tk.LEFT, padx=1)
                 except Exception:
                     pass
+            # Restore transfer pod if previously hidden
+            if self._transfer_pod_hidden and hasattr(self, "pod_transfer"):
+                self.pod_transfer.pack(side=tk.LEFT, padx=(0, 8))
+            self._transfer_pod_hidden = False
 
     def _show_overflow_menu(self):
         if not self.btn_overflow:
@@ -1573,10 +1721,15 @@ class IDMGUIApp:
         )
         self.lbl_sidebar_title.place(x=44, y=10)
 
-        # Section 1 Container (fixed 22px height: keeps Row 1 locked at exact same vertical coordinate in both modes)
-        self.frame_sec_pustaka = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=22)
+        # Scrollable nav container fills the middle between header and bottom
+        self.nav_scroller = SidebarNavScroller(self.sidebar_frame, bg=THEME["surface_alt"])
+        self.nav_scroller.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(4, 4))
+
+        # Add section containers and items inside the nav scroller
+        # Section 1: "Pustaka" (Library)
+        self.frame_sec_pustaka = tk.Frame(self.nav_scroller.inner, bg=THEME["surface_alt"], height=22)
         self.frame_sec_pustaka.pack_propagate(False)
-        self.frame_sec_pustaka.pack(fill=tk.X)
+        self.frame_sec_pustaka.pack(side=tk.TOP, fill=tk.X)
 
         self.lbl_sec_pustaka = tk.Label(
             self.frame_sec_pustaka,
@@ -1586,7 +1739,7 @@ class IDMGUIApp:
             font=(FONT_DISPLAY, 7, "bold"),
             anchor=tk.W,
         )
-        self.lbl_sec_pustaka.place(x=10, y=3)
+        self.lbl_sec_pustaka.pack(fill=tk.X, padx=10, pady=(1, 1))
 
         pustaka_specs = [
             ("all", "📥", tr("nav_all")),
@@ -1595,7 +1748,7 @@ class IDMGUIApp:
         ]
         for key, icon, label in pustaka_specs:
             item = SidebarNavItem(
-                self.sidebar_frame,
+                self.nav_scroller.inner,
                 icon=icon,
                 text=label,
                 key=key,
@@ -1606,9 +1759,9 @@ class IDMGUIApp:
             self.sidebar_items[key] = item
 
         # Section 2 Container (fixed 26px height: keeps Category rows locked at exact same vertical coordinate in both modes)
-        self.frame_sec_kategori = tk.Frame(self.sidebar_frame, bg=THEME["surface_alt"], height=26)
+        self.frame_sec_kategori = tk.Frame(self.nav_scroller.inner, bg=THEME["surface_alt"], height=26)
         self.frame_sec_kategori.pack_propagate(False)
-        self.frame_sec_kategori.pack(fill=tk.X, pady=(4, 2))
+        self.frame_sec_kategori.pack(side=tk.TOP, fill=tk.X, pady=(4, 2))
 
         # 1px subtle divider between sections
         self.div_sec_kategori = tk.Frame(self.frame_sec_kategori, height=1, bg=THEME["border"])
@@ -1622,7 +1775,7 @@ class IDMGUIApp:
             font=(FONT_DISPLAY, 7, "bold"),
             anchor=tk.W,
         )
-        self.lbl_sec_kategori.place(x=10, y=3)
+        self.lbl_sec_kategori.pack(fill=tk.X, padx=10, pady=(1, 1))
 
         cat_specs = [
             ("video", "🎬", tr("cat_video")),
@@ -1634,7 +1787,7 @@ class IDMGUIApp:
         ]
         for key, icon, label in cat_specs:
             item = SidebarNavItem(
-                self.sidebar_frame,
+                self.nav_scroller.inner,
                 icon=icon,
                 text=label,
                 key=key,
@@ -1645,7 +1798,7 @@ class IDMGUIApp:
             self.sidebar_items[key] = item
 
         # Activate 'all' item by default with animated glide indicator
-        self.sidebar_glide_bar = tk.Frame(self.sidebar_frame, bg=THEME["accent_glow"], width=3)
+        self.sidebar_glide_bar = tk.Frame(self.nav_scroller.inner, bg=THEME["accent_glow"], width=3)
         self.sidebar_items["all"].set_active(True)
         self.sidebar_glide_bar.place(x=2, y=28, width=3, height=24)
         self.sidebar_glide_bar.lift()
@@ -1958,6 +2111,13 @@ class IDMGUIApp:
             url_entry.pack(fill=tk.X, pady=(0, 2))
             url_entry.focus_set()
 
+            # Bind Return on entry AND dialog; Escape on dialog
+            dlg.bind("<Return>", lambda e: on_ok())
+            dlg.bind("<Escape>", lambda e: dlg.destroy())
+            if url_entry:
+                url_entry.bind("<Return>", lambda e: on_ok())
+                url_entry.bind("<Escape>", lambda e: dlg.destroy())
+
             # Inline validation error label
             lbl_error = tk.Label(main_box, text="", bg=THEME["surface"], fg=THEME["danger_text"], font=FONT_SMALL)
             lbl_error.pack(anchor=tk.W, pady=(0, 6))
@@ -1994,9 +2154,6 @@ class IDMGUIApp:
 
             btn_cancel = create_modern_button(btn_box, text=tr("dlg_add_btn_cancel"), command=dlg.destroy, kind="secondary", padx=12, pady=4, radius=7)
             btn_cancel.pack(side=tk.RIGHT)
-
-            dlg.bind("<Return>", lambda e: on_ok())
-            dlg.bind("<Escape>", lambda e: dlg.destroy())
         else:
             self._show_download_info_for_url(clipboard_url)
 
@@ -2535,8 +2692,9 @@ class IDMGUIApp:
                 pct_str = "□□□□□□ 0%"
 
             cat = self._detect_category(task.url, task.output_path)
-            glyph = get_file_type_glyph(cat, fname)
-            disp_fname = f"{glyph} {fname}"
+            # NOTE: icon glyph is rendered separately by GlassTableView's outline icon set.
+            # Keep filename plain so the table icon and text align at the same X position.
+            disp_fname = fname
 
             values = (
                 disp_fname,
@@ -2584,7 +2742,7 @@ class IDMGUIApp:
         self.statusbar.config(
             text=tr("statusbar_summary", total=len(tasks), active=active_count, speed=f"{format_bytes(int(total_speed))}/s")
         )
-        self.root.after(300, self._tick_ui)
+        self.root.after(1000, self._tick_ui)
 
     def _get_selected_task_id(self) -> Optional[str]:
         sel = self.tree.selection()

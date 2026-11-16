@@ -1169,6 +1169,9 @@ class OptionsDialog:
         self.notebook = ttk.Notebook(main_frame, style="Options.TNotebook")
         self.notebook.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
+        # Make notebook focusable for keyboard navigation
+        self.notebook.configure(takefocus=True)
+
         # ---------------- TAB 1: UMUM (General) ----------------
         tab_general = tk.Frame(self.notebook, bg=BG, padx=16, pady=16)
         self.notebook.add(tab_general, text=tr("tab_general"))
@@ -1198,7 +1201,7 @@ class OptionsDialog:
         ]):
             r = idx // 2
             c = idx % 2
-            tk.Checkbutton(
+            cb = tk.Checkbutton(
                 browsers_frame,
                 text=name,
                 variable=var,
@@ -1208,7 +1211,9 @@ class OptionsDialog:
                 activebackground=CARD_BG,
                 activeforeground=FG,
                 font=("Segoe UI", 9),
-            ).grid(row=r, column=c, sticky=tk.W, padx=10, pady=2)
+                takefocus=True,
+            )
+            cb.grid(row=r, column=c, sticky=tk.W, padx=10, pady=2)
         browsers_frame.columnconfigure(0, weight=1)
         browsers_frame.columnconfigure(1, weight=1)
 
@@ -1246,6 +1251,7 @@ class OptionsDialog:
             activebackground=BG,
             activeforeground=FG,
             font=("Segoe UI", 9),
+            takefocus=True,
         ).pack(anchor=tk.W, pady=2)
 
         self.cb_close_tray_var = tk.BooleanVar(value=self.sm.get_close_to_tray())
@@ -1259,6 +1265,7 @@ class OptionsDialog:
             activebackground=BG,
             activeforeground=FG,
             font=("Segoe UI", 9),
+            takefocus=True,
         ).pack(anchor=tk.W, pady=2)
 
         self.cb_start_minimized_var = tk.BooleanVar(value=self.sm.get_start_minimized())
@@ -1272,6 +1279,7 @@ class OptionsDialog:
             activebackground=BG,
             activeforeground=FG,
             font=("Segoe UI", 9),
+            takefocus=True,
         ).pack(anchor=tk.W, pady=2)
 
         self.cb_sound_var = tk.BooleanVar(value=self.sm.get_play_sound_on_complete())
@@ -1285,6 +1293,7 @@ class OptionsDialog:
             activebackground=BG,
             activeforeground=FG,
             font=("Segoe UI", 9),
+            takefocus=True,
         ).pack(anchor=tk.W, pady=2)
 
         self.cb_confirm_del_var = tk.BooleanVar(value=self.sm.get_confirm_on_delete())
@@ -1298,6 +1307,7 @@ class OptionsDialog:
             activebackground=BG,
             activeforeground=FG,
             font=("Segoe UI", 9),
+            takefocus=True,
         ).pack(anchor=tk.W, pady=2)
 
         self.cb_autoclose_progress_var = tk.BooleanVar(value=self.sm.get_autoclose_progress())
@@ -1311,6 +1321,7 @@ class OptionsDialog:
             activebackground=BG,
             activeforeground=FG,
             font=("Segoe UI", 9),
+            takefocus=True,
         ).pack(anchor=tk.W, pady=2)
 
         self.cb_clipboard_var = tk.BooleanVar(value=self.sm.data.get("monitor_clipboard", True))
@@ -1324,7 +1335,11 @@ class OptionsDialog:
             activebackground=BG,
             activeforeground=FG,
             font=("Segoe UI", 9),
+            takefocus=True,
         ).pack(anchor=tk.W, pady=2)
+
+        # Focus first focusable widget after UI is built
+        self.top.after(50, self._focus_first_widget)
 
         tk.Label(
             tab_general,
@@ -1490,6 +1505,26 @@ class OptionsDialog:
         chosen = filedialog.askdirectory(parent=self.top, initialdir=initial, title=tr("opt_browse_temp_title"))
         if chosen:
             self.temp_var.set(os.path.abspath(chosen))
+
+    def _focus_first_widget(self):
+        """Set focus to the first focusable widget in the dialog."""
+        def find_first_focusable(w):
+            if hasattr(w, 'winfo_children'):
+                for c in w.winfo_children():
+                    result = find_first_focusable(c)
+                    if result:
+                        return result
+            try:
+                if w.winfo_class() in ('Entry', 'Combobox', 'Checkbutton', 'Button', 'Notebook'):
+                    if str(w.cget('takefocus')) in ('1', 'True', 'true') or w.winfo_class() == 'Notebook':
+                        return w
+            except Exception:
+                pass
+            return None
+        
+        first = find_first_focusable(self.top)
+        if first:
+            first.focus_set()
 
     def _on_save(self):
         cat_disp = self.cat_var.get()

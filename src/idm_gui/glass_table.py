@@ -51,7 +51,7 @@ class GlassTableView(tk.Frame):
         on_add_url_click: Optional[Callable] = None,
         **kwargs,
     ):
-        bg = kwargs.pop("bg", THEME["surface_canvas"])
+        bg = kwargs.pop("bg", THEME["tree_bg"])  # Match TactileTableContainer.inner_frame
         super().__init__(parent, bg=bg, **kwargs)
 
         self.columns_keys = list(columns)
@@ -84,6 +84,9 @@ class GlassTableView(tk.Frame):
         self._shimmer_phase: float = 0.0
         self._shimmer_timer_id: Optional[str] = None
 
+        # Coalesced rendering: batch rapid item()/insert() updates into ONE viewport render
+        self._render_scheduled: bool = False
+
         # Event callbacks registered via bind()
         self._custom_bindings: dict[str, list[Callable]] = {}
 
@@ -91,19 +94,19 @@ class GlassTableView(tk.Frame):
         self.header_canvas = tk.Canvas(
             self,
             height=32,
-            bg=THEME["surface"],
+            bg=THEME["tree_bg"],   # Match container's fallback background
             highlightthickness=0,
             bd=0,
         )
         self.header_canvas.pack(side=tk.TOP, fill=tk.X)
 
         # 2. Body Viewport Frame (Holds Viewport Canvas + GlassThinScrollbar)
-        self.body_frame = tk.Frame(self, bg=THEME["surface_canvas"])
+        self.body_frame = tk.Frame(self, bg=THEME["tree_bg"])  # Match container
         self.body_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
         self.viewport = tk.Canvas(
             self.body_frame,
-            bg=THEME["surface_canvas"],
+            bg=THEME["tree_bg"],   # Match container; container glass shows through
             highlightthickness=0,
             bd=0,
             takefocus=True,
@@ -114,7 +117,7 @@ class GlassTableView(tk.Frame):
             self.body_frame,
             command=self._on_scrollbar_move,
             width=8,
-            bg=THEME["surface_canvas"],
+            bg=THEME["tree_bg"],  # Match container
         )
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -164,9 +167,43 @@ class GlassTableView(tk.Frame):
         self.header_canvas.bind("<Button-1>", self._on_header_click, add="+")
 
     def _on_resize(self, event=None):
+        self._responsive_fit_columns()
         self._update_scroll_bounds()
         self._redraw_header()
         self._render_viewport()
+
+    def _responsive_fit_columns(self):
+        """Dynamically fit all 6 columns to the available viewport width so Speed & URL
+        are always visible (or gracefully narrow) without clipping."""
+        try:
+            vw = self.viewport.winfo_width()
+            vh = self.viewport.winfo_height()
+        except Exception:
+            return
+        if vw < 320:
+            return
+
+        fixed_cols = ["size", "status", "progress", "speed"]
+        fixed_total = sum(self._col_config[k]["width"] for k in fixed_cols)
+        remaining = max(0, vw - fixed_total - 16)
+
+        name_w = self._col_config["name"]["width"]
+        url_w = self._col_config["url"]["width"]
+
+        if remaining >= (name_w + url_w):
+            # Room to expand: distribute proportionally between name and url
+            expand = remaining - (name_w + url_w)
+            self._col_config["name"]["width"] = name_w + int(expand * 0.4)
+            self._col_config["url"]["width"] = url_w + int(expand * 0.6)
+        else:
+            # Tight space: shrink name and url to fit
+            if remaining > 220:
+                self._col_config["name"]["width"] = max(120, int(remaining * 0.45))
+                self._col_config["url"]["width"] = max(100, remaining - self._col_config["name"]["width"])
+            else:
+                # Very compact: hide URL by minimising it, shrink name
+                self._col_config["name"]["width"] = max(110, int(remaining * 0.6))
+                self._col_config["url"]["width"] = max(80, remaining - self._col_config["name"]["width"])
 
     def _on_mouse_wheel(self, event):
         delta = -1 if event.delta > 0 else 1
@@ -231,7 +268,7 @@ class GlassTableView(tk.Frame):
         else:
             self._selected_ids.clear()
             self._anchor_id = None
-        self._render_viewport()
+        self._schedule_coalesced_render()
         self._trigger_custom_binding("<<TreeviewSelect>>", event)
 
     def _on_ctrl_click(self, event):
@@ -243,7 +280,7 @@ class GlassTableView(tk.Frame):
             else:
                 self._selected_ids.add(row_id)
             self._anchor_id = row_id
-        self._render_viewport()
+        self._schedule_coalesced_render()
         self._trigger_custom_binding("<<TreeviewSelect>>", event)
 
     def _on_shift_click(self, event):
@@ -258,7 +295,7 @@ class GlassTableView(tk.Frame):
         elif row_id:
             self._selected_ids = {row_id}
             self._anchor_id = row_id
-        self._render_viewport()
+        self._schedule_coalesced_render()
         self._trigger_custom_binding("<<TreeviewSelect>>", event)
 
     def _on_double_click(self, event):
@@ -266,7 +303,7 @@ class GlassTableView(tk.Frame):
         if row_id:
             self._selected_ids = {row_id}
             self._anchor_id = row_id
-            self._render_viewport()
+            self._schedule_coalesced_render()
             self._trigger_custom_binding("<Double-1>", event)
 
     def _on_right_click(self, event):
@@ -365,7 +402,7 @@ class GlassTableView(tk.Frame):
         row_id = self._get_row_at_y(event.y)
         if row_id != self._hover_id:
             self._hover_id = row_id
-            self._render_viewport()
+            self._schedule_coalesced_render()
 
         # Check if hovering over URL column
         if row_id and row_id in self._data:
@@ -381,7 +418,7 @@ class GlassTableView(tk.Frame):
     def _on_mouse_leave(self, event):
         if self._hover_id is not None:
             self._hover_id = None
-            self._render_viewport()
+            self._schedule_coalesced_render()
         self._hide_url_tooltip()
 
     def _show_url_tooltip(self, rx: int, ry: int, url: str):
@@ -440,8 +477,8 @@ class GlassTableView(tk.Frame):
         hw = self.header_canvas.winfo_width()
         hh = 32
 
-        # 1. Subtle glass header background
-        self.header_canvas.create_rectangle(0, 0, hw, hh, fill=THEME["surface"], outline="")
+        # Header background: match container tree_bg
+        self.header_canvas.create_rectangle(0, 0, hw, hh, fill=THEME["tree_bg"], outline="")
         # Specular bottom hairline
         self.header_canvas.create_line(0, hh - 1, hw, hh - 1, fill=THEME["glass_border"], width=1)
 
@@ -469,12 +506,30 @@ class GlassTableView(tk.Frame):
                 self.header_canvas.create_line(cur_x + cw, 6, cur_x + cw, hh - 6, fill=THEME["border"], width=1)
             cur_x += cw
 
+    def _schedule_coalesced_render(self):
+        """Coalesce bursts of insert()/item() calls into a single viewport render.
+
+        Without this, _tick_ui updating N rows triggers N full viewport renders
+        per tick, each with per-character font.measure round-trips.
+        """
+        if self._render_scheduled:
+            return
+        self._render_scheduled = True
+        self.viewport.after_idle(self._coalesced_render)
+
+    def _coalesced_render(self):
+        self._render_scheduled = False
+        self._render_viewport()
+
     def _render_viewport(self):
         self.viewport.delete("row_item")
         self.viewport.delete("empty_state")
 
         vh = self.viewport.winfo_height()
         vw = self.viewport.winfo_width()
+
+        # 0. Translucent Liquid Glass Mesh Background behind all rows
+        self._ensure_viewport_glass_photo(vw, vh)
 
         # Check Empty State
         if not self._items:
@@ -490,6 +545,16 @@ class GlassTableView(tk.Frame):
             y = (idx * self.row_height) - self._scroll_offset_y
             self._render_row(item_id, idx, y, vw)
 
+    def _ensure_viewport_glass_photo(self, vw: int, vh: int):
+        """Generates a translucent Liquid Glass mesh photo as the backdrop of the table viewport.
+        
+        NOTE: The TactileTableContainer already draws a full glass panel background.
+        This method is kept for compatibility but does nothing - the container's
+        background shows through the transparent viewport.
+        """
+        # Viewport is transparent; container's glass panel provides the background
+        pass
+
     def _render_row(self, item_id: str, row_idx: int, y: int, vw: int):
         data = self._data.get(item_id, {})
         values = data.get("values", [])
@@ -500,17 +565,20 @@ class GlassTableView(tk.Frame):
 
         # 1. Row Background: Selected Glass / Hover Frosted / Alternating Subtle
         if is_selected:
-            # Luminous glass selected row
-            draw_round_rectangle(self.viewport, 4, y + 2, vw - 4, y + rh - 2, r=RADIUS_XS, fill="#162844", outline=THEME["accent_primary"], width=1, tags="row_item")
+            # Luminous glass selected row: stipple dithering for container glass glow-through
+            self.viewport.create_rectangle(4, y + 2, vw - 4, y + rh - 2, fill="#1e4a7a", outline=THEME["accent_primary"], stipple="gray75", tags="row_item")
             # Left cyan active indicator pip
             self.viewport.create_rectangle(4, y + 6, 7, y + rh - 6, fill=THEME["accent_glow"], outline="", tags="row_item")
         elif is_hovered:
-            # Frosted glass hover highlight
-            draw_round_rectangle(self.viewport, 4, y + 2, vw - 4, y + rh - 2, r=RADIUS_XS, fill="#101a2c", outline=THEME["glass_border"], width=1, tags="row_item")
+            # Frosted glass hover highlight: stipple dithering for container glass glow-through
+            self.viewport.create_rectangle(4, y + 2, vw - 4, y + rh - 2, fill="#2a4064", outline=THEME["glass_border"], stipple="gray50", tags="row_item")
         else:
             is_even = row_idx % 2 == 0
-            bg_col = "#090d16" if is_even else "#060910"
-            self.viewport.create_rectangle(4, y + 2, vw - 4, y + rh - 2, fill=bg_col, outline="", tags="row_item")
+            # Semi-transparent look via stipple dithering (Tk has no per-item alpha);
+            # lets the container glass panel glow through while keeping text contrast.
+            # Use theme-based colors that work with the TactileTableContainer glass (tree_bg base)
+            bg_col = "#182338" if is_even else "#0f1626"  # Slightly darker, works with container glass
+            self.viewport.create_rectangle(4, y + 2, vw - 4, y + rh - 2, fill=bg_col, outline="", stipple="gray50", tags="row_item")
 
         # 2. Extract Values
         fn = str(values[0]) if len(values) > 0 else ""
@@ -529,14 +597,18 @@ class GlassTableView(tk.Frame):
 
         mid_y = y + (rh // 2)
 
-        # 3. Col 0: File Name (Icon + Pure White Bold)
+        # 3. Col 0: File Name (Consistent Category Emoji Icon + Pure White Bold Text)
         name_x = col_x["name"] + 14
-        icon = self._get_file_icon(fn)
-        self.viewport.create_text(name_x, mid_y, text=icon, font=(FONT_DISPLAY, 11), fill="#60a5fa", anchor=tk.W, tags="row_item")
+        # Strip legacy double icon prefix (e.g. "📁 name.zip") so only ONE consistent icon is shown
+        import re
+        fn_clean = re.sub(r"^[\U0001F300-\U0001FAFF\u2600-\u27BF]\s+", "", fn).strip()
+        icon = self._get_file_icon(fn_clean)
+        self.viewport.create_text(name_x, mid_y, text=icon, font=(FONT_DISPLAY, 11), fill=THEME["accent_glow"], anchor=tk.W, tags="row_item")
 
         # Ellipsize file name if exceeds column width
         avail_name_w = self._col_config["name"]["width"] - 48
-        disp_name = self._fit_text_with_ellipsis(fn, avail_name_w, (FONT_DISPLAY, 9, "bold"))
+        disp_name = self._fit_text_with_ellipsis(fn_clean, avail_name_w, (FONT_DISPLAY, 9, "bold"))
+        # File name text always starts at the exact same fixed X position (name_x + 24)
         self.viewport.create_text(name_x + 24, mid_y, text=disp_name, font=(FONT_DISPLAY, 9, "bold"), fill=THEME["text_primary"], anchor=tk.W, tags="row_item")
 
         # 4. Col 1: Size (Right-aligned cool slate under SIZE header)
@@ -599,12 +671,13 @@ class GlassTableView(tk.Frame):
         x2 = x1 + card_w
         y2 = y1 + card_h
 
-        # Modern Liquid Glass Empty State Floating Pod
+        # Empty state card: match container's mesh panel style
+        # Use tree_bg with glass panel for seamless integration
         draw_liquid_glass_panel(
             self.viewport,
             x1, y1, x2, y2,
             r=RADIUS_LG,
-            fill=THEME["surface"],
+            fill=THEME["tree_bg"],        # Match container base
             border=THEME["glass_border"],
             rim_highlight=THEME["glass_rim"],
             refraction=THEME["glass_refraction"],
@@ -643,8 +716,11 @@ class GlassTableView(tk.Frame):
             if has_downloading:
                 self._shimmer_phase = (self._shimmer_phase + 0.04) % 1.0
                 self._render_viewport()
-
-            self._shimmer_timer_id = self.after(50, _step)
+                # Active shimmer: 50ms = 20 FPS
+                self._shimmer_timer_id = self.after(50, _step)
+            else:
+                # Idle: check once per second
+                self._shimmer_timer_id = self.after(1000, _step)
 
         self._shimmer_timer_id = self.after(100, _step)
 
@@ -697,14 +773,18 @@ class GlassTableView(tk.Frame):
             f = tkfont.Font(font=font_spec)
             if f.measure(text) <= max_w:
                 return text
-            # Binary search / truncation
+            # Binary search for max chars that fit (O(log n) instead of O(n))
             ellipsis = "..."
             ell_w = f.measure(ellipsis)
             sub_w = max_w - ell_w
-            for i in range(len(text) - 1, 0, -1):
-                if f.measure(text[:i]) <= sub_w:
-                    return text[:i] + ellipsis
-            return text[:4] + ellipsis
+            lo, hi = 0, len(text)
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if f.measure(text[:mid]) <= sub_w:
+                    lo = mid
+                else:
+                    hi = mid - 1
+            return text[:lo] + ellipsis if lo > 0 else text[:4] + ellipsis
         except Exception:
             return text[:30] + "..." if len(text) > 30 else text
 
@@ -729,7 +809,7 @@ class GlassTableView(tk.Frame):
                 self._items.insert(int(index), row_id)
 
         self._update_scroll_bounds()
-        self._render_viewport()
+        self._schedule_coalesced_render()
         return row_id
 
     def delete(self, *items):
@@ -759,7 +839,7 @@ class GlassTableView(tk.Frame):
         if "tags" in kwargs:
             self._data[row_id]["tags"] = tuple(kwargs["tags"])
         if kwargs:
-            self._render_viewport()
+            self._schedule_coalesced_render()
 
         rec = self._data[row_id]
         if option == "values":
@@ -780,7 +860,7 @@ class GlassTableView(tk.Frame):
         self._selected_ids = {str(item) for item in flat_items if str(item) in self._data}
         if self._selected_ids:
             self._anchor_id = list(self._selected_ids)[-1]
-        self._render_viewport()
+        self._schedule_coalesced_render()
 
     def selection_add(self, *items):
         if len(items) == 1 and isinstance(items[0], (list, tuple, set)):
@@ -791,7 +871,7 @@ class GlassTableView(tk.Frame):
             iid = str(item)
             if iid in self._data:
                 self._selected_ids.add(iid)
-        self._render_viewport()
+        self._schedule_coalesced_render()
 
     def selection_remove(self, *items):
         if len(items) == 1 and isinstance(items[0], (list, tuple, set)):
@@ -800,11 +880,12 @@ class GlassTableView(tk.Frame):
             flat_items = items
         for item in flat_items:
             self._selected_ids.discard(str(item))
-        self._render_viewport()
+        self._schedule_coalesced_render()
 
     def selection_clear(self, **kwargs):
         self._selected_ids.clear()
-        self._render_viewport()
+        self._anchor_id = None
+        self._schedule_coalesced_render()
 
     def identify_row(self, y: int) -> Optional[str]:
         return self._get_row_at_y(y)
