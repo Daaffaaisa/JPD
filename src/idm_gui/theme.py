@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import math
+from collections import OrderedDict
 from typing import Callable, Optional, Any
 import tkinter as tk
 from tkinter import ttk
@@ -1306,6 +1307,9 @@ class AmbientMeshEngine:
         self._idle_threshold_s: float = 5.0
         self._fps_delay_ms: int = 66  # ~15 FPS cap
         self.enabled: bool = True
+        self._corner_mask_cache: dict[tuple[int, int], Any] = {}
+        self._panel_img_cache: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
+        self._backdrop_img_cache: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
 
     @classmethod
     def get_shared(cls) -> "AmbientMeshEngine":
@@ -1328,6 +1332,26 @@ class AmbientMeshEngine:
             self._mesh_img = bg.filter(ImageFilter.GaussianBlur(radius=85))
         return self._mesh_img
 
+    def _get_corner_curve_mask(self, sr: int, peak: int):
+        """Cached top-left (sr x sr) normal-weighted alpha falloff mask."""
+        key = (sr, peak)
+        cached = self._corner_mask_cache.get(key)
+        if cached is not None:
+            return cached
+        from PIL import Image
+
+        buf = bytearray(sr * sr)
+        for sy in range(sr):
+            dy = sr - sy
+            row_off = sy * sr
+            for sx in range(sr):
+                dx = sr - sx
+                ny = dy / max(1.0, math.hypot(dx, dy))
+                buf[row_off + sx] = int(peak * max(0.0, ny) ** 1.8)
+        patch = Image.frombytes("L", (sr, sr), bytes(buf))
+        self._corner_mask_cache[key] = patch
+        return patch
+
     def create_glass_panel(
         self,
         w: int,
@@ -1343,11 +1367,17 @@ class AmbientMeshEngine:
         """Generates an authentic translucent Liquid Glass PhotoImage with physical
         normal-based curved specular highlight and caustic refraction, cropping from the underlying mesh.
         """
-        from PIL import Image, ImageDraw, ImageFilter, ImageTk
+        from PIL import Image, ImageDraw, ImageChops, ImageTk
 
         w = max(10, int(w))
         h = max(10, int(h))
         r = max(2, min(int(r), min(w, h) // 2))
+
+        cache_key = (w, h, r, root_x, root_y, tint_rgba, border_rgba, specular, caustic)
+        cached_img = self._panel_img_cache.get(cache_key)
+        if cached_img is not None:
+            self._panel_img_cache.move_to_end(cache_key)
+            return ImageTk.PhotoImage(cached_img)
 
         mesh = self.get_mesh_image()
         mw, mh = mesh.size
@@ -1355,7 +1385,6 @@ class AmbientMeshEngine:
         cy1 = max(0, min(mh - h, root_y % (mh - h) if mh > h else 0))
         crop = mesh.crop((cx1, cy1, cx1 + w, cy1 + h)).convert("RGBA")
 
-        # 40% dark tint allows 60% of background mesh glow to shine through
         tint = Image.new("RGBA", (w, h), tint_rgba)
         glass = Image.alpha_composite(crop, tint)
 
@@ -1377,67 +1406,51 @@ class AmbientMeshEngine:
         border_img = border_img.resize((w, h), Image.Resampling.LANCZOS)
         glass = Image.alpha_composite(glass, border_img)
 
-        # Physical Normal-Based Curved Specular Rim (Top Edge & Top Corners)
+        strip_1x = min(h, r + 2)
+        sh_strip = strip_1x * scale
+
+        # Physical Normal-Based Curved Specular Rim (Top Edge & Top Corners only)
         if specular and w > 2 * r and h > 10:
-            spec_img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+            spec_img = Image.new("RGBA", (sw, sh_strip), (0, 0, 0, 0))
             d_s = ImageDraw.Draw(spec_img)
             d_s.rounded_rectangle([0, 0, sw - 1, sh - 1], radius=sr, outline=(255, 255, 255, 255), width=scale)
 
-            alpha_spec = bytearray(sw * sh)
-            for sy in range(sh):
-                if sy > sr:
-                    continue
-                for sx in range(sw):
-                    if sx < sr:
-                        dx = sr - sx
-                        dy = sr - sy
-                        dist = math.hypot(dx, dy)
-                        ny = dy / max(1.0, dist)
-                    elif sx > sw - sr:
-                        dx = sx - (sw - sr)
-                        dy = sr - sy
-                        dist = math.hypot(dx, dy)
-                        ny = dy / max(1.0, dist)
-                    else:
-                        ny = 1.0
-                    alpha_spec[sy * sw + sx] = int(245 * max(0.0, ny) ** 1.8)
+            spec_mask = Image.new("L", (sw, sh_strip), 0)
+            tl_mask = self._get_corner_curve_mask(sr, 245)
+            spec_mask.paste(tl_mask, (0, 0))
+            if sw - sr >= sr:
+                ImageDraw.Draw(spec_mask).rectangle([sr, 0, sw - sr, sr - 1], fill=245)
+            if sr > 1:
+                tr_mask = tl_mask.transpose(Image.Transpose.FLIP_LEFT_RIGHT).crop((0, 0, sr - 1, sr))
+                spec_mask.paste(tr_mask, (sw - sr + 1, 0))
 
-            spec_mask = Image.frombytes("L", (sw, sh), bytes(alpha_spec))
-            spec_img.putalpha(Image.composite(spec_mask, Image.new("L", (sw, sh), 0), spec_img.getchannel("A")))
-            spec_curved = spec_img.resize((w, h), Image.Resampling.LANCZOS)
-            glass = Image.alpha_composite(glass, spec_curved)
+            spec_img.putalpha(ImageChops.multiply(spec_img.getchannel("A"), spec_mask))
+            spec_curved = spec_img.resize((w, strip_1x), Image.Resampling.LANCZOS)
+            glass.alpha_composite(spec_curved, dest=(0, 0))
 
-        # Physical Normal-Based Caustic Refraction (Bottom Edge & Bottom Corners)
+        # Physical Normal-Based Caustic Refraction (Bottom Edge & Bottom Corners only)
         if caustic and w > 2 * r and h > 10:
-            caust_img = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+            caust_img = Image.new("RGBA", (sw, sh_strip), (0, 0, 0, 0))
             d_c = ImageDraw.Draw(caust_img)
-            d_c.rounded_rectangle([0, 0, sw - 1, sh - 1], radius=sr, outline=(56, 189, 248, 255), width=scale)
+            d_c.rounded_rectangle([0, sh_strip - sh, sw - 1, sh_strip - 1], radius=sr, outline=(56, 189, 248, 255), width=scale)
 
-            alpha_caust = bytearray(sw * sh)
-            for sy in range(sh):
-                if sy < sh - sr:
-                    continue
-                dy_from_bot = (sh - 1) - sy
-                for sx in range(sw):
-                    if sx < sr:
-                        dx = sr - sx
-                        dy = sr - dy_from_bot
-                        dist = math.hypot(dx, dy)
-                        ny = dy / max(1.0, dist)
-                    elif sx > sw - sr:
-                        dx = sx - (sw - sr)
-                        dy = sr - dy_from_bot
-                        dist = math.hypot(dx, dy)
-                        ny = dy / max(1.0, dist)
-                    else:
-                        ny = 1.0
-                    alpha_caust[sy * sw + sx] = int(210 * max(0.0, ny) ** 1.8)
+            caust_mask = Image.new("L", (sw, sh_strip), 0)
+            bl_mask = self._get_corner_curve_mask(sr, 210).transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+            y_off = sh_strip - sr
+            caust_mask.paste(bl_mask, (0, y_off))
+            if sw - sr >= sr:
+                ImageDraw.Draw(caust_mask).rectangle([sr, y_off, sw - sr, sh_strip - 1], fill=210)
+            if sr > 1:
+                br_mask = bl_mask.transpose(Image.Transpose.FLIP_LEFT_RIGHT).crop((0, 0, sr - 1, sr))
+                caust_mask.paste(br_mask, (sw - sr + 1, y_off))
 
-            caust_mask = Image.frombytes("L", (sw, sh), bytes(alpha_caust))
-            caust_img.putalpha(Image.composite(caust_mask, Image.new("L", (sw, sh), 0), caust_img.getchannel("A")))
-            caust_curved = caust_img.resize((w, h), Image.Resampling.LANCZOS)
-            glass = Image.alpha_composite(glass, caust_curved)
+            caust_img.putalpha(ImageChops.multiply(caust_img.getchannel("A"), caust_mask))
+            caust_curved = caust_img.resize((w, strip_1x), Image.Resampling.LANCZOS)
+            glass.alpha_composite(caust_curved, dest=(0, h - strip_1x))
 
+        self._panel_img_cache[cache_key] = glass
+        while len(self._panel_img_cache) > 36:
+            self._panel_img_cache.popitem(last=False)
         return ImageTk.PhotoImage(glass)
 
     def create_glass_backdrop(
@@ -1449,11 +1462,18 @@ class AmbientMeshEngine:
         tint_rgba: tuple[int, int, int, int] = (8, 12, 20, 165),
     ) -> Any:
         """Generates a coordinate-aligned rectangular frosted mesh backdrop (no border/mask)
-        so inner table widgets seamlessly blend with an enclosing Liquid Glass container."""
+        so inner table widgets seamlessly blend with an enclosing Liquid Glass container.
+        """
         from PIL import Image, ImageTk
 
         w = max(2, int(w))
         h = max(2, int(h))
+        bkey = (w, h, root_x, root_y, tint_rgba)
+        cached_img = self._backdrop_img_cache.get(bkey)
+        if cached_img is not None:
+            self._backdrop_img_cache.move_to_end(bkey)
+            return ImageTk.PhotoImage(cached_img)
+
         mesh = self.get_mesh_image()
         mw, mh = mesh.size
         cx1 = max(0, min(mw - w, root_x % (mw - w) if mw > w else 0))
@@ -1465,6 +1485,9 @@ class AmbientMeshEngine:
             crop = crop.resize((w, h), Image.Resampling.BILINEAR)
         tint = Image.new("RGBA", (w, h), tint_rgba)
         glass = Image.alpha_composite(crop, tint)
+        self._backdrop_img_cache[bkey] = glass
+        while len(self._backdrop_img_cache) > 64:
+            self._backdrop_img_cache.popitem(last=False)
         return ImageTk.PhotoImage(glass)
 
     def get_mesh_photo(self, master: Optional[tk.Misc] = None) -> Any:

@@ -451,6 +451,7 @@ class TactileCard(tk.Canvas):
         self.lbl_title = _CanvasTextAdapter(self, self.item_title)
         self.lbl_val = _CanvasTextAdapter(self, self.item_val)
 
+        self._panel_cache_key: Optional[tuple[int, int, int, int]] = None
         self._redraw_debounce_id: Optional[str] = None
         self.bind("<Configure>", self._schedule_redraw)
 
@@ -462,17 +463,30 @@ class TactileCard(tk.Canvas):
                 pass
         self._redraw_debounce_id = self.after(50, self._redraw)
 
-    def _redraw(self, event=None):
+    def _redraw(self, event=None, force: bool = False):
+        if self._redraw_debounce_id is not None:
+            try:
+                self.after_cancel(self._redraw_debounce_id)
+            except Exception:
+                pass
+            self._redraw_debounce_id = None
         w = self.winfo_width()
         h = self.winfo_height()
         if w < 30 or h < 30:
             return
-        self.delete("card_bg")
-        r = self.r
         try:
             top = self.winfo_toplevel()
             root_x = max(0, self.winfo_rootx() - top.winfo_rootx())
             root_y = max(0, self.winfo_rooty() - top.winfo_rooty())
+        except Exception:
+            root_x, root_y = 0, 0
+        key = (w, h, root_x, root_y)
+        if not force and key == self._panel_cache_key and getattr(self, "_panel_photo", None) is not None and self.find_withtag("card_bg"):
+            return
+        self._panel_cache_key = key
+        self.delete("card_bg")
+        r = self.r
+        try:
             self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
                 w=w,
                 h=h,
@@ -698,7 +712,12 @@ class SidebarGlassContainer(tk.Canvas):
         self._redraw_debounce_id = self.after(35, self._redraw)
 
     def _redraw(self, force: bool = False, fast: bool = False):
-        self._redraw_debounce_id = None
+        if self._redraw_debounce_id is not None:
+            try:
+                self.after_cancel(self._redraw_debounce_id)
+            except Exception:
+                pass
+            self._redraw_debounce_id = None
         w = self.winfo_width()
         h = self.winfo_height()
         if w < 24 or h < 40:
@@ -715,6 +734,8 @@ class SidebarGlassContainer(tk.Canvas):
                 rx = max(0, self.winfo_rootx() - top.winfo_rootx())
                 ry = max(0, self.winfo_rooty() - top.winfo_rooty())
                 key = (w, h, r, rx, ry)
+                if not force and key == self._panel_cache_key and self._panel_photo is not None and self.find_withtag("card_bg"):
+                    return
                 if force or key != self._panel_cache_key or self._panel_photo is None:
                     self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
                         w=w,
@@ -735,6 +756,7 @@ class SidebarGlassContainer(tk.Canvas):
             except Exception:
                 pass
 
+        self._panel_cache_key = None
         self.delete("card_bg")
         draw_liquid_glass_panel(
             self,
@@ -802,6 +824,7 @@ class TactileTableContainer(tk.Canvas):
         self.inner_frame = tk.Frame(self, bg=THEME["tree_bg"])
         self.win_id = self.create_window(pad, pad, window=self.inner_frame, anchor=tk.NW)
 
+        self._panel_cache_key: Optional[tuple[int, int, int, int]] = None
         self._redraw_debounce_id: Optional[str] = None
         self.bind("<Configure>", self._schedule_redraw)
 
@@ -813,17 +836,36 @@ class TactileTableContainer(tk.Canvas):
                 pass
         self._redraw_debounce_id = self.after(50, self._redraw)
 
-    def _redraw(self, event=None):
+    def _redraw(self, event=None, force: bool = False):
+        if self._redraw_debounce_id is not None:
+            try:
+                self.after_cancel(self._redraw_debounce_id)
+            except Exception:
+                pass
+            self._redraw_debounce_id = None
         w = self.winfo_width()
         h = self.winfo_height()
         if w < 50 or h < 50:
             return
-        self.delete("card_bg")
+        # Always keep inner frame inset aligned immediately even when cached
+        pad = self._calc_pad()
+        self.coords(self.win_id, pad, pad)
+        self.itemconfigure(self.win_id, width=max(10, w - (pad * 2)), height=max(10, h - (pad * 2)))
+
         r = self.r
         try:
             top = self.winfo_toplevel()
             root_x = max(0, self.winfo_rootx() - top.winfo_rootx())
             root_y = max(0, self.winfo_rooty() - top.winfo_rooty())
+        except Exception:
+            root_x, root_y = 0, 0
+        key = (w, h, root_x, root_y)
+        if not force and key == self._panel_cache_key and getattr(self, "_panel_photo", None) is not None and self.find_withtag("card_bg"):
+            return
+        self._panel_cache_key = key
+
+        self.delete("card_bg")
+        try:
             self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
                 w=w,
                 h=h,
@@ -1151,9 +1193,10 @@ class SidebarNavItem(tk.Canvas):
         except Exception:
             return text
 
-    def set_compact(self, compact: bool):
+    def set_compact(self, compact: bool, redraw: bool = True):
         self.is_compact = compact
-        self._redraw(force=True)
+        if redraw:
+            self._redraw(force=True)
 
     def set_text_fade(self, alpha: float):
         bg_col = "#132b4f" if self.is_active else THEME["tree_bg"]
@@ -1225,7 +1268,12 @@ class ModernMainPaned:
             else:
                 self._panes.append(widget)
         if len(self._panes) > 0 and widget == self._panes[0]:
-            widget.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
+            pack_kw: dict[str, Any] = {"side": tk.LEFT, "fill": tk.Y, "padx": (0, 8)}
+            if "before" in kwargs and kwargs["before"] is not None:
+                pack_kw["before"] = kwargs["before"]
+            elif len(self._panes) > 1 and self._panes[1].winfo_manager() == "pack":
+                pack_kw["before"] = self._panes[1]
+            widget.pack(**pack_kw)
         else:
             widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -3356,12 +3404,22 @@ class IDMGUIApp:
 
     def _on_sidebar_bottom_configure(self, width: int):
         _apply_canvas_glass_backdrop(self.sidebar_bottom, tint_rgba=(8, 12, 20, 165))
-        if not self.sidebar_compact and width >= 40:
+        if not self.sidebar_compact and width >= 120:
             self.storage_card.place(x=0, y=3, width=width, height=84)
 
     def _apply_sidebar_layout(self):
+        anim_id = getattr(self, "_sidebar_anim_id", None)
+        if anim_id is not None:
+            try:
+                self.root.after_cancel(anim_id)
+            except Exception:
+                pass
+            self._sidebar_anim_id = None
+
         target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
         try:
+            if hasattr(self.sidebar_frame, "set_animating"):
+                self.sidebar_frame.set_animating(False)
             self.sidebar_frame.configure(width=target_w)
         except Exception:
             pass
@@ -3377,7 +3435,7 @@ class IDMGUIApp:
             except Exception:
                 pass
             for item in self.sidebar_items.values():
-                item.set_compact(True)
+                item.set_compact(True, redraw=False)
         else:
             try:
                 self.btn_compact_folder.place_forget()
@@ -3387,32 +3445,45 @@ class IDMGUIApp:
                 self.lbl_sec_kategori.place(x=10, y=12)
                 inner_w = max(140, target_w - 16)
                 self.storage_card.place(x=0, y=3, width=inner_w, height=84)
+                tk.Misc.lift(self.storage_card)
             except Exception:
                 pass
             for item in self.sidebar_items.values():
-                item.set_compact(False)
+                item.set_compact(False, redraw=False)
+
+        # Flush geometry once so all left/right Liquid Glass panels render at final coordinates
+        try:
+            self.paned.container.update_idletasks()
+        except Exception:
+            pass
 
         self._refresh_sidebar_glass()
+        self._refresh_right_glass()
+
+    def _refresh_right_glass(self):
+        for attr in ("card_speed", "card_active", "card_total", "table_container"):
+            widget = getattr(self, attr, None)
+            if widget is not None and hasattr(widget, "_redraw"):
+                try:
+                    widget._redraw()
+                except Exception:
+                    pass
 
     def _refresh_sidebar_glass(self):
         try:
             if hasattr(self.sidebar_frame, "set_animating"):
                 self.sidebar_frame.set_animating(False)
-                self.sidebar_frame._redraw(force=True)
-            self.sidebar_header._bg_mesh_key = None  # type: ignore[attr-defined]
+                self.sidebar_frame._redraw(force=False)
             _apply_canvas_glass_backdrop(self.sidebar_header, tint_rgba=(8, 12, 20, 165))
-            self.sidebar_bottom._bg_mesh_key = None  # type: ignore[attr-defined]
             _apply_canvas_glass_backdrop(self.sidebar_bottom, tint_rgba=(8, 12, 20, 165))
-            self.nav_scroller._redraw_backdrop(force=True)
-            self.btn_hamburger._bg_mesh_key = None  # type: ignore[attr-defined]
+            self.nav_scroller._redraw_backdrop(force=False)
             self.btn_hamburger._redraw()
-            self.btn_compact_folder._bg_mesh_key = None  # type: ignore[attr-defined]
             self.btn_compact_folder._redraw()
-            self.storage_card._redraw(force=True)
-            self.frame_sec_pustaka._redraw(force=True)
-            self.frame_sec_kategori._redraw(force=True)
+            self.storage_card._redraw(force=False)
+            self.frame_sec_pustaka._redraw(force=False)
+            self.frame_sec_kategori._redraw(force=False)
             for item in self.sidebar_items.values():
-                item._redraw(force=True)
+                item._redraw(force=False)
         except Exception:
             pass
 
@@ -3422,69 +3493,8 @@ class IDMGUIApp:
         self._apply_sidebar_compact_state(animated=True)
 
     def _apply_sidebar_compact_state(self, animated: bool = True):
-        if not animated or os.environ.get("PYTEST_CURRENT_TEST"):
-            self._apply_sidebar_compact_immediate()
-            return
-
-        anim_id = getattr(self, "_sidebar_anim_id", None)
-        if anim_id is not None:
-            try:
-                self.root.after_cancel(anim_id)
-            except Exception:
-                pass
-            self._sidebar_anim_id = None
-
-        try:
-            start_w = self.sidebar_frame.winfo_width()
-            if start_w < SIDEBAR_WIDTH_COMPACT or start_w > SIDEBAR_WIDTH_EXPANDED:
-                start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
-        except Exception:
-            start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
-
-        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
-        duration = 0.22
-        start_time = time.perf_counter()
-
-        if hasattr(self.sidebar_frame, "set_animating"):
-            self.sidebar_frame.set_animating(True)
-
-        if self.sidebar_compact:
-            try:
-                self.lbl_sidebar_title.place_forget()
-                self.lbl_sec_pustaka.place_forget()
-                self.lbl_sec_kategori.place_forget()
-                self.storage_card.place_forget()
-                self.btn_compact_folder.place(x=6, y=49, width=34, height=34)
-                self.btn_hamburger.place(x=8, y=4, width=30, height=30)
-            except Exception:
-                pass
-            for item in self.sidebar_items.values():
-                item.set_compact(True)
-        else:
-            try:
-                self.btn_compact_folder.place_forget()
-            except Exception:
-                pass
-
-        def _step():
-            self._sidebar_anim_id = None
-            now = time.perf_counter()
-            elapsed = now - start_time
-            t = min(1.0, elapsed / duration)
-            progress = 1.0 - (1.0 - t) ** 3
-            cur_w = int(start_w + (target_w - start_w) * progress)
-            try:
-                self.sidebar_frame.configure(width=cur_w)
-                self.sidebar_frame.update_idletasks()
-            except Exception:
-                pass
-
-            if t < 1.0:
-                self._sidebar_anim_id = self.root.after(8, _step)
-            else:
-                self._finish_sidebar_animation()
-
-        _step()
+        # Single atomic layout + synchronized glass redraw prevents multi-frame reflow lag and intermediate glitches
+        self._apply_sidebar_compact_immediate()
 
     def _finish_sidebar_animation(self):
         self._sidebar_anim_id = None
@@ -3504,19 +3514,21 @@ class IDMGUIApp:
         if self.sidebar_visible:
             self.paned.forget(self.sidebar_frame)
             self.sidebar_visible = False
+            try:
+                self.paned.container.update_idletasks()
+            except Exception:
+                pass
+            self._refresh_right_glass()
         else:
             panes = self.paned.panes()
             min_s = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
-            if panes:
-                self.paned.add(self.sidebar_frame, before=panes[0], minsize=min_s)
+            right_pane = panes[1] if len(panes) > 1 else None
+            if right_pane is not None:
+                self.paned.add(self.sidebar_frame, before=right_pane, minsize=min_s)
             else:
                 self.paned.add(self.sidebar_frame, minsize=min_s)
             self.sidebar_visible = True
-            target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
-            try:
-                self.paned.sash_place(0, target_w, 0)
-            except Exception:
-                pass
+            self._apply_sidebar_layout()
 
     def set_language(self, lang: str):
         """Sets the application language ('id' or 'en') and dynamically updates UI strings."""
