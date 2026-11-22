@@ -94,10 +94,13 @@ class _CanvasTextAdapter:
     """Lightweight adapter mimicking a tk.Label interface for pure Canvas text items,
     with built-in smooth rolling / count-up animation for numeric stats."""
 
-    def __init__(self, canvas: tk.Canvas, item_id: int):
+    def __init__(self, canvas: tk.Canvas, item_id: int, width_fn: Optional[Any] = None):
         self.canvas = canvas
         self.item_id = item_id
+        self._width_fn = width_fn
         self._cur_val = ""
+        self._raw_val = ""
+        self._val_font: Optional[Any] = None
         self._anim_id: Optional[str] = None
 
     def config(self, **kwargs):
@@ -106,11 +109,19 @@ class _CanvasTextAdapter:
     def configure(self, **kwargs):
         for k, v in kwargs.items():
             if k == "text":
-                new_str = str(v)
+                raw_str = str(v)
+                self._raw_val = raw_str
+                new_str = raw_str
                 old_str = self._cur_val or (self.canvas.itemcget(self.item_id, "text") if self.canvas.winfo_exists() else "")
-                # Truncate text to fit card width (with ellipsis) if canvas is a TactileCard
-                if hasattr(self.canvas, "winfo_width") and self.canvas.winfo_width() > 0:
-                    new_str = self._truncate_for_card(new_str, self.canvas.winfo_width())
+                # Truncate text to fit card width (with ellipsis) if canvas is a TactileCard / StatBar pod
+                try:
+                    card_w = int(self._width_fn()) if self._width_fn is not None else (
+                        self.canvas.winfo_width() if hasattr(self.canvas, "winfo_width") else 0
+                    )
+                except Exception:
+                    card_w = 0
+                if card_w > 0:
+                    new_str = self._truncate_for_card(new_str, card_w)
                 self._cur_val = new_str
                 if is_reduced_motion() or os.environ.get("PYTEST_CURRENT_TEST") or not self.canvas.winfo_exists():
                     self.canvas.itemconfigure(self.item_id, text=new_str)
@@ -182,8 +193,9 @@ class _CanvasTextAdapter:
             if not text or card_width < 40:
                 return text
             max_text_width = card_width - 36  # left 18 + right 18 padding
-            import tkinter.font as tkfont
-            val_font = tkfont.Font(font=(FONT_DISPLAY, 12, "bold"))
+            if self._val_font is None:
+                self._val_font = tkfont.Font(root=self.canvas, font=(FONT_DISPLAY, 12, "bold"))
+            val_font = self._val_font
             if val_font.measure(text) <= max_text_width:
                 return text
             lo, hi = 0, len(text)
@@ -589,6 +601,199 @@ class TactileCard(tk.Canvas):
                 self.itemconfig(self.item_val, text=val_text[:lo] + "…")
         except Exception:
             pass
+
+
+class _StatPodAdapter:
+    """Adapter exposing TactileCard-compatible properties for a pod inside TactileStatBar."""
+
+    def __init__(self, bar: "TactileStatBar", idx: int, lbl_title: _CanvasTextAdapter, lbl_val: _CanvasTextAdapter):
+        self._bar = bar
+        self._idx = idx
+        self.lbl_title = lbl_title
+        self.lbl_val = lbl_val
+
+    def winfo_width(self) -> int:
+        return self._bar._slot_width(self._idx)
+
+    @property
+    def _panel_photo(self) -> Optional[Any]:
+        photos = self._bar._slot_photos
+        return photos[self._idx] if self._idx < len(photos) else None
+
+    def set_sliding(self, sliding: bool):
+        self._bar.set_sliding(sliding)
+
+    def _redraw(self, event=None, force: bool = False, fast: bool = False):
+        self._bar._redraw(force=force, fast=fast)
+
+
+class TactileStatBar(tk.Canvas):
+    """Single atomic Liquid Glass Canvas rendering all 3 KPI telemetry pods.
+
+    Eliminates separate child HWNDs inside the stat strip so Win32 GDI/DWM
+    never slices adjacent cards with parent background strips during resize/glide.
+    """
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        pods: list[tuple[str, str, str]],
+        r: int = RADIUS_LG,
+        height: int = 70,
+        gap: int = 8,
+    ):
+        bg_col = parent.cget("bg") if hasattr(parent, "cget") else THEME["bg_dark"]
+        super().__init__(parent, height=height, bg=bg_col, highlightthickness=0, bd=0)
+        self.r = r
+        self.gap = gap
+        self._pod_specs = list(pods)
+        self._slot_photos: list[Optional[Any]] = [None] * len(pods)
+        self._slots_cache: list[tuple[int, int]] = [(0, 250)] * len(pods)
+        self._cache_key: Optional[tuple[int, int, int, int, bool]] = None
+        self._sliding = False
+        self._redraw_debounce_id: Optional[str] = None
+        self.pods: list[_StatPodAdapter] = []
+
+        for idx, (title, initial_val, val_fg) in enumerate(pods):
+            item_title = self.create_text(
+                18,
+                21,
+                text=title,
+                fill=THEME["text_secondary"],
+                font=(FONT_DISPLAY, 8, "bold"),
+                anchor=tk.W,
+                tags=("card_text", f"pod_{idx}_text"),
+            )
+            item_val = self.create_text(
+                18,
+                48,
+                text=initial_val,
+                fill=val_fg,
+                font=(FONT_DISPLAY, 12, "bold"),
+                anchor=tk.W,
+                tags=("card_text", f"pod_{idx}_text"),
+            )
+            lbl_title = _CanvasTextAdapter(self, item_title)
+            lbl_val = _CanvasTextAdapter(self, item_val, width_fn=lambda i=idx: self._slot_width(i))
+            self.pods.append(_StatPodAdapter(self, idx, lbl_title, lbl_val))
+
+        self.bind("<Configure>", self._schedule_redraw)
+
+    def _compute_slots(self, w: int) -> list[tuple[int, int]]:
+        n = len(self._pod_specs)
+        if n <= 0:
+            return []
+        if n == 3:
+            cw = max(30, (w - 2 * self.gap) // 3)
+            x1 = cw + self.gap
+            x2 = 2 * (cw + self.gap)
+            return [(0, cw), (x1, cw), (x2, max(30, w - x2))]
+        total_gap = self.gap * (n - 1)
+        cw = max(30, (w - total_gap) // n)
+        slots: list[tuple[int, int]] = []
+        x = 0
+        for i in range(n):
+            sw = max(30, w - x) if i == n - 1 else cw
+            slots.append((x, sw))
+            x += cw + self.gap
+        return slots
+
+    def _slot_width(self, idx: int) -> int:
+        if 0 <= idx < len(self._slots_cache):
+            return self._slots_cache[idx][1]
+        return max(30, self.winfo_width() // max(1, len(self._pod_specs)))
+
+    def set_sliding(self, sliding: bool):
+        if self._sliding == sliding:
+            return
+        self._sliding = sliding
+        if not sliding:
+            self._redraw(force=True, fast=False)
+
+    def _schedule_redraw(self, event=None):
+        if self._sliding:
+            self._redraw(fast=True)
+            return
+        if self._redraw_debounce_id is not None:
+            try:
+                self.after_cancel(self._redraw_debounce_id)
+            except Exception:
+                pass
+        self._redraw_debounce_id = self.after(35, self._redraw)
+
+    def _redraw(self, event=None, force: bool = False, fast: bool = False):
+        if self._redraw_debounce_id is not None:
+            try:
+                self.after_cancel(self._redraw_debounce_id)
+            except Exception:
+                pass
+            self._redraw_debounce_id = None
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 120 or h < 30:
+            return
+        try:
+            top = self.winfo_toplevel()
+            rx = max(0, self.winfo_rootx() - top.winfo_rootx())
+            ry = max(0, self.winfo_rooty() - top.winfo_rooty())
+        except Exception:
+            rx, ry = 0, 0
+        key = (w, h, rx, ry, fast)
+        if not force and key == self._cache_key and self.find_withtag("card_bg"):
+            return
+        self._cache_key = key
+
+        slots = self._compute_slots(w)
+        self._slots_cache = slots
+        self.delete("card_bg")
+
+        mid_y = h / 2.0
+        title_y = int(mid_y - 10)
+        val_y = int(mid_y + 10)
+        engine = AmbientMeshEngine.get_shared()
+
+        for idx, (sx, sw) in enumerate(slots):
+            try:
+                photo = engine.create_glass_panel(
+                    w=sw,
+                    h=h,
+                    r=self.r,
+                    root_x=rx + sx,
+                    root_y=ry,
+                    tint_rgba=(10, 16, 28, 105),
+                    border_rgba=(70, 110, 170, 190),
+                    specular=True,
+                    caustic=True,
+                    fast=fast,
+                )
+                self._slot_photos[idx] = photo
+                self.create_image(sx, 0, image=photo, anchor=tk.NW, tags="card_bg")
+            except Exception:
+                self._slot_photos[idx] = None
+                draw_liquid_glass_panel(
+                    self,
+                    x1=sx + 2,
+                    y1=2,
+                    x2=sx + sw - 2,
+                    y2=h - 2,
+                    r=self.r,
+                    fill=THEME["surface"],
+                    border=THEME["glass_border"],
+                    rim_highlight=THEME["glass_rim"],
+                    refraction=THEME["glass_refraction"],
+                    shadow=True,
+                    tags="card_bg",
+                )
+            pod = self.pods[idx]
+            self.coords(pod.lbl_title.item_id, sx + 18, title_y)
+            self.coords(pod.lbl_val.item_id, sx + 18, val_y)
+            raw = pod.lbl_val._raw_val
+            if raw:
+                fitted = pod.lbl_val._truncate_for_card(raw, sw)
+                pod.lbl_val._cur_val = fitted
+                self.itemconfigure(pod.lbl_val.item_id, text=fitted)
+
+        self.tag_lower("card_bg")
 
 
 class TactileStorageCard(tk.Canvas):
@@ -2560,26 +2765,22 @@ class IDMGUIApp:
         # Right Container: Dashboard Live Stats + Downloads Table
         right_container = tk.Frame(self.paned.container, bg=THEME["bg_dark"])
 
-        # 1. Live Telemetry Metric Strip (Floating Liquid Glass Pods - Uniform 1/3 Width Grid)
-        self.stat_bar = tk.Frame(right_container, bg=THEME["bg_dark"], padx=0, pady=0)
+        # 1. Live Telemetry Metric Strip (Single Unified Liquid Glass Canvas to eliminate Win32 child slice artifacts)
+        self.stat_bar = TactileStatBar(
+            right_container,
+            pods=[
+                (tr("stat_speed"), "0 B/s", THEME["accent_glow"]),
+                (tr("stat_active"), "0", THEME["text_primary"]),
+                (tr("stat_files"), "0", THEME["text_primary"]),
+            ],
+            r=RADIUS_LG,
+            height=70,
+            gap=8,
+        )
         self.stat_bar.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
-        self.stat_bar.columnconfigure(0, weight=1, uniform="kpi_pods")
-        self.stat_bar.columnconfigure(1, weight=1, uniform="kpi_pods")
-        self.stat_bar.columnconfigure(2, weight=1, uniform="kpi_pods")
-
-        # Card 1: Live Speed (Liquid Glass Card)
-        self.card_speed = TactileCard(self.stat_bar, tr("stat_speed"), "0 B/s", val_fg=THEME["accent_glow"], r=RADIUS_LG)
-        self.card_speed.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
+        self.card_speed, self.card_active, self.card_total = self.stat_bar.pods
         self.lbl_stat_speed = self.card_speed.lbl_val
-
-        # Card 2: Active / Queued Tasks (Liquid Glass Card)
-        self.card_active = TactileCard(self.stat_bar, tr("stat_active"), "0", val_fg=THEME["text_primary"], r=RADIUS_LG)
-        self.card_active.grid(row=0, column=1, sticky="nsew", padx=4)
         self.lbl_stat_active = self.card_active.lbl_val
-
-        # Card 3: Library Stats (Liquid Glass Card)
-        self.card_total = TactileCard(self.stat_bar, tr("stat_files"), "0", val_fg=THEME["text_primary"], r=RADIUS_LG)
-        self.card_total.grid(row=0, column=2, sticky="nsew", padx=(4, 0))
         self.lbl_stat_total = self.card_total.lbl_val
 
         # 2. Downloads Table Frame inside Liquid Glass rounded container
@@ -3723,7 +3924,7 @@ class IDMGUIApp:
             pass
 
     def _set_right_sliding(self, sliding: bool):
-        for attr in ("card_speed", "card_active", "card_total", "table_container", "tree"):
+        for attr in ("stat_bar", "table_container", "tree"):
             widget = getattr(self, attr, None)
             if widget is not None and hasattr(widget, "set_sliding"):
                 try:
@@ -3732,7 +3933,7 @@ class IDMGUIApp:
                     pass
 
     def _refresh_right_glass(self):
-        for attr in ("card_speed", "card_active", "card_total", "table_container"):
+        for attr in ("stat_bar", "table_container"):
             widget = getattr(self, attr, None)
             if widget is not None and hasattr(widget, "_redraw"):
                 try:
@@ -4013,9 +4214,16 @@ class IDMGUIApp:
 
     def _finish_sidebar_animation(self):
         self._sidebar_anim_id = None
-        self._end_slide_modes()
         self._exit_place_glide_mode(show_sidebar=True)
+        self._end_slide_modes()
         self._apply_sidebar_layout(initial_fade=None)
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                for _ in range(64):
+                    if not self.root.tk.dooneevent(38):
+                        break
+            except Exception:
+                pass
 
     def _apply_sidebar_compact_immediate(self):
         self._cancel_sidebar_anim()
