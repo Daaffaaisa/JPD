@@ -1468,6 +1468,56 @@ class AmbientMeshEngine:
             self._panel_img_cache.popitem(last=False)
         return ImageTk.PhotoImage(glass)
 
+    def create_sliced_panel_photo(
+        self,
+        base_w: int,
+        w: int,
+        h: int,
+        r: int,
+        root_x: int = 0,
+        root_y: int = 0,
+        tint_rgba: tuple[int, int, int, int] = (8, 12, 20, 165),
+        border_rgba: tuple[int, int, int, int] = (60, 95, 150, 180),
+    ) -> Any:
+        """Fast horizontal 3-slice of a cached glass panel for silky 45-60fps glide animations."""
+        from PIL import Image, ImageTk
+
+        w = max(10, int(w))
+        h = max(10, int(h))
+        base_w = max(w, int(base_w))
+        base_r = max(2, min(int(r), min(base_w, h) // 2))
+
+        base_key = (base_w, h, base_r, root_x, root_y, tint_rgba, border_rgba, True, True, False)
+        base_pil = self._panel_img_cache.get(base_key)
+        if base_pil is None:
+            # Populate the base panel in cache cleanly
+            self.create_glass_panel(
+                w=base_w,
+                h=h,
+                r=base_r,
+                root_x=root_x,
+                root_y=root_y,
+                tint_rgba=tint_rgba,
+                border_rgba=border_rgba,
+                specular=True,
+                caustic=True,
+                fast=False,
+            )
+            base_pil = self._panel_img_cache.get(base_key)
+        if base_pil is None:
+            return self.create_glass_panel(w, h, r, root_x, root_y, tint_rgba, border_rgba, True, True, fast=True)
+        self._panel_img_cache.move_to_end(base_key)
+        if w == base_w:
+            return ImageTk.PhotoImage(base_pil)
+
+        edge = max(4, min(r + 2, w // 2))
+        left_w = max(0, w - edge)
+        out = Image.new("RGBA", (w, h))
+        if left_w > 0:
+            out.paste(base_pil.crop((0, 0, left_w, h)), (0, 0))
+        out.paste(base_pil.crop((base_w - edge, 0, base_w, h)), (left_w, 0))
+        return ImageTk.PhotoImage(out)
+
     def _get_tinted_mesh(self, tint_rgba: tuple[int, int, int, int]) -> Any:
         cached = self._tinted_mesh_cache.get(tint_rgba)
         if cached is None:

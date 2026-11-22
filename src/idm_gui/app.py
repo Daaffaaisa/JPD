@@ -1022,18 +1022,31 @@ class SidebarGlassContainer(tk.Canvas):
             if not force and key == self._panel_cache_key and self._panel_photo is not None and self.find_withtag("card_bg"):
                 return
             if force or key != self._panel_cache_key or self._panel_photo is None:
-                self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
-                    w=w,
-                    h=h,
-                    r=r,
-                    root_x=rx,
-                    root_y=ry,
-                    tint_rgba=(8, 12, 20, 165),
-                    border_rgba=(60, 95, 150, 180),
-                    specular=True,
-                    caustic=True,
-                    fast=fast,
-                )
+                engine = AmbientMeshEngine.get_shared()
+                if fast:
+                    self._panel_photo = engine.create_sliced_panel_photo(
+                        base_w=max(w, SIDEBAR_WIDTH_EXPANDED),
+                        w=w,
+                        h=h,
+                        r=r,
+                        root_x=rx,
+                        root_y=ry,
+                        tint_rgba=(8, 12, 20, 165),
+                        border_rgba=(60, 95, 150, 180),
+                    )
+                else:
+                    self._panel_photo = engine.create_glass_panel(
+                        w=w,
+                        h=h,
+                        r=r,
+                        root_x=rx,
+                        root_y=ry,
+                        tint_rgba=(8, 12, 20, 165),
+                        border_rgba=(60, 95, 150, 180),
+                        specular=True,
+                        caustic=True,
+                        fast=False,
+                    )
                 self._panel_cache_key = key
             self.delete("card_bg")
             self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
@@ -4003,13 +4016,18 @@ class IDMGUIApp:
             if cw < 100 or ch < 50:
                 return
             right_pane = self._get_right_pane()
+            # Lock right_pane width at its starting size during the glide so Win32 DWM
+            # translates the cached right HWND at 40-60 FPS without reallocating large canvases
+            # in fullscreen, then snaps cleanly to final width once settled.
+            right_w = max(100, cw - start_w - 8)
+            self._glide_right_w = right_w
             if self.sidebar_frame.winfo_manager() == "pack":
                 self.sidebar_frame.pack_forget()
             if right_pane is not None and right_pane.winfo_manager() == "pack":
                 right_pane.pack_forget()
             self.sidebar_frame.place(x=0, y=0, width=start_w, height=ch)
             if right_pane is not None:
-                right_pane.place(x=start_w + 8, y=0, width=max(100, cw - start_w - 8), height=ch)
+                right_pane.place(x=start_w + 8, y=0, width=right_w, height=ch)
             tk.Misc.lift(self.sidebar_frame)
         except Exception:
             pass
@@ -4017,6 +4035,7 @@ class IDMGUIApp:
     def _exit_place_glide_mode(self, show_sidebar: bool = True):
         """Restore standard pack layout management inside ModernMainPaned."""
         try:
+            self._glide_right_w = None
             right_pane = self._get_right_pane()
             if self.sidebar_frame.winfo_manager() == "place":
                 self.sidebar_frame.place_forget()
@@ -4049,10 +4068,12 @@ class IDMGUIApp:
                 self.sidebar_frame.place_configure(x=0, y=0, width=cur_w, height=ch)
                 right_pane = self._get_right_pane()
                 if right_pane is not None and right_pane.winfo_manager() == "place":
+                    locked_rw = getattr(self, "_glide_right_w", None)
+                    right_w = locked_rw if locked_rw is not None else max(100, cw - cur_w - 8)
                     right_pane.place_configure(
                         x=cur_w + 8,
                         y=0,
-                        width=max(100, cw - cur_w - 8),
+                        width=right_w,
                         height=ch,
                     )
             else:
@@ -4131,7 +4152,7 @@ class IDMGUIApp:
         except Exception:
             start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
 
-        duration = 0.35
+        duration = 0.30
         start_t = time.perf_counter()
         going_compact = self.sidebar_compact
         last_w = [start_w]
@@ -4251,7 +4272,7 @@ class IDMGUIApp:
             except Exception:
                 start_w = target_w
             start_t = time.perf_counter()
-            duration = 0.22
+            duration = 0.24
             try:
                 self.root._sidebar_animating = True  # type: ignore[attr-defined]
             except Exception:
