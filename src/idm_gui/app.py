@@ -3936,14 +3936,19 @@ class IDMGUIApp:
         except Exception:
             pass
 
-    def _set_right_sliding(self, sliding: bool):
+    def _set_right_sliding(self, sliding: bool, redraw: bool = True):
         for attr in ("stat_bar", "table_container", "tree"):
             widget = getattr(self, attr, None)
-            if widget is not None and hasattr(widget, "set_sliding"):
-                try:
-                    widget.set_sliding(sliding)
-                except Exception:
-                    pass
+            if widget is None:
+                continue
+            try:
+                if hasattr(widget, "set_sliding"):
+                    if redraw or not hasattr(widget, "_sliding"):
+                        widget.set_sliding(sliding)
+                    else:
+                        widget._sliding = sliding
+            except Exception:
+                pass
 
     def _refresh_right_glass(self):
         for attr in ("stat_bar", "table_container"):
@@ -3984,14 +3989,17 @@ class IDMGUIApp:
             self._sidebar_anim_id = None
         return gen
 
-    def _end_slide_modes(self):
+    def _end_slide_modes(self, redraw: bool = True):
         try:
             self.root._sidebar_animating = False  # type: ignore[attr-defined]
         except Exception:
             pass
         if hasattr(self, "sidebar_frame") and hasattr(self.sidebar_frame, "set_animating"):
-            self.sidebar_frame.set_animating(False)
-        self._set_right_sliding(False)
+            if redraw or not hasattr(self.sidebar_frame, "_animating"):
+                self.sidebar_frame.set_animating(False)
+            else:
+                self.sidebar_frame._animating = False
+        self._set_right_sliding(False, redraw=redraw)
 
     def _get_right_pane(self) -> Optional[tk.Widget]:
         try:
@@ -4152,7 +4160,7 @@ class IDMGUIApp:
         except Exception:
             start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
 
-        duration = 0.30
+        duration = 0.26
         start_t = time.perf_counter()
         going_compact = self.sidebar_compact
         last_w = [start_w]
@@ -4217,6 +4225,10 @@ class IDMGUIApp:
                     in_a = max(0.0, min(1.0, (t - 0.36) / 0.64))
                     self._set_sidebar_content_fade(in_a, redraw=not will_resize)
 
+            if t >= 1.0 or (not first_frame[0] and t >= 0.88 and abs(cur_w - target_w) <= 3):
+                self._finish_sidebar_animation()
+                return
+
             if not (first_frame[0] and not will_resize):
                 self._apply_glide_width(cur_w)
             else:
@@ -4226,17 +4238,14 @@ class IDMGUIApp:
                     pass
             first_frame[0] = False
 
-            if t < 1.0:
-                self._sidebar_anim_id = self.root.after(1, _step)
-            else:
-                self._finish_sidebar_animation()
+            self._sidebar_anim_id = self.root.after(1, _step)
 
         _step()
 
     def _finish_sidebar_animation(self):
         self._sidebar_anim_id = None
         self._exit_place_glide_mode(show_sidebar=True)
-        self._end_slide_modes()
+        self._end_slide_modes(redraw=False)
         self._apply_sidebar_layout(initial_fade=None)
         if not os.environ.get("PYTEST_CURRENT_TEST"):
             try:
@@ -4289,17 +4298,24 @@ class IDMGUIApp:
                 t = min(1.0, (time.perf_counter() - start_t) / duration)
                 ease = 0.5 * (1.0 - math.cos(math.pi * t))
                 cur_w = max(16, int(round(start_w + (16 - start_w) * ease)))
-                self._set_sidebar_content_fade(max(0.0, 1.0 - (t / 0.45)), redraw=False)
-                self._apply_glide_width(cur_w)
-                if t < 1.0:
-                    self._sidebar_anim_id = self.root.after(1, _hide_step)
-                else:
-                    self._end_slide_modes()
-                    self._set_sidebar_content_fade(None)
+                if t >= 1.0 or (t >= 0.88 and cur_w <= 19):
+                    self._set_sidebar_content_fade(None, redraw=False)
                     self._exit_place_glide_mode(show_sidebar=False)
                     self.paned.forget(self.sidebar_frame)
+                    self._end_slide_modes(redraw=False)
                     self._flush_paned_geometry()
                     self._refresh_right_glass()
+                    if not os.environ.get("PYTEST_CURRENT_TEST"):
+                        try:
+                            for _ in range(64):
+                                if not self.root.tk.dooneevent(38):
+                                    break
+                        except Exception:
+                            pass
+                    return
+                self._set_sidebar_content_fade(max(0.0, 1.0 - (t / 0.45)), redraw=False)
+                self._apply_glide_width(cur_w)
+                self._sidebar_anim_id = self.root.after(1, _hide_step)
 
             _hide_step()
         else:
@@ -4339,12 +4355,12 @@ class IDMGUIApp:
                 t = min(1.0, (time.perf_counter() - start_t) / duration)
                 ease = 0.5 * (1.0 - math.cos(math.pi * t))
                 cur_w = max(16, int(round(start_w + (target_w - start_w) * ease)))
+                if t >= 1.0 or (t >= 0.88 and abs(cur_w - target_w) <= 3):
+                    self._finish_sidebar_animation()
+                    return
                 self._set_sidebar_content_fade(max(0.0, min(1.0, (t - 0.30) / 0.70)), redraw=False)
                 self._apply_glide_width(cur_w)
-                if t < 1.0:
-                    self._sidebar_anim_id = self.root.after(1, _show_step)
-                else:
-                    self._finish_sidebar_animation()
+                self._sidebar_anim_id = self.root.after(1, _show_step)
 
             _show_step()
 
