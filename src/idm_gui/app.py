@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import math
 import threading
@@ -245,9 +246,13 @@ def _apply_canvas_glass_backdrop(canvas: tk.Canvas, tint_rgba: tuple[int, int, i
                 tint_rgba=tint_rgba,
             )
             canvas._bg_mesh_key = key  # type: ignore[attr-defined]
-            canvas.delete("bg_mesh")
+            old_bg = canvas.find_withtag("bg_mesh")
             canvas.create_image(0, 0, image=canvas._bg_mesh_photo, anchor=tk.NW, tags="bg_mesh")  # type: ignore[attr-defined]
-        canvas.tag_lower("bg_mesh")
+            canvas.tag_lower("bg_mesh")
+            if old_bg:
+                canvas.delete(*old_bg)
+        else:
+            canvas.tag_lower("bg_mesh")
         return True
     except Exception:
         return False
@@ -536,7 +541,7 @@ class TactileCard(tk.Canvas):
         if not force and key == self._panel_cache_key and getattr(self, "_panel_photo", None) is not None and self.find_withtag("card_bg"):
             return
         self._panel_cache_key = key
-        self.delete("card_bg")
+        old_bg = self.find_withtag("card_bg")
         r = self.r
         try:
             self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
@@ -568,6 +573,8 @@ class TactileCard(tk.Canvas):
                 tags="card_bg",
             )
         self.tag_lower("card_bg")
+        if old_bg:
+            self.delete(*old_bg)
 
         # Perfectly center title and metric vertically with balanced spacing
         mid_y = h / 2.0
@@ -745,7 +752,7 @@ class TactileStatBar(tk.Canvas):
 
         slots = self._compute_slots(w)
         self._slots_cache = slots
-        self.delete("card_bg")
+        old_bg = self.find_withtag("card_bg")
 
         mid_y = h / 2.0
         title_y = int(mid_y - 10)
@@ -794,6 +801,8 @@ class TactileStatBar(tk.Canvas):
                 self.itemconfigure(pod.lbl_val.item_id, text=fitted)
 
         self.tag_lower("card_bg")
+        if old_bg:
+            self.delete(*old_bg)
 
 
 class TactileStorageCard(tk.Canvas):
@@ -895,6 +904,7 @@ class TactileStorageCard(tk.Canvas):
             fast_mode = bool(getattr(top, "_sidebar_animating", False))
             key = (w, h, rx, ry, fast_mode)
             if force or key != self._card_cache_key or self._card_photo is None or not self.find_withtag("card_bg"):
+                old_bg = self.find_withtag("card_bg")
                 self._card_photo = AmbientMeshEngine.get_shared().create_glass_panel(
                     w=w,
                     h=h,
@@ -908,14 +918,17 @@ class TactileStorageCard(tk.Canvas):
                     fast=fast_mode,
                 )
                 self._card_cache_key = key
-                self.delete("card_bg")
                 self.create_image(0, 0, image=self._card_photo, anchor=tk.NW, tags="card_bg")
+                self.tag_lower("bg_mesh")
+                self.tag_raise("card_bg", "bg_mesh")
+                if old_bg:
+                    self.delete(*old_bg)
             drew_panel = True
         except Exception:
             drew_panel = False
 
         if not drew_panel:
-            self.delete("card_bg")
+            old_bg = self.find_withtag("card_bg")
             draw_liquid_glass_panel(
                 self,
                 x1=1,
@@ -930,6 +943,8 @@ class TactileStorageCard(tk.Canvas):
                 shadow=False,
                 tags="card_bg",
             )
+            if old_bg:
+                self.delete(*old_bg)
         self.tag_lower("bg_mesh")
         self.tag_raise("card_bg", "bg_mesh")
         self.tag_raise("card_fg")
@@ -1048,15 +1063,17 @@ class SidebarGlassContainer(tk.Canvas):
                         fast=False,
                     )
                 self._panel_cache_key = key
-            self.delete("card_bg")
+            old_bg = self.find_withtag("card_bg")
             self.create_image(0, 0, image=self._panel_photo, anchor=tk.NW, tags="card_bg")
             self.tag_lower("card_bg")
+            if old_bg:
+                self.delete(*old_bg)
             return
         except Exception:
             pass
 
         self._panel_cache_key = None
-        self.delete("card_bg")
+        old_bg = self.find_withtag("card_bg")
         draw_liquid_glass_panel(
             self,
             x1=1,
@@ -1072,6 +1089,8 @@ class SidebarGlassContainer(tk.Canvas):
             tags="card_bg",
         )
         self.tag_lower("card_bg")
+        if old_bg:
+            self.delete(*old_bg)
 
 
 class SidebarSectionCanvas(tk.Canvas):
@@ -1216,7 +1235,7 @@ class TactileTableContainer(tk.Canvas):
             return
         self._panel_cache_key = key
 
-        self.delete("card_bg")
+        old_bg = self.find_withtag("card_bg")
         try:
             self._panel_photo = AmbientMeshEngine.get_shared().create_glass_panel(
                 w=w,
@@ -1247,6 +1266,8 @@ class TactileTableContainer(tk.Canvas):
                 tags="card_bg",
             )
         self.tag_lower("card_bg")
+        if old_bg:
+            self.delete(*old_bg)
 
         # Inset enough to clear the rounded corner arc and rim completely
         pad = self._calc_pad()
@@ -1311,9 +1332,11 @@ class SidebarNavScroller(tk.Frame):
                     tint_rgba=(8, 12, 20, 165),
                 )
                 self._bg_cache_key = key
-                self.canvas.delete("glass_bg")
+                old_bg = self.canvas.find_withtag("glass_bg")
                 self.canvas.create_image(0, cy0, image=self._bg_photo, anchor=tk.NW, tags="glass_bg")
                 self.canvas.tag_lower("glass_bg")
+                if old_bg:
+                    self.canvas.delete(*old_bg)
         except Exception:
             pass
 
@@ -1668,16 +1691,61 @@ SIDEBAR_WIDTH_COMPACT = 56
 
 
 class ModernMainPaned:
-    """High-performance, crash-free container replacement for tk.PanedWindow on Windows 11.
-    Eliminates GDI sash collisions, window unmapping race conditions, and tcl9tk90.dll TkWinGetDrawableDC crashes.
+    """Permanent place()-managed paned layout for sidebar and right pane.
+
+    Keeps both panes in one geometry manager permanently (never unmapping right_pane
+    or switching pack <-> place), eliminating Win32 DWM black expose flashes during transitions.
     """
 
     def __init__(self, parent: tk.Misc, bg: str):
         self.container = tk.Frame(parent, bg=bg)
         self._panes: list[tk.Widget] = []
+        self._sidebar_width: int = SIDEBAR_WIDTH_EXPANDED
+        self._sidebar_visible: bool = True
+        self._manual_layout: bool = False
+        self._on_container_resize: Optional[Any] = None
+        self.container.bind("<Configure>", self._on_configure, add="+")
 
     def pack(self, **kwargs):
         return self.container.pack(**kwargs)
+
+    def _on_configure(self, event=None):
+        if self._on_container_resize is not None and event is not None:
+            try:
+                self._on_container_resize(event.width, event.height)
+            except Exception:
+                pass
+        if not self._manual_layout:
+            self.layout_now()
+
+    def layout_now(self):
+        if not self._panes:
+            return
+        cw = self.container.winfo_width()
+        ch = self.container.winfo_height()
+        sidebar = self._panes[0] if len(self._panes) >= 1 else None
+        right = self._panes[1] if len(self._panes) >= 2 else None
+        if cw < 20 or ch < 20:
+            if sidebar is not None and self._sidebar_visible:
+                sidebar.configure(width=self._sidebar_width)
+            return
+        if sidebar is not None:
+            if self._sidebar_visible:
+                sidebar.place(x=0, y=0, width=self._sidebar_width, height=ch)
+            elif sidebar.winfo_manager() == "place":
+                sidebar.place_forget()
+        if right is not None:
+            if self._sidebar_visible:
+                rx = self._sidebar_width + 8
+                right.place(x=rx, y=0, width=max(100, cw - rx), height=ch)
+            else:
+                right.place(x=0, y=0, width=cw, height=ch)
+
+    def set_sidebar(self, visible: bool, width: Optional[int] = None):
+        if width is not None:
+            self._sidebar_width = int(width)
+        self._sidebar_visible = bool(visible)
+        self.layout_now()
 
     def add(self, widget: tk.Widget, **kwargs):
         if widget not in self._panes:
@@ -1686,18 +1754,24 @@ class ModernMainPaned:
             else:
                 self._panes.append(widget)
         if len(self._panes) > 0 and widget == self._panes[0]:
-            pack_kw: dict[str, Any] = {"side": tk.LEFT, "fill": tk.Y, "padx": (0, 8)}
-            if "before" in kwargs and kwargs["before"] is not None:
-                pack_kw["before"] = kwargs["before"]
-            elif len(self._panes) > 1 and self._panes[1].winfo_manager() == "pack":
-                pack_kw["before"] = self._panes[1]
-            widget.pack(**pack_kw)
-        else:
-            widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            self._sidebar_visible = True
+            try:
+                req_w = int(widget.cget("width"))
+                if req_w >= 40:
+                    self._sidebar_width = req_w
+            except Exception:
+                pass
+        self.layout_now()
 
     def forget(self, widget: tk.Widget):
         try:
-            widget.pack_forget()
+            if self._panes and widget == self._panes[0]:
+                self._sidebar_visible = False
+                if widget.winfo_manager() == "place":
+                    widget.place_forget()
+                self.layout_now()
+            elif widget.winfo_manager() == "place":
+                widget.place_forget()
         except Exception:
             pass
 
@@ -1707,7 +1781,10 @@ class ModernMainPaned:
     def sash_place(self, idx: int, x: int, y: int):
         if self._panes:
             try:
-                self._panes[0]["width"] = x
+                self._sidebar_width = int(x)
+                self._panes[0]["width"] = int(x)
+                if not self._manual_layout:
+                    self.layout_now()
             except Exception:
                 pass
 
@@ -1718,10 +1795,971 @@ class ModernMainPaned:
         if self._panes:
             try:
                 w = self._panes[0].winfo_width()
-                return (w if w > 1 else SIDEBAR_WIDTH_EXPANDED, 1)
+                return (w if w > 1 else self._sidebar_width, 1)
             except Exception:
-                return (SIDEBAR_WIDTH_EXPANDED, 1)
-        return (SIDEBAR_WIDTH_EXPANDED, 1)
+                return (self._sidebar_width, 1)
+        return (self._sidebar_width, 1)
+
+
+class _SidebarTransitionOverlay:
+    """High-FPS stationary Canvas compositor used exclusively while animating sidebar transitions.
+
+    Avoids resizing 15+ nested Win32 HWNDs per frame (~120-210ms) so collapse/expand/hide/show
+    runs at 60+ FPS in lockstep with zero HWND unmaps, zero black blinks, and zero right-edge lag.
+    """
+
+    def __init__(self, app: "IDMGUIApp"):
+        self.app = app
+        self.canvas = tk.Canvas(app.paned.container, bg=THEME["bg_dark"], highlightthickness=0, bd=0)
+        self.active: bool = False
+        self.mode: str = "compact"
+        self.anim_dims: tuple[int, int] = (0, 0)
+        self.cur_sb_x: int = 0
+        self.cur_sb_w: int = SIDEBAR_WIDTH_EXPANDED
+        self.cur_fade: float = 1.0
+        self.cur_compact: bool = False
+        self._snap: dict[str, Any] = {}
+        self._photos: dict[str, Any] = {}
+        self._fonts: dict[Any, tkfont.Font] = {}
+        self._fit_cache: dict[tuple[Any, ...], str] = {}
+        self._raw_measure: dict[tuple[str, Any], int] = {}
+        self._base_ids: set[int] = set()
+        self._rp_handles: dict[str, Any] = {}
+        self._sb_built_sig: Optional[tuple[Any, ...]] = None
+        self._sb_last_x: int = 0
+        self._sb_top_id: Optional[int] = None
+        self._gap_sb_id: Optional[int] = None
+        self._gap_left_id: Optional[int] = None
+
+    def _font(self, spec: Any) -> tkfont.Font:
+        f = self._fonts.get(spec)
+        if f is None:
+            f = tkfont.Font(root=self.canvas, font=spec)
+            self._fonts[spec] = f
+        return f
+
+    def _fit_text(self, text: str, max_w: int, spec: Any) -> str:
+        if max_w <= 6 or not text:
+            return ""
+        ck = (text, max_w, spec)
+        hit = self._fit_cache.get(ck)
+        if hit is not None:
+            return hit
+        f = self._font(spec)
+        rk = (text, spec)
+        raw_w = self._raw_measure.get(rk)
+        if raw_w is None:
+            raw_w = f.measure(text)
+            self._raw_measure[rk] = raw_w
+        if raw_w <= max_w:
+            res = text
+        elif (text, spec) in getattr(self, "_prefix_tables", {}):
+            pts = self._prefix_tables[(text, spec)]
+            cut = 0
+            for idx_p in range(1, len(pts)):
+                c1, w1 = pts[idx_p]
+                if w1 > max_w:
+                    c0, w0 = pts[idx_p - 1]
+                    frac = max(0.0, min(1.0, (max_w - w0) / max(1, w1 - w0)))
+                    cut = c0 + int((c1 - c0) * frac)
+                    break
+                cut = c1
+            res = (text[:cut] + "…") if cut > 0 else "…"
+        else:
+            lo = max(0, min(len(text), int(len(text) * max(0.05, (max_w - 10) / max(1, raw_w)))))
+            hi = len(text)
+            if f.measure(text[:lo] + "…") > max_w:
+                hi = lo
+                lo = 0
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if f.measure(text[:mid] + "…") <= max_w:
+                    lo = mid
+                else:
+                    hi = mid - 1
+            res = (text[:lo] + "…") if lo > 0 else "…"
+        if len(self._fit_cache) > 512:
+            self._fit_cache.clear()
+        self._fit_cache[ck] = res
+        return res
+
+    @staticmethod
+    def _fit_cols_for_vw(base_cols: dict[str, dict[str, Any]], keys: list[str], vw: int) -> dict[str, int]:
+        out = {k: int(base_cols[k]["width"]) for k in keys}
+        if vw < 320:
+            return out
+        fixed_total = sum(out[k] for k in ("size", "status", "progress", "speed") if k in out)
+        remaining = max(0, vw - fixed_total - 16)
+        name_w = out["name"]
+        url_w = out["url"]
+        if remaining >= (name_w + url_w):
+            expand = remaining - (name_w + url_w)
+            out["name"] = name_w + int(expand * 0.4)
+            out["url"] = url_w + int(expand * 0.6)
+        elif remaining > 220:
+            out["name"] = max(120, int(remaining * 0.45))
+            out["url"] = max(100, remaining - out["name"])
+        else:
+            out["name"] = max(110, int(remaining * 0.6))
+            out["url"] = max(80, remaining - out["name"])
+        return out
+
+    def begin(
+        self,
+        mode: str,
+        start_sb_x: int,
+        start_sb_w: int,
+        start_fade: float,
+        start_compact: bool,
+        target_sb_w: int,
+        target_visible: bool,
+    ) -> bool:
+        app = self.app
+        cont = app.paned.container
+        cw = cont.winfo_width()
+        ch = cont.winfo_height()
+        if cw < 120 or ch < 80:
+            return False
+
+        retarget_ok = self.active and self.anim_dims == (cw, ch) and bool(self._snap)
+        self.mode = mode
+        if not retarget_ok:
+            self._capture_snapshot(cw, ch, target_sb_w, target_visible)
+        else:
+            self._retarget_cols(target_sb_w, target_visible)
+
+        self.cur_sb_x = int(start_sb_x)
+        self.cur_sb_w = int(start_sb_w)
+        self.cur_fade = float(start_fade)
+        self.cur_compact = bool(start_compact)
+        self.active = True
+
+        # Render frame 0 BEFORE placing/mapping canvas so no empty black frame can ever show
+        self.canvas.configure(width=cw, height=ch)
+        if not retarget_ok:
+            self.canvas.delete("all")
+            self._base_ids.clear()
+            self._rp_handles.clear()
+            self._sb_built_sig = None
+            self._sb_top_id = None
+            self._gap_sb_id = None
+            self._gap_left_id = None
+        self.render(self.cur_sb_x, self.cur_sb_w, self.cur_fade, self.cur_compact)
+        app.paned._manual_layout = True
+        self.canvas.place(x=0, y=0, width=cw, height=ch)
+        tk.Misc.lift(self.canvas)
+        return True
+
+    def _retarget_cols(self, target_sb_w: int, target_visible: bool):
+        snap = self._snap
+        cw = snap["cw"]
+        tpad = snap["tpad"]
+        sb_col_w = snap["sb_col_w"]
+        target_rw = max(100, cw - ((target_sb_w + 8) if target_visible else 0))
+        target_vw = max(100, target_rw - (2 * tpad) - sb_col_w)
+        base_cols = {k: {"width": w} for k, w in snap["cur_cols"].items()}
+        snap["start_cols"] = dict(snap["cur_cols"])
+        snap["end_cols"] = self._fit_cols_for_vw(base_cols, snap["col_keys"], target_vw)
+
+    def _capture_snapshot(self, cw: int, ch: int, target_sb_w: int, target_visible: bool):
+        app = self.app
+        cont = app.paned.container
+        top = app.root
+        pan_rx = max(0, cont.winfo_rootx() - top.winfo_rootx())
+        pan_ry = max(0, cont.winfo_rooty() - top.winfo_rooty())
+        cont_top_y = cont.winfo_rooty()
+
+        stat_h = app.stat_bar.winfo_height()
+        if stat_h < 40:
+            stat_h = 70
+        tc_y = app.table_container.winfo_y() if app.table_container.winfo_y() >= stat_h else (stat_h + 6)
+        stat_gap = max(4, tc_y - stat_h)
+        tpad = app.table_container._calc_pad()
+
+        eng = AmbientMeshEngine.get_shared()
+        self._photos = {
+            "mesh_kpi": eng.create_glass_backdrop(cw, stat_h, pan_rx, pan_ry, (10, 16, 28, 105), ),
+            "mesh_body": eng.create_glass_backdrop(cw, max(2, ch - stat_h - stat_gap), pan_rx, pan_ry + stat_h + stat_gap, (8, 12, 20, 165)),
+            "kpi_c": eng.get_corner_cutout_overlays(RADIUS_LG, THEME["bg_dark"], (70, 110, 170, 190), True, True, self.canvas),
+            "tbl_c": eng.get_corner_cutout_overlays(RADIUS_LG, THEME["bg_dark"], (60, 95, 150, 180), True, True, self.canvas),
+            "sb_tops": {},
+            "empty_cards": {},
+        }
+
+        # Sidebar capture (handle case where sidebar was hidden/unmapped safely)
+        sb_mapped = bool(app.sidebar_frame.winfo_ismapped())
+        pad_x_ref, pad_y_ref = app.sidebar_frame._calc_pads(app.sidebar_frame.winfo_width() if sb_mapped else (SIDEBAR_WIDTH_COMPACT if app.sidebar_compact else SIDEBAR_WIDTH_EXPANDED))
+        nav_top_y = (app.nav_scroller.canvas.winfo_rooty() - cont_top_y) if sb_mapped else (pad_y_ref + 40)
+        sb_bot_y = (app.sidebar_bottom.winfo_rooty() - cont_top_y) if sb_mapped else max(nav_top_y + 40, ch - pad_y_ref - 88)
+        nav_bot_y = (nav_top_y + app.nav_scroller.canvas.winfo_height()) if sb_mapped else sb_bot_y
+
+        scroll_y = 0
+        try:
+            scroll_y = int(app.nav_scroller.canvas.canvasy(0))
+        except Exception:
+            scroll_y = 0
+
+        nav_entries: list[dict[str, Any]] = []
+        # Deterministic vertical offsets cleanly matching packed scroller order when unmapped
+        cur_y = nav_top_y - scroll_y
+        ordered_entries = [
+            ("sec", app.frame_sec_pustaka, 22),
+            *[("item", app.sidebar_items[k], 34) for k in ("all", "downloading", "finished") if k in app.sidebar_items],
+            ("sec", app.frame_sec_kategori, 30),
+            *[("item", app.sidebar_items[k], 34) for k in ("video", "music", "pictures", "programs", "documents", "compressed") if k in app.sidebar_items],
+        ]
+        for kind, widget, fallback_h in ordered_entries:
+            h = widget.winfo_height() if (sb_mapped and widget.winfo_height() >= 10) else fallback_h
+            wy = (widget.winfo_rooty() - cont_top_y) if sb_mapped else cur_y
+            cur_y += h
+            if kind == "sec":
+                nav_entries.append({
+                    "kind": "sec",
+                    "y": wy,
+                    "h": h,
+                    "text": widget.label_adapter.cget("text"),
+                    "fg": widget.label_adapter.cget("fg"),
+                    "show_divider": bool(widget.show_divider),
+                })
+            else:
+                nav_entries.append({
+                    "kind": "item",
+                    "y": wy,
+                    "h": h,
+                    "key": widget.key,
+                    "icon": widget.icon_glyph,
+                    "text": widget.raw_text,
+                    "count": int(widget.count),
+                    "is_active": bool(widget.is_active),
+                    "is_hovered": bool(widget.is_hovered),
+                })
+
+        # KPI pods
+        pods = []
+        for pod in app.stat_bar.pods:
+            pods.append((
+                pod.lbl_title.cget("text"),
+                pod.lbl_val._raw_val or pod.lbl_val.cget("text"),
+                pod.lbl_val.cget("fg"),
+            ))
+
+        # Table columns and rows
+        tree = app.tree
+        col_keys = list(tree.columns_keys)
+        start_cols = {k: int(tree._col_config[k]["width"]) for k in col_keys}
+        col_titles = {k: tree._col_config[k].get("title", k.title()) for k in col_keys}
+        col_anchors = {k: tree._col_config[k].get("anchor", tk.W) for k in col_keys}
+        sb_col_w = tree.scrollbar.winfo_width() if tree.scrollbar.winfo_ismapped() else 8
+
+        target_rw = max(100, cw - ((target_sb_w + 8) if target_visible else 0))
+        target_vw = max(100, target_rw - (2 * tpad) - sb_col_w)
+        end_cols = self._fit_cols_for_vw(tree._col_config, col_keys, target_vw)
+
+        vp_h = max(40, (ch - stat_h - stat_gap) - (2 * tpad) - 32)
+        rh = tree.row_height
+        scroll_off = int(tree._scroll_offset_y)
+        items = list(tree._items)
+        rows: list[tuple[Any, ...]] = []
+        if items:
+            start_idx = max(0, scroll_off // rh)
+            end_idx = min(len(items), (scroll_off + vp_h) // rh + 1)
+            for idx in range(start_idx, end_idx):
+                iid = items[idx]
+                data = tree._data.get(iid, {})
+                vals = data.get("values", [])
+                tags = data.get("tags", ())
+                fn = str(vals[0]) if len(vals) > 0 else ""
+                fn_clean = re.sub(r"^[\U0001F300-\U0001FAFF\u2600-\u27BF]\s+", "", fn).strip()
+                icon = tree._get_file_icon(fn_clean)
+                size_str = str(vals[1]) if len(vals) > 1 else ""
+                status_str = str(vals[2]) if len(vals) > 2 else ""
+                _, st_color = tree._get_status_style(status_str, tags)
+                clean_st = status_str.replace("⚡ ", "").replace("✓ ", "").replace("⏸ ", "").replace("❌ ", "").strip()
+                pct_float, pct_text = tree._parse_progress(str(vals[3]) if len(vals) > 3 else "")
+                speed_str = str(vals[4]) if len(vals) > 4 else ""
+                url_str = str(vals[5]) if len(vals) > 5 else ""
+                rows.append((
+                    idx,
+                    (idx * rh) - scroll_off,
+                    iid in tree._selected_ids,
+                    iid == tree._hover_id,
+                    icon,
+                    fn_clean,
+                    size_str,
+                    clean_st,
+                    st_color,
+                    pct_float,
+                    pct_text,
+                    speed_str,
+                    url_str,
+                ))
+
+        sb_thumb = None
+        if tree.scrollbar.winfo_ismapped() and (tree.scrollbar.last - tree.scrollbar.first) < 0.999 and tree.scrollbar.find_withtag("thumb"):
+            sb_thumb = (float(tree.scrollbar.first), float(tree.scrollbar.last), tree.scrollbar.active_color)
+
+        self.anim_dims = (cw, ch)
+        self._fit_cache.clear()
+        self._raw_measure.clear()
+        self._prefix_tables: dict[tuple[str, Any], list[tuple[int, int]]] = {}
+        f_name = self._font((FONT_DISPLAY, 9, "bold"))
+        f_url = self._font((FONT_DISPLAY, 8))
+        ell_n = f_name.measure("…")
+        ell_u = f_url.measure("…")
+        min_nw = max(40, min(start_cols["name"], end_cols["name"]) - 48)
+        min_uw = max(40, min(start_cols["url"], end_cols["url"]) - 28)
+        for r in rows:
+            fn_w = f_name.measure(r[5])
+            self._raw_measure[(r[5], (FONT_DISPLAY, 9, "bold"))] = fn_w
+            if fn_w > min_nw and len(r[5]) > 4:
+                step = max(2, len(r[5]) // 14)
+                pts = [(0, 0)]
+                for ci in range(step, len(r[5]), step):
+                    pts.append((ci, f_name.measure(r[5][:ci]) + ell_n))
+                pts.append((len(r[5]), fn_w))
+                self._prefix_tables[(r[5], (FONT_DISPLAY, 9, "bold"))] = pts
+            u_w = f_url.measure(r[12])
+            self._raw_measure[(r[12], (FONT_DISPLAY, 8))] = u_w
+            if u_w > min_uw and len(r[12]) > 4:
+                step = max(3, len(r[12]) // 16)
+                pts = [(0, 0)]
+                for ci in range(step, len(r[12]), step):
+                    pts.append((ci, f_url.measure(r[12][:ci]) + ell_u))
+                pts.append((len(r[12]), u_w))
+                self._prefix_tables[(r[12], (FONT_DISPLAY, 8))] = pts
+        self._snap = {
+            "cw": cw,
+            "ch": ch,
+            "pan_rx": pan_rx,
+            "pan_ry": pan_ry,
+            "stat_h": stat_h,
+            "stat_gap": stat_gap,
+            "tpad": tpad,
+            "nav_top_y": nav_top_y,
+            "nav_bot_y": nav_bot_y,
+            "sb_bot_y": sb_bot_y,
+            "nav_title": tr("nav_title"),
+            "nav_title_fg": app.lbl_sidebar_title.cget("fg"),
+            "sec_storage": tr("sec_storage"),
+            "storage_path": app.storage_card.lbl_path.cget("text"),
+            "storage_btn": app.storage_card.btn_open.cget("text"),
+            "nav_entries": nav_entries,
+            "pods": pods,
+            "col_keys": col_keys,
+            "start_cols": start_cols,
+            "cur_cols": dict(start_cols),
+            "end_cols": end_cols,
+            "col_titles": col_titles,
+            "col_anchors": col_anchors,
+            "sb_col_w": sb_col_w,
+            "rh": rh,
+            "rows": rows,
+            "is_empty": (len(items) == 0),
+            "empty_title": tr("empty_title"),
+            "empty_desc": tr("empty_desc"),
+            "empty_btn": tr("empty_btn"),
+            "sb_thumb": sb_thumb,
+            "start_sb_w": max(1, int(app.sidebar_frame.winfo_width() or SIDEBAR_WIDTH_EXPANDED)),
+        }
+
+    def _create_rounded_outline(self, x1: int, y1: int, x2: int, y2: int, ckey: str, tags: str) -> dict[str, Any]:
+        tl, tr_i, bl, br, top_hex, bot_hex, border_hex, pad = self._photos[ckey]
+        c = self.canvas
+        h = {
+            "top": c.create_line(x1 + pad, y1, x2 - pad, y1, fill=top_hex, width=1, tags=tags),
+            "bot": c.create_line(x1 + pad, y2 - 1, x2 - pad, y2 - 1, fill=bot_hex, width=1, tags=tags),
+            "left": c.create_line(x1, y1 + pad, x1, y2 - pad, fill=border_hex, width=1, tags=tags),
+            "right": c.create_line(x2 - 1, y1 + pad, x2 - 1, y2 - pad, fill=border_hex, width=1, tags=tags),
+            "tl": c.create_image(x1, y1, image=tl, anchor=tk.NW, tags=tags),
+            "bl": c.create_image(x1, y2 - pad, image=bl, anchor=tk.NW, tags=tags),
+            "tr": c.create_image(x2 - pad, y1, image=tr_i, anchor=tk.NW, tags=tags),
+            "br": c.create_image(x2 - pad, y2 - pad, image=br, anchor=tk.NW, tags=tags),
+            "pad": pad,
+            "vis": True,
+            "lvis": True,
+            "cvis": True,
+        }
+        return h
+
+    def _move_rounded_outline(self, h: dict[str, Any], x1: int, y1: int, x2: int, y2: int):
+        c = self.canvas
+        pad = h["pad"]
+        if x2 - x1 < 2 * pad + 2 or y2 - y1 < 2 * pad + 2:
+            if h["vis"]:
+                for k in ("top", "bot", "left", "right", "tl", "bl", "tr", "br"):
+                    c.itemconfigure(h[k], state="hidden")
+                h["vis"] = False
+                h["lvis"] = False
+                h["cvis"] = False
+            return
+        if not h["vis"]:
+            for k in ("top", "bot", "tr", "br", "right"):
+                c.itemconfigure(h[k], state="normal")
+            h["vis"] = True
+        c.coords(h["top"], max(0, x1 + pad), y1, x2 - pad, y1)
+        c.coords(h["bot"], max(0, x1 + pad), y2 - 1, x2 - pad, y2 - 1)
+        need_l = x1 >= 0
+        if need_l != h["lvis"]:
+            c.itemconfigure(h["left"], state="normal" if need_l else "hidden")
+            h["lvis"] = need_l
+        if need_l:
+            c.coords(h["left"], x1, y1 + pad, x1, y2 - pad)
+        c.coords(h["right"], x2 - 1, y1 + pad, x2 - 1, y2 - pad)
+        need_c = x1 >= -pad
+        if need_c != h["cvis"]:
+            st_c = "normal" if need_c else "hidden"
+            c.itemconfigure(h["tl"], state=st_c)
+            c.itemconfigure(h["bl"], state=st_c)
+            h["cvis"] = need_c
+        if need_c:
+            c.coords(h["tl"], x1, y1)
+            c.coords(h["bl"], x1, y2 - pad)
+        c.coords(h["tr"], x2 - pad, y1)
+        c.coords(h["br"], x2 - pad, y2 - pad)
+
+    def _draw_rounded_outline(
+        self,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        ckey: str,
+        tags: str = "ov_sb",
+        right_edge: bool = True,
+    ):
+        tl, tr_i, bl, br, top_hex, bot_hex, border_hex, pad = self._photos[ckey]
+        c = self.canvas
+        if x2 - x1 < 2 * pad + 2 or y2 - y1 < 2 * pad + 2:
+            return
+        c.create_line(x1 + pad, y1, x2 - pad, y1, fill=top_hex, width=1, tags=tags)
+        c.create_line(x1 + pad, y2 - 1, x2 - pad, y2 - 1, fill=bot_hex, width=1, tags=tags)
+        if x1 >= 0:
+            c.create_line(x1, y1 + pad, x1, y2 - pad, fill=border_hex, width=1, tags=tags)
+        if right_edge:
+            c.create_line(x2 - 1, y1 + pad, x2 - 1, y2 - pad, fill=border_hex, width=1, tags=tags)
+        if x1 >= -pad:
+            c.create_image(x1, y1, image=tl, anchor=tk.NW, tags=tags)
+            c.create_image(x1, y2 - pad, image=bl, anchor=tk.NW, tags=tags)
+        c.create_image(x2 - pad, y1, image=tr_i, anchor=tk.NW, tags=tags)
+        c.create_image(x2 - pad, y2 - pad, image=br, anchor=tk.NW, tags=tags)
+
+    def _draw_pill_outline(self, x1: int, y1: int, x2: int, y2: int, r: int, fill: str, outline: str, tags: str = "ov_sb"):
+        draw_round_rectangle(self.canvas, x1, y1, x2, y2, r=r, fill=fill, outline=outline, width=1, tags=tags)
+
+    def _draw_sidebar(self, sb_x: int, sb_w: int, fade_a: float, compact_inner: bool):
+        c = self.canvas
+        snap = self._snap
+        ch = snap["ch"]
+        sb_right = sb_x + sb_w
+
+        # Fast-path horizontal drawer translation in visibility mode: 1 C move call!
+        fade_bucket = 1.0 if fade_a >= 0.99 else round(fade_a, 3)
+        sig = (sb_w, fade_bucket, compact_inner)
+        if self.mode == "visibility" and self._sb_built_sig == sig and self._sb_built_sig is not None:
+            dx = sb_x - self._sb_last_x
+            if dx != 0:
+                c.move("ov_sb", dx, 0)
+                self._sb_last_x = sb_x
+            return
+
+        c.delete("ov_sb")
+        self._sb_built_sig = sig
+        self._sb_last_x = sb_x
+        if sb_right <= 4:
+            return
+
+        pad_x, pad_y = (5, 11) if sb_w < 100 else (8, 10)
+        inner_x = sb_x + pad_x
+        inner_w = max(10, sb_w - (pad_x * 2))
+        a = None if fade_a >= 0.99 else max(0.0, min(1.0, float(fade_a)))
+        fade_base = "#0a1222"
+
+        # 1. Header: Hamburger button + faded NAVIGATION label
+        hx = inner_x + (8 if compact_inner else 6)
+        hy = pad_y + 4
+        if hx + 30 > -32:
+            self._draw_pill_outline(hx, hy, hx + 30, hy + 30, 9, "#16253d", "#2a4268", tags="ov_sb")
+            c.create_line(hx + 11, hy + 1, hx + 19, hy + 1, fill="#64748b", width=1, tags="ov_sb")
+            c.create_text(hx + 15, hy + 15, text="☰", fill="#ffffff", font=(FONT_DISPLAY, 10), anchor=tk.CENTER, tags="ov_sb")
+
+        if (not compact_inner) and (a is None or a > 0.04) and inner_x + 44 < sb_right:
+            tfg = snap["nav_title_fg"] if a is None else interpolate_color("#0d1b32", snap["nav_title_fg"], a)
+            c.create_text(inner_x + 44, pad_y + 19, text=snap["nav_title"], fill=tfg, font=(FONT_DISPLAY, 8, "bold"), anchor=tk.W, tags="ov_sb")
+
+        # 2. Nav items + Section headers clipped vertically inside scroller band
+        ntop = snap["nav_top_y"]
+        nbot = snap["nav_bot_y"]
+        for entry in snap["nav_entries"]:
+            ey = entry["y"]
+            eh = entry["h"]
+            if ey + eh <= ntop + 2 or ey >= nbot - 2:
+                continue
+            mid_y = ey + (eh // 2)
+            if entry["kind"] == "sec":
+                if not compact_inner and (a is None or a > 0.04):
+                    sec_base = "#0d1b32"
+                    if entry["show_divider"]:
+                        div_col = THEME["glass_border"] if a is None else interpolate_color(sec_base, THEME["glass_border"], a)
+                        if inner_x + 10 < inner_x + inner_w - 10:
+                            c.create_line(inner_x + 10, ey + 5, inner_x + inner_w - 10, ey + 5, fill=div_col, width=1, tags="ov_sb")
+                    s_fg = entry["fg"] if a is None else interpolate_color(sec_base, entry["fg"], a)
+                    ty = ey + (12 if entry["show_divider"] else 3)
+                    c.create_text(inner_x + 10, ty, text=entry["text"], fill=s_fg, font=(FONT_DISPLAY, 7, "bold"), anchor=tk.NW, tags="ov_sb")
+                continue
+
+            is_active = entry["is_active"]
+            is_hovered = entry["is_hovered"]
+            count = entry["count"]
+
+            if compact_inner:
+                cx = (inner_w // 2) if inner_w <= 54 else 23
+                px1 = inner_x + max(4, cx - 17)
+                px2 = inner_x + min(inner_w - 4, cx + 17)
+            else:
+                px1 = inner_x + 4
+                px2 = inner_x + inner_w - 4
+
+            if px2 > -40 and px2 - px1 >= 10:
+                if is_active and (a is None or a > 0.03):
+                    pfill = "#132b4f" if a is None else interpolate_color(fade_base, "#132b4f", a)
+                    pout = THEME["accent_glow"] if a is None else interpolate_color(fade_base, THEME["accent_glow"], a)
+                    prim = "#93c5fd" if a is None else interpolate_color(fade_base, "#93c5fd", a)
+                    self._draw_pill_outline(px1, ey + 2, px2, ey + eh - 2, 10, pfill, pout, tags="ov_sb")
+                    if px2 - px1 > 24 and (a is None or a > 0.15):
+                        c.create_line(px1 + 10, ey + 3, px2 - 10, ey + 3, fill=prim, width=1, tags="ov_sb")
+                    if not compact_inner and px2 - px1 > 16:
+                        c.create_rectangle(px1 + 5, ey + 7, px1 + 8, ey + eh - 7, fill=pout, outline="", tags="ov_sb")
+                elif is_hovered and (a is None or a > 0.05):
+                    hfill = "#10203a" if a is None else interpolate_color(fade_base, "#10203a", a)
+                    hout = "#284268" if a is None else interpolate_color(fade_base, "#284268", a)
+                    self._draw_pill_outline(px1, ey + 2, px2, ey + eh - 2, 10, hfill, hout, tags="ov_sb")
+
+            icon_x = inner_x + (((inner_w // 2) if inner_w <= 54 else 23) if compact_inner else 24)
+            if icon_x < sb_right - 4:
+                icon_fg = THEME["accent_glow"] if is_active else THEME["text_secondary"]
+                if a is not None and is_active:
+                    icon_fg = interpolate_color(THEME["text_secondary"], THEME["accent_glow"], a)
+                c.create_text(icon_x, mid_y, text=entry["icon"], fill=icon_fg, font=(FONT_DISPLAY, 10), anchor=tk.CENTER, tags="ov_sb")
+
+            if compact_inner:
+                if count > 0 and (a is None or a > 0.04):
+                    pip_fill = THEME["danger"] if a is None else interpolate_color(fade_base, THEME["danger"], a)
+                    dx = icon_x + 7
+                    c.create_oval(dx, ey + 5, dx + 7, ey + 12, fill=pip_fill, outline="#080c14", width=1, tags="ov_sb")
+            elif (a is None or a > 0.03) and inner_w >= 80:
+                badge_str = str(count)
+                badge_w = max(24, len(badge_str) * 7 + 12)
+                bx2 = inner_x + inner_w - 12
+                bx1 = bx2 - badge_w
+                bg_base = "#132b4f" if is_active else "#0a1222"
+                bbg = "#09111f" if a is None else interpolate_color(bg_base, "#09111f", a)
+                bout = (THEME["accent_glow"] if is_active else "#203452")
+                if a is not None:
+                    bout = interpolate_color(fade_base, bout, a)
+                bfg = THEME["accent_glow"] if is_active else THEME["text_tertiary"]
+                if a is not None:
+                    bfg = interpolate_color(bg_base, bfg, a)
+                if bx1 > inner_x + 42:
+                    c.create_rectangle(bx1, ey + 8, bx2, ey + eh - 8, fill=bbg, outline=bout, width=1, tags="ov_sb")
+                    c.create_text((bx1 + bx2) // 2, mid_y, text=badge_str, fill=bfg, font=(FONT_DISPLAY, 8, "bold"), anchor=tk.CENTER, tags="ov_sb")
+                text_x = inner_x + 40
+                avail_w = max(10, bx1 - text_x - 6)
+                if avail_w > 12:
+                    t_spec = (FONT_DISPLAY if is_active else FONT_FAMILY, 9, "bold" if is_active else "normal")
+                    disp = self._fit_text(entry["text"], avail_w, t_spec)
+                    tfg = "#ffffff" if is_active else THEME["text_secondary"]
+                    if a is not None:
+                        tfg = interpolate_color(bg_base, tfg, a)
+                    c.create_text(text_x, mid_y, text=disp, fill=tfg, font=t_spec, anchor=tk.W, tags="ov_sb")
+
+        # 3. Bottom Storage Card OR Compact Folder button
+        sby = snap["sb_bot_y"]
+        if compact_inner:
+            if a is None or a > 0.03:
+                cx1, cy1 = inner_x + 6, sby + 49
+                fill = "#16253d" if a is None else interpolate_color(fade_base, "#16253d", a)
+                brd = "#2a4268" if a is None else interpolate_color(fade_base, "#2a4268", a)
+                tfg = "#ffffff" if a is None else interpolate_color(fade_base, "#ffffff", a)
+                self._draw_pill_outline(cx1, cy1, cx1 + 34, cy1 + 34, 9, fill, brd, tags="ov_sb")
+                if a is None or a > 0.15:
+                    gl = "#64748b" if a is None else interpolate_color(fade_base, "#64748b", a)
+                    c.create_line(cx1 + 11, cy1 + 1, cx1 + 23, cy1 + 1, fill=gl, width=1, tags="ov_sb")
+                c.create_text(cx1 + 17, cy1 + 17, text="📁", fill=tfg, font=(FONT_DISPLAY, 11), anchor=tk.CENTER, tags="ov_sb")
+        else:
+            if (a is None or a > 0.03) and inner_w >= 70:
+                cx1, cy1, cx2, cy2 = inner_x, sby + 3, inner_x + inner_w, sby + 87
+                if cx2 > -20:
+                    cfill = "#0c1626" if a is None else interpolate_color(fade_base, "#0c1626", a)
+                    cbrd = "#3c5f96" if a is None else interpolate_color(fade_base, "#3c5f96", a)
+                    self._draw_pill_outline(cx1, cy1, cx2, cy2, RADIUS_SM, cfill, cbrd, tags="ov_sb")
+                    st_col = THEME["text_tertiary"] if a is None else interpolate_color(fade_base, THEME["text_tertiary"], a)
+                    sp_col = THEME["text_secondary"] if a is None else interpolate_color(fade_base, THEME["text_secondary"], a)
+                    c.create_text(cx1 + 12, cy1 + 15, text=snap["sec_storage"], fill=st_col, font=(FONT_DISPLAY, 7, "bold"), anchor=tk.W, tags="ov_sb")
+                    path_txt = self._fit_text(snap["storage_path"], max(20, inner_w - 24), (FONT_FAMILY, 8))
+                    c.create_text(cx1 + 12, cy1 + 33, text=path_txt, fill=sp_col, font=(FONT_FAMILY, 8), anchor=tk.W, tags="ov_sb")
+                    bx1, by1, bx2, by2 = cx1 + 10, cy1 + 48, cx2 - 10, cy1 + 74
+                    if bx2 - bx1 > 20:
+                        bfill = "#172844" if a is None else interpolate_color(fade_base, "#172844", a)
+                        bbrd = "#2a4268" if a is None else interpolate_color(fade_base, "#2a4268", a)
+                        btfg = "#ffffff" if a is None else interpolate_color(fade_base, "#ffffff", a)
+                        self._draw_pill_outline(bx1, by1, bx2, by2, 8, bfill, bbrd, tags="ov_sb")
+                        bdisp = self._fit_text(snap["storage_btn"], max(16, (bx2 - bx1) - 12), (FONT_FAMILY, 8, "bold"))
+                        c.create_text((bx1 + bx2) // 2, (by1 + by2) // 2, text=bdisp, fill=btfg, font=(FONT_FAMILY, 8, "bold"), anchor=tk.CENTER, tags="ov_sb")
+
+        if sb_right >= 24:
+            self._draw_rounded_outline(sb_x, 0, sb_right, ch, "tbl_c", tags="ov_sb")
+
+    def _build_right_pane_items(self):
+        c = self.canvas
+        snap = self._snap
+        cw = snap["cw"]
+        ch = snap["ch"]
+        stat_h = snap["stat_h"]
+        stat_gap = snap["stat_gap"]
+        tpad = snap["tpad"]
+        gap_bg = THEME["bg_dark"]
+        tc_y = stat_h + stat_gap
+
+        h: dict[str, Any] = {
+            "kpi_gaps": [c.create_rectangle(0, 0, 1, stat_h, fill=gap_bg, outline="", tags="ov_rp") for _ in range(2)],
+            "kpi_cards": [],
+            "horiz_gap": c.create_rectangle(0, stat_h, cw, tc_y, fill=gap_bg, outline="", tags="ov_rp"),
+            "hdr_line": c.create_line(0, 0, 10, 0, fill=THEME["glass_border"], width=1, tags="ov_rp"),
+            "hdr_texts": [],
+            "hdr_divs": [],
+            "empty": None,
+            "rows": [],
+            "thumb": None,
+            "tbl_outline": None,
+        }
+
+        for idx, (title, raw_val, val_fg) in enumerate(snap["pods"]):
+            h["kpi_cards"].append({
+                "title": c.create_text(0, 0, text=title, fill=THEME["text_secondary"], font=(FONT_DISPLAY, 8, "bold"), anchor=tk.W, tags="ov_rp"),
+                "val": c.create_text(0, 0, text=raw_val, fill=val_fg, font=(FONT_DISPLAY, 12, "bold"), anchor=tk.W, tags="ov_rp"),
+                "last_val": raw_val,
+                "outline": self._create_rounded_outline(0, 0, 100, stat_h, "kpi_c", "ov_rp"),
+            })
+
+        col_keys = snap["col_keys"]
+        for i, k in enumerate(col_keys):
+            h["hdr_texts"].append(c.create_text(0, 0, text=snap["col_titles"][k].upper(), fill=THEME["text_tertiary"], font=(FONT_DISPLAY, 8, "bold"), anchor=snap["col_anchors"][k], tags="ov_rp"))
+            if i < len(col_keys) - 1:
+                h["hdr_divs"].append(c.create_line(0, 0, 0, 10, fill=THEME["border"], width=1, tags="ov_rp"))
+
+        if snap["is_empty"]:
+            h["empty"] = {
+                "card": draw_round_rectangle(c, 0, 0, 420, 176, r=RADIUS_LG, fill="", outline="#466eaa", width=1, tags="ov_rp"),
+                "rim_t": c.create_line(0, 0, 10, 0, fill="#dce9ff", width=1, tags="ov_rp"),
+                "rim_b": c.create_line(0, 0, 10, 0, fill=THEME["glass_refraction"], width=1, tags="ov_rp"),
+                "glyph": c.create_text(0, 0, text="📥", font=(FONT_DISPLAY, 24), fill=THEME["accent_glow"], anchor=tk.CENTER, tags="ov_rp"),
+                "title": c.create_text(0, 0, text=snap["empty_title"], font=(FONT_DISPLAY, 11, "bold"), fill=THEME["text_primary"], anchor=tk.CENTER, tags="ov_rp"),
+                "desc": c.create_text(0, 0, text=snap["empty_desc"], font=(FONT_DISPLAY, 8), fill=THEME["text_tertiary"], anchor=tk.CENTER, width=360, justify=tk.CENTER, tags="ov_rp"),
+                "btn": draw_round_rectangle(c, 0, 0, 180, 30, r=15, fill=THEME["accent_primary"], outline=THEME["accent_glow"], width=1, tags="ov_rp"),
+                "btn_txt": c.create_text(0, 0, text=snap["empty_btn"], font=(FONT_DISPLAY, 8, "bold"), fill="#ffffff", anchor=tk.CENTER, tags="ov_rp"),
+                "last_w": 420,
+            }
+        else:
+            name_spec = (FONT_DISPLAY, 9, "bold")
+            url_spec = (FONT_DISPLAY, 8)
+            for row in snap["rows"]:
+                row_idx, rel_y, is_sel, is_hov, icon, fn_clean, size_str, clean_st, st_col, pct_f, pct_txt, speed_str, url_str = row
+                if is_sel:
+                    bg_id = c.create_rectangle(0, 0, 10, 10, fill="#15355a", outline=THEME["accent_primary"], tags="ov_rp")
+                    pip_id = c.create_rectangle(0, 0, 10, 10, fill=THEME["accent_glow"], outline="", tags="ov_rp")
+                elif is_hov:
+                    bg_id = c.create_rectangle(0, 0, 10, 10, fill="#1a2c48", outline=THEME["glass_border"], tags="ov_rp")
+                    pip_id = None
+                else:
+                    rfill = "#111c2f" if (row_idx % 2 == 0) else "#0c1526"
+                    bg_id = c.create_rectangle(0, 0, 10, 10, fill=rfill, outline="", tags="ov_rp")
+                    pip_id = None
+                h["rows"].append({
+                    "meta": (rel_y, fn_clean, pct_f, url_str),
+                    "bg": bg_id,
+                    "pip": pip_id,
+                    "icon": c.create_text(0, 0, text=icon, font=(FONT_DISPLAY, 11), fill=THEME["accent_glow"], anchor=tk.W, tags="ov_rp"),
+                    "name": c.create_text(0, 0, text=fn_clean, font=name_spec, fill=THEME["text_primary"], anchor=tk.W, tags="ov_rp"),
+                    "last_name": fn_clean,
+                    "size": c.create_text(0, 0, text=size_str, font=("Consolas", 9), fill=THEME["text_secondary"], anchor=tk.E, tags="ov_rp"),
+                    "dot": c.create_text(0, 0, text="●", font=(FONT_DISPLAY, 7, "bold"), fill=st_col, anchor=tk.W, tags="ov_rp"),
+                    "status": c.create_text(0, 0, text=clean_st, font=(FONT_DISPLAY, 8, "bold"), fill=st_col, anchor=tk.W, tags="ov_rp"),
+                    "p_bg": c.create_rectangle(0, 0, 64, 7, fill="#0c1422", outline="#1a273c", width=1, tags="ov_rp"),
+                    "p_fill": c.create_rectangle(0, 0, 1, 5, fill=st_col, outline="", tags="ov_rp") if pct_f > 0 else None,
+                    "p_txt": c.create_text(0, 0, text=pct_txt, font=("Consolas", 8), fill=THEME["text_secondary"], anchor=tk.W, tags="ov_rp"),
+                    "speed": c.create_text(0, 0, text=speed_str, font=("Consolas", 9), fill=THEME["text_secondary"], anchor=tk.E, tags="ov_rp"),
+                    "url": c.create_text(0, 0, text=url_str, font=url_spec, fill=THEME["text_subtle"], anchor=tk.W, tags="ov_rp"),
+                    "last_url": url_str,
+                })
+
+        if snap["sb_thumb"] is not None and snap["sb_col_w"] >= 4:
+            h["thumb"] = c.create_rectangle(0, 0, 6, 20, fill=snap["sb_thumb"][2], outline="", tags="ov_rp")
+
+        h["tbl_outline"] = self._create_rounded_outline(0, tc_y, cw, ch, "tbl_c", "ov_rp")
+        self._rp_handles = h
+
+    def _draw_right_pane(self, rx: int, rw: int):
+        if not self._rp_handles:
+            self._build_right_pane_items()
+        c = self.canvas
+        snap = self._snap
+        h = self._rp_handles
+        cw = snap["cw"]
+        ch = snap["ch"]
+        stat_h = snap["stat_h"]
+        stat_gap = snap["stat_gap"]
+        tpad = snap["tpad"]
+        tc_y = stat_h + stat_gap
+
+        # 1. KPI Stat Bar (coords only!)
+        slots = self.app.stat_bar._compute_slots(rw)
+        mid_y = stat_h / 2.0
+        title_y = int(mid_y - 10)
+        val_y = int(mid_y + 10)
+        for idx, (sx, sw) in enumerate(slots):
+            ax = rx + sx
+            if idx > 0:
+                c.coords(h["kpi_gaps"][idx - 1], ax - 8, 0, ax, stat_h)
+            pod_h = h["kpi_cards"][idx]
+            title, raw_val, _ = snap["pods"][idx]
+            c.coords(pod_h["title"], ax + 18, title_y)
+            c.coords(pod_h["val"], ax + 18, val_y)
+            max_tw = max(20, sw - 36)
+            fitted = self._fit_text(raw_val, max_tw, (FONT_DISPLAY, 12, "bold")) if raw_val else ""
+            if fitted != pod_h["last_val"]:
+                c.itemconfigure(pod_h["val"], text=fitted)
+                pod_h["last_val"] = fitted
+            self._move_rounded_outline(pod_h["outline"], ax, 0, ax + sw, stat_h)
+
+        c.coords(h["horiz_gap"], rx, stat_h, cw, tc_y)
+
+        # 2. Table Container interior & columns
+        ix = rx + tpad
+        iy = tc_y + tpad
+        iw = max(40, rw - (2 * tpad))
+        ih = max(40, (ch - tc_y) - (2 * tpad))
+        vw = max(40, iw - snap["sb_col_w"])
+        hdr_h = 32
+        vp_y = iy + hdr_h
+        vp_h = max(20, ih - hdr_h)
+
+        col_keys = snap["col_keys"]
+        scols = snap["start_cols"]
+        ecols = snap["end_cols"]
+        s_flex = scols["name"] + scols["url"]
+        e_flex = ecols["name"] + ecols["url"]
+        cur_cols = dict(scols)
+        if abs(e_flex - s_flex) > 0:
+            fixed_sum = sum(scols[k] for k in ("size", "status", "progress", "speed") if k in scols)
+            cur_flex = max(40, vw - fixed_sum - 16)
+            alpha_w = (cur_flex - s_flex) / (e_flex - s_flex)
+            cur_cols["name"] = max(80, int(round(scols["name"] + (ecols["name"] - scols["name"]) * alpha_w)))
+            cur_cols["url"] = max(60, cur_flex - cur_cols["name"])
+        snap["cur_cols"] = cur_cols
+
+        c.coords(h["hdr_line"], ix + 4, iy + hdr_h - 1, max(ix + 4, ix + iw - 4), iy + hdr_h - 1)
+        cur_x = ix
+        for i, k in enumerate(col_keys):
+            col_w = cur_cols[k]
+            anchor = snap["col_anchors"][k]
+            tx = cur_x + 14 if anchor == tk.W else (cur_x + col_w - 14 if anchor == tk.E else cur_x + (col_w // 2))
+            c.coords(h["hdr_texts"][i], tx, iy + (hdr_h // 2))
+            if i < len(h["hdr_divs"]):
+                if cur_x + col_w < ix + iw:
+                    c.itemconfigure(h["hdr_divs"][i], state="normal")
+                    c.coords(h["hdr_divs"][i], cur_x + col_w, iy + 6, cur_x + col_w, iy + hdr_h - 6)
+                else:
+                    c.itemconfigure(h["hdr_divs"][i], state="hidden")
+            cur_x += col_w
+
+        if snap["is_empty"] and h["empty"] is not None:
+            em = h["empty"]
+            cx = ix + (vw // 2)
+            cy = vp_y + (vp_h // 2)
+            card_w = min(420, max(280, vw - 60))
+            card_h = 176
+            x1 = cx - (card_w // 2)
+            y1 = cy - (card_h // 2)
+            if card_w != em["last_w"]:
+                c.delete(em["card"])
+                em["card"] = draw_round_rectangle(c, x1, y1, x1 + card_w, y1 + card_h, r=RADIUS_LG, fill="", outline="#466eaa", width=1, tags="ov_rp")
+                c.tag_lower(em["card"], em["rim_t"])
+                em["last_w"] = card_w
+            else:
+                # Translate existing card polygon uniformly
+                old_box = c.coords(em["card"])
+                if len(old_box) >= 2:
+                    cur_cx = int(round(sum(old_box[0::2]) / max(1, len(old_box[0::2]))))
+                    cur_cy = int(round(sum(old_box[1::2]) / max(1, len(old_box[1::2]))))
+                    c.move(em["card"], cx - cur_cx, cy - cur_cy)
+            c.coords(em["rim_t"], x1 + RADIUS_LG, y1 + 1, x1 + card_w - RADIUS_LG, y1 + 1)
+            c.coords(em["rim_b"], x1 + RADIUS_LG, y1 + card_h - 1, x1 + card_w - RADIUS_LG, y1 + card_h - 1)
+            c.coords(em["glyph"], cx, cy - 44)
+            c.coords(em["title"], cx, cy - 10)
+            c.coords(em["desc"], cx, cy + 15)
+            c.itemconfigure(em["desc"], width=card_w - 48)
+            old_b = c.coords(em["btn"])
+            if len(old_b) >= 2:
+                bcx = int(round(sum(old_b[0::2]) / max(1, len(old_b[0::2]))))
+                bcy = int(round(sum(old_b[1::2]) / max(1, len(old_b[1::2]))))
+                c.move(em["btn"], cx - bcx, (cy + 57) - bcy)
+            c.coords(em["btn_txt"], cx, cy + 57)
+        else:
+            rh = snap["rh"]
+            col_x = {}
+            cx_acc = ix
+            for k in col_keys:
+                col_x[k] = cx_acc
+                cx_acc += cur_cols[k]
+
+            name_spec = (FONT_DISPLAY, 9, "bold")
+            url_spec = (FONT_DISPLAY, 8)
+            avail_name_w = max(24, cur_cols["name"] - 48)
+            url_left_x = col_x["url"] + 14
+            avail_url_w = max(60, (ix + vw) - url_left_x - 14)
+
+            for rh_item in h["rows"]:
+                rel_y, fn_clean, pct_f, url_str = rh_item["meta"]
+                y = vp_y + rel_y
+                ry1 = max(vp_y, y + 2)
+                ry2 = min(vp_y + vp_h, y + rh - 2)
+                if ry2 <= ry1 + 2:
+                    continue
+                c.coords(rh_item["bg"], ix + 4, ry1, ix + vw - 4, ry2)
+                if rh_item["pip"] is not None:
+                    c.coords(rh_item["pip"], ix + 4, max(vp_y, y + 6), ix + 7, min(vp_y + vp_h, y + rh - 6))
+                mid_r = y + (rh // 2)
+                if mid_r < vp_y + 9 or mid_r > vp_y + vp_h - 9:
+                    for key_h in ("icon", "name", "size", "dot", "status", "p_bg", "p_fill", "p_txt", "speed", "url"):
+                        if rh_item[key_h] is not None:
+                            c.itemconfigure(rh_item[key_h], state="hidden")
+                    continue
+                name_x = col_x["name"] + 14
+                c.coords(rh_item["icon"], name_x, mid_r)
+                c.coords(rh_item["name"], name_x + 24, mid_r)
+                disp_name = self._fit_text(fn_clean, avail_name_w, name_spec)
+                if disp_name != rh_item["last_name"]:
+                    c.itemconfigure(rh_item["name"], text=disp_name)
+                    rh_item["last_name"] = disp_name
+
+                c.coords(rh_item["size"], col_x["size"] + cur_cols["size"] - 14, mid_r)
+                st_lx = col_x["status"] + 14
+                c.coords(rh_item["dot"], st_lx, mid_r)
+                c.coords(rh_item["status"], st_lx + 12, mid_r)
+
+                bx = col_x["progress"] + 14
+                by = mid_r - 3
+                bar_w = 64
+                c.coords(rh_item["p_bg"], bx, by, bx + bar_w, by + 7)
+                if rh_item["p_fill"] is not None:
+                    fill_w = max(0, min(bar_w, int(bar_w * pct_f)))
+                    c.coords(rh_item["p_fill"], bx + 1, by + 1, max(bx + 2, bx + fill_w), by + 6)
+                c.coords(rh_item["p_txt"], bx + bar_w + 8, mid_r)
+                c.coords(rh_item["speed"], col_x["speed"] + cur_cols["speed"] - 14, mid_r)
+
+                c.coords(rh_item["url"], url_left_x, mid_r)
+                disp_url = self._fit_text(url_str, avail_url_w, url_spec)
+                if disp_url != rh_item["last_url"]:
+                    c.itemconfigure(rh_item["url"], text=disp_url)
+                    rh_item["last_url"] = disp_url
+
+        if h["thumb"] is not None and snap["sb_thumb"] is not None and snap["sb_col_w"] >= 4:
+            first, last, _ = snap["sb_thumb"]
+            sx = ix + vw
+            top_px = vp_y + int(first * vp_h)
+            bot_px = min(vp_y + vp_h, vp_y + max(int(first * vp_h) + 20, int(last * vp_h)))
+            if bot_px > top_px:
+                c.itemconfigure(h["thumb"], state="normal")
+                c.coords(h["thumb"], sx + 1, top_px, sx + snap["sb_col_w"] - 1, bot_px)
+            else:
+                c.itemconfigure(h["thumb"], state="hidden")
+
+        self._move_rounded_outline(h["tbl_outline"], rx, tc_y, cw, ch)
+
+    def render(self, sb_x: int, sb_w: int, fade_alpha: float, compact_inner: bool):
+        c = self.canvas
+        snap = self._snap
+        if not snap:
+            return
+
+        cw = snap["cw"]
+        ch = snap["ch"]
+        stat_h = snap["stat_h"]
+        stat_gap = snap["stat_gap"]
+        pan_rx = snap["pan_rx"]
+        pan_ry = snap["pan_ry"]
+        gap_bg = THEME["bg_dark"]
+
+        self.cur_sb_x = int(sb_x)
+        self.cur_sb_w = int(sb_w)
+        self.cur_fade = float(fade_alpha)
+        self.cur_compact = bool(compact_inner)
+
+        # Layer order created once cleanly: ov_base -> sb_top -> ov_gaps -> ov_sb -> ov_rp
+        if not self._base_ids:
+            b1 = c.create_image(0, 0, image=self._photos["mesh_kpi"], anchor=tk.NW, tags="ov_base")
+            b2 = c.create_image(0, stat_h + stat_gap, image=self._photos["mesh_body"], anchor=tk.NW, tags="ov_base")
+            self._sb_top_id = c.create_image(0, 0, anchor=tk.NW, state="hidden", tags="ov_base")
+            self._gap_sb_id = c.create_rectangle(0, 0, 1, ch, fill=gap_bg, outline="", state="hidden", tags="ov_gaps")
+            self._gap_left_id = c.create_rectangle(0, 0, 1, ch, fill=gap_bg, outline="", state="hidden", tags="ov_gaps")
+            self._base_ids = {b1, b2, self._sb_top_id, self._gap_sb_id, self._gap_left_id}
+
+        sb_right = sb_x + sb_w
+        if sb_right > 0:
+            vis_x = max(0, sb_x)
+            vis_w = sb_right - vis_x
+            if vis_w > 0:
+                tkey = (vis_w, vis_x)
+                sb_top = self._photos["sb_tops"].get(tkey)
+                if sb_top is None:
+                    sb_top = AmbientMeshEngine.get_shared().create_glass_backdrop(
+                        vis_w, stat_h + stat_gap, pan_rx + vis_x, pan_ry, (8, 12, 20, 165)
+                    )
+                    self._photos["sb_tops"][tkey] = sb_top
+                c.itemconfigure(self._sb_top_id, image=sb_top, state="normal")
+                c.coords(self._sb_top_id, vis_x, 0)
+            else:
+                c.itemconfigure(self._sb_top_id, state="hidden")
+        else:
+            c.itemconfigure(self._sb_top_id, state="hidden")
+
+        rx = max(0, sb_right + 8)
+        rw = max(100, cw - rx)
+        gap_l = max(0, sb_right)
+        if rx > gap_l:
+            c.itemconfigure(self._gap_sb_id, state="normal")
+            c.coords(self._gap_sb_id, gap_l, 0, rx, ch)
+        else:
+            c.itemconfigure(self._gap_sb_id, state="hidden")
+        if sb_x > 0:
+            c.itemconfigure(self._gap_left_id, state="normal")
+            c.coords(self._gap_left_id, 0, 0, sb_x, ch)
+        else:
+            c.itemconfigure(self._gap_left_id, state="hidden")
+
+        self._draw_right_pane(rx, rw)
+        self._draw_sidebar(sb_x, sb_w, fade_alpha, compact_inner)
+
+    def hide(self):
+        self.active = False
+        try:
+            self.canvas.place_forget()
+            self.canvas.delete("all")
+        except Exception:
+            pass
+        self._base_ids.clear()
+        self._rp_handles.clear()
+        self._sb_built_sig = None
+        self._sb_top_id = None
+        self._gap_sb_id = None
+        self._gap_left_id = None
+        self._photos.clear()
+        self._snap.clear()
+        self._fit_cache.clear()
+        self._raw_measure.clear()
+        self._prefix_tables.clear()
+        self.app.paned._manual_layout = False
+
 
 
 class IDMGUIApp:
@@ -2641,6 +3679,8 @@ class IDMGUIApp:
     def _build_main_content(self):
         self.paned = ModernMainPaned(self.root, bg=THEME["bg_dark"])
         self.paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 6))
+        self._transition_overlay = _SidebarTransitionOverlay(self)
+        self.paned._on_container_resize = self._on_paned_container_resize
 
         # Left Sidebar: Floating Liquid Glass Navigation Rail
         self.sidebar_frame = SidebarGlassContainer(
@@ -3822,8 +4862,9 @@ class IDMGUIApp:
             self.storage_card.place(x=0, y=3, width=width, height=84)
 
     def _flush_paned_geometry(self):
-        """Synchronously flush pack -> Canvas.create_window -> GlassTableView resize cascade."""
+        """Synchronously flush permanent place() -> Canvas.create_window -> GlassTableView cascade."""
         try:
+            self.paned.layout_now()
             self.root.update_idletasks()
             if hasattr(self, "sidebar_frame") and self.sidebar_visible:
                 sw = self.sidebar_frame.winfo_width()
@@ -4013,255 +5054,175 @@ class IDMGUIApp:
             pass
         return None
 
-    def _enter_place_glide_mode(self, start_w: int):
-        """Temporarily switch paned children from pack -> place so sidebar & right pane
-        translate/resize atomically in Z-order with zero pack thrash or pane overlap.
-        """
-        try:
-            container = self.paned.container
-            cw = container.winfo_width()
-            ch = container.winfo_height()
-            if cw < 100 or ch < 50:
-                return
-            right_pane = self._get_right_pane()
-            # Lock right_pane width at its starting size during the glide so Win32 DWM
-            # translates the cached right HWND at 40-60 FPS without reallocating large canvases
-            # in fullscreen, then snaps cleanly to final width once settled.
-            right_w = max(100, cw - start_w - 8)
-            self._glide_right_w = right_w
-            if self.sidebar_frame.winfo_manager() == "pack":
-                self.sidebar_frame.pack_forget()
-            if right_pane is not None and right_pane.winfo_manager() == "pack":
-                right_pane.pack_forget()
-            self.sidebar_frame.place(x=0, y=0, width=start_w, height=ch)
-            if right_pane is not None:
-                right_pane.place(x=start_w + 8, y=0, width=right_w, height=ch)
-            tk.Misc.lift(self.sidebar_frame)
-        except Exception:
-            pass
+    def _on_paned_container_resize(self, cw: int, ch: int):
+        ov = getattr(self, "_transition_overlay", None)
+        if ov is not None and ov.active and (cw, ch) != ov.anim_dims:
+            self._apply_sidebar_compact_immediate()
 
-    def _exit_place_glide_mode(self, show_sidebar: bool = True):
-        """Restore standard pack layout management inside ModernMainPaned."""
-        try:
-            self._glide_right_w = None
-            right_pane = self._get_right_pane()
-            if self.sidebar_frame.winfo_manager() == "place":
-                self.sidebar_frame.place_forget()
-            if right_pane is not None and right_pane.winfo_manager() == "place":
-                right_pane.place_forget()
-            if right_pane is not None and right_pane.winfo_manager() != "pack":
-                right_pane.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            if show_sidebar:
-                if self.sidebar_frame not in self.paned._panes:
-                    if right_pane is not None:
-                        self.paned._panes.insert(0, self.sidebar_frame)
-                    else:
-                        self.paned._panes.append(self.sidebar_frame)
-                if self.sidebar_frame.winfo_manager() != "pack":
-                    if right_pane is not None:
-                        self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8), before=right_pane)
-                    else:
-                        self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
-            else:
-                self.paned.forget(self.sidebar_frame)
-        except Exception:
-            pass
-
-    def _apply_glide_width(self, cur_w: int):
-        """Apply width cur_w synchronously across sidebar, right pane & inner Canvas windows during glide."""
-        try:
-            cw = self.paned.container.winfo_width()
-            ch = self.paned.container.winfo_height()
-            if self.sidebar_frame.winfo_manager() == "place" and cw >= 100 and ch >= 50:
-                self.sidebar_frame.place_configure(x=0, y=0, width=cur_w, height=ch)
-                right_pane = self._get_right_pane()
-                if right_pane is not None and right_pane.winfo_manager() == "place":
-                    locked_rw = getattr(self, "_glide_right_w", None)
-                    right_w = locked_rw if locked_rw is not None else max(100, cw - cur_w - 8)
-                    right_pane.place_configure(
-                        x=cur_w + 8,
-                        y=0,
-                        width=right_w,
-                        height=ch,
-                    )
-            else:
-                self.sidebar_frame.configure(width=cur_w)
-            pad_x, pad_y = self.sidebar_frame._calc_pads(cur_w)
-            inner_w = max(10, cur_w - (pad_x * 2))
-            sh = ch if ch >= 20 else self.sidebar_frame.winfo_height()
-            if sh >= 20:
-                self.sidebar_frame.coords(self.sidebar_frame.win_id, pad_x, pad_y)
-                self.sidebar_frame.itemconfigure(
-                    self.sidebar_frame.win_id,
-                    width=inner_w,
-                    height=max(10, sh - (pad_y * 2)),
-                )
-            self.nav_scroller.canvas.itemconfigure(self.nav_scroller._win, width=inner_w)
-            if not self.sidebar_compact and cur_w >= 130 and getattr(self.lbl_sidebar_title, "_visible", False):
-                self.sidebar_bottom.configure(width=inner_w)
-                self.storage_card.place(x=0, y=3, width=inner_w, height=84)
-            self.root.update_idletasks()
-            # Drain pending Win32 WM_PAINT / Expose / DisplayFrame events without running timers
-            # (TCL_WINDOW_EVENTS=4 | TCL_IDLE_EVENTS=32 | TCL_DONT_WAIT=2 = 38) so panes stay
-            # 100% crisp with zero stale trails or half-painted child windows mid-glide.
-            for _ in range(128):
-                if not self.root.tk.dooneevent(38):
-                    break
-        except Exception:
-            pass
-            pass
-
-    def _switch_sidebar_inner_mode(self, compact: bool, width: int):
-        """Switch inner sidebar content between compact and expanded cleanly at a midpoint width."""
-        inner_w = max(40, width - (10 if width < 100 else 16))
-        if compact:
-            try:
-                self.lbl_sidebar_title.place_forget()
-                self.lbl_sec_pustaka.place_forget()
-                self.lbl_sec_kategori.place_forget()
-                self.storage_card.place_forget()
-                self.btn_compact_folder.place(x=6, y=49, width=34, height=34)
-                self.btn_hamburger.place(x=8, y=4, width=30, height=30)
-            except Exception:
-                pass
-            for item in self.sidebar_items.values():
-                item.set_compact(True, redraw=False)
+    def _commit_sidebar_real_layout(self, show_sidebar: bool, target_w: int):
+        """Update the underlying permanent place()-managed panes cleanly (behind any active overlay)."""
+        self.paned.set_sidebar(visible=show_sidebar, width=target_w)
+        if show_sidebar:
+            self._apply_sidebar_layout(initial_fade=None)
         else:
+            self._set_sidebar_content_fade(None, redraw=False)
+            self._flush_paned_geometry()
+            self._refresh_right_glass()
             try:
-                self.btn_compact_folder.place_forget()
-                self.btn_hamburger.place(x=6, y=4, width=30, height=30)
-                self.lbl_sidebar_title.place(x=44, y=19)
-                self.lbl_sec_pustaka.place(x=10, y=3)
-                self.lbl_sec_kategori.place(x=10, y=12)
-                self.sidebar_bottom.configure(width=inner_w)
-                self.storage_card.place(x=0, y=3, width=inner_w, height=84)
-                tk.Misc.lift(self.storage_card)
+                if hasattr(self, "tree") and hasattr(self.tree, "viewport"):
+                    dims = (self.tree.viewport.winfo_width(), self.tree.viewport.winfo_height())
+                    if dims != getattr(self.tree, "_last_resize_dims", None):
+                        self.tree._on_resize()
+                self.root.update_idletasks()
             except Exception:
                 pass
-            for item in self.sidebar_items.values():
-                item.set_compact(False, redraw=False)
 
     def toggle_sidebar_compact(self):
         """Toggle between expanded sidebar with labels and compact sidebar with icons and phone notification badges."""
         self.sidebar_compact = not self.sidebar_compact
         self._apply_sidebar_compact_state(animated=True)
 
-    def _apply_sidebar_compact_state(self, animated: bool = True):
-        gen = self._cancel_sidebar_anim()
-        if not animated or os.environ.get("PYTEST_CURRENT_TEST") or is_reduced_motion() or not self.sidebar_visible:
-            self._apply_sidebar_compact_immediate()
-            return
+    def _run_overlay_transition(
+        self,
+        mode: str,
+        duration: float,
+        start_sb_x: int,
+        start_sb_w: int,
+        start_fade: float,
+        start_compact: bool,
+        target_sb_x: int,
+        target_sb_w: int,
+        target_compact: bool,
+        target_visible: bool,
+        gen: int,
+    ) -> bool:
+        ov = getattr(self, "_transition_overlay", None)
+        if ov is None or not ov.begin(
+            mode=mode,
+            start_sb_x=start_sb_x,
+            start_sb_w=start_sb_w,
+            start_fade=start_fade,
+            start_compact=start_compact,
+            target_sb_w=target_sb_w,
+            target_visible=target_visible,
+        ):
+            return False
 
-        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
-        try:
-            start_w = self.sidebar_frame.winfo_width()
-            if start_w < SIDEBAR_WIDTH_COMPACT or start_w > SIDEBAR_WIDTH_EXPANDED:
-                start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
-        except Exception:
-            start_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
+        def _drain_paint():
+            try:
+                self.root.update_idletasks()
+                for _ in range(128):
+                    if not self.root.tk.dooneevent(38):
+                        break
+            except Exception:
+                pass
 
-        duration = 0.26
+        # Drain Frame 0 upload before starting the wall-clock easing timer so frame 1 doesn't jump
+        _drain_paint()
         start_t = time.perf_counter()
-        going_compact = self.sidebar_compact
-        last_w = [start_w]
-        first_frame = [True]
-
-        sample_item = next(iter(self.sidebar_items.values()), None)
-        cur_fade = getattr(sample_item, "_fade_alpha", None)
-        start_fade = 1.0 if cur_fade is None else float(cur_fade)
-
-        try:
-            self.root._sidebar_animating = True  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        if hasattr(self.sidebar_frame, "set_animating"):
-            self.sidebar_frame.set_animating(True)
-        self._set_right_sliding(True)
-        self._enter_place_glide_mode(start_w)
-
-        # Anchor starting inner state in case user reversed mid-animation
-        already_switched = (
-            (going_compact and not getattr(self.lbl_sidebar_title, "_visible", True))
-            or ((not going_compact) and getattr(self.lbl_sidebar_title, "_visible", False))
-        )
-        inner_switched = [already_switched]
+        going_compact = target_compact and (not start_compact) and (mode == "compact")
+        going_expanded = (not target_compact) and start_compact and (mode == "compact")
 
         def _step():
             if getattr(self, "_sidebar_anim_gen", 0) != gen or not self.root.winfo_exists():
                 return
             self._sidebar_anim_id = None
             t = min(1.0, (time.perf_counter() - start_t) / duration)
-            # Smooth sinusoidal ease-in-out prevents mid-travel velocity spikes across frames
             ease = 0.5 * (1.0 - math.cos(math.pi * t))
-            cur_w = int(round(start_w + (target_w - start_w) * ease))
-            will_resize = (cur_w != last_w[0])
-            last_w[0] = cur_w
+            cur_x = int(round(start_sb_x + (target_sb_x - start_sb_x) * ease))
+            cur_w = int(round(start_sb_w + (target_sb_w - start_sb_w) * ease))
 
-            if already_switched:
-                in_a = start_fade + (1.0 - start_fade) * ease
-                self._set_sidebar_content_fade(in_a, redraw=not will_resize)
-            elif going_compact:
-                if not inner_switched[0]:
-                    out_a = max(0.0, 1.0 - (t / 0.36))
-                    if t >= 0.36 or cur_w <= 155:
-                        self._switch_sidebar_inner_mode(compact=True, width=cur_w)
-                        inner_switched[0] = True
-                        self._set_sidebar_content_fade(0.0, redraw=not will_resize)
-                    else:
-                        self._set_sidebar_content_fade(out_a, redraw=not will_resize)
-                if inner_switched[0]:
-                    in_a = max(0.0, min(1.0, (t - 0.45) / 0.55))
-                    self._set_sidebar_content_fade(in_a, redraw=not will_resize)
+            if going_compact:
+                if t < 0.36 and cur_w > 155:
+                    inner_c = False
+                    fade_v = max(0.0, 1.0 - (t / 0.36))
+                else:
+                    inner_c = True
+                    fade_v = max(0.0, min(1.0, (t - 0.45) / 0.55))
+            elif going_expanded:
+                if t < 0.34 or cur_w < 130:
+                    inner_c = True
+                    fade_v = max(0.0, 1.0 - (t / 0.28))
+                else:
+                    inner_c = False
+                    fade_v = max(0.0, min(1.0, (t - 0.36) / 0.64))
             else:
-                if not inner_switched[0]:
-                    out_a = max(0.0, 1.0 - (t / 0.28))
-                    if t >= 0.34 and cur_w >= 130:
-                        self._switch_sidebar_inner_mode(compact=False, width=cur_w)
-                        inner_switched[0] = True
-                        self._set_sidebar_content_fade(0.0, redraw=not will_resize)
-                    else:
-                        self._set_sidebar_content_fade(out_a, redraw=not will_resize)
-                if inner_switched[0]:
-                    in_a = max(0.0, min(1.0, (t - 0.36) / 0.64))
-                    self._set_sidebar_content_fade(in_a, redraw=not will_resize)
+                inner_c = target_compact
+                fade_v = 1.0 if mode == "visibility" else (start_fade + (1.0 - start_fade) * ease)
 
-            if t >= 1.0 or (not first_frame[0] and t >= 0.88 and abs(cur_w - target_w) <= 3):
-                self._finish_sidebar_animation()
+            if t >= 1.0:
+                ov.render(target_sb_x, target_sb_w, 1.0, target_compact)
+                _drain_paint()
+                self._commit_sidebar_real_layout(show_sidebar=target_visible, target_w=target_sb_w)
+                tk.Misc.lift(ov.canvas)
+                _drain_paint()
+                ov.hide()
+                self._end_slide_modes(redraw=False)
+                _drain_paint()
                 return
 
-            if not (first_frame[0] and not will_resize):
-                self._apply_glide_width(cur_w)
-            else:
-                try:
-                    self.root.update_idletasks()
-                except Exception:
-                    pass
-            first_frame[0] = False
-
+            ov.render(cur_x, cur_w, fade_v, inner_c)
+            tk.Misc.lift(ov.canvas)
+            _drain_paint()
             self._sidebar_anim_id = self.root.after(1, _step)
 
-        _step()
+        self._sidebar_anim_id = self.root.after(1, _step)
+        return True
 
-    def _finish_sidebar_animation(self):
-        self._sidebar_anim_id = None
-        self._exit_place_glide_mode(show_sidebar=True)
-        self._end_slide_modes(redraw=False)
-        self._apply_sidebar_layout(initial_fade=None)
-        if not os.environ.get("PYTEST_CURRENT_TEST"):
+    def _apply_sidebar_compact_state(self, animated: bool = True):
+        ov = getattr(self, "_transition_overlay", None)
+        was_ov = bool(ov is not None and ov.active)
+        cur_x = ov.cur_sb_x if was_ov else 0
+        cur_w = ov.cur_sb_w if was_ov else None
+        cur_fade = ov.cur_fade if was_ov else 1.0
+        cur_compact = ov.cur_compact if was_ov else (not self.sidebar_compact)
+
+        gen = self._cancel_sidebar_anim()
+        if not animated or os.environ.get("PYTEST_CURRENT_TEST") or is_reduced_motion() or not self.sidebar_visible:
+            self._apply_sidebar_compact_immediate()
+            return
+
+        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
+        if cur_w is None:
             try:
-                for _ in range(64):
-                    if not self.root.tk.dooneevent(38):
-                        break
+                cur_w = self.sidebar_frame.winfo_width()
+                if cur_w < SIDEBAR_WIDTH_COMPACT or cur_w > SIDEBAR_WIDTH_EXPANDED:
+                    cur_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
             except Exception:
-                pass
+                cur_w = SIDEBAR_WIDTH_EXPANDED if self.sidebar_compact else SIDEBAR_WIDTH_COMPACT
+
+        if not self._run_overlay_transition(
+            mode="compact",
+            duration=0.25,
+            start_sb_x=cur_x,
+            start_sb_w=cur_w,
+            start_fade=cur_fade,
+            start_compact=cur_compact,
+            target_sb_x=0,
+            target_sb_w=target_w,
+            target_compact=self.sidebar_compact,
+            target_visible=True,
+            gen=gen,
+        ):
+            self._apply_sidebar_compact_immediate()
 
     def _apply_sidebar_compact_immediate(self):
         self._cancel_sidebar_anim()
-        self._end_slide_modes()
-        self._exit_place_glide_mode(show_sidebar=self.sidebar_visible)
-        self._apply_sidebar_layout(initial_fade=None)
+        ov = getattr(self, "_transition_overlay", None)
+        if ov is not None and ov.active:
+            ov.hide()
+        self._end_slide_modes(redraw=False)
+        target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
+        self._commit_sidebar_real_layout(show_sidebar=self.sidebar_visible, target_w=target_w)
 
     def toggle_sidebar(self):
+        ov = getattr(self, "_transition_overlay", None)
+        was_ov = bool(ov is not None and ov.active)
+        cur_x = ov.cur_sb_x if was_ov else None
+        cur_w = ov.cur_sb_w if was_ov else None
+        cur_fade = ov.cur_fade if was_ov else 1.0
+        cur_compact = ov.cur_compact if was_ov else self.sidebar_compact
+
         gen = self._cancel_sidebar_anim()
         immediate = bool(os.environ.get("PYTEST_CURRENT_TEST") or is_reduced_motion())
         target_w = SIDEBAR_WIDTH_COMPACT if self.sidebar_compact else SIDEBAR_WIDTH_EXPANDED
@@ -4269,100 +5230,52 @@ class IDMGUIApp:
         if self.sidebar_visible:
             self.sidebar_visible = False
             if immediate:
-                self._exit_place_glide_mode(show_sidebar=False)
-                self.paned.forget(self.sidebar_frame)
-                self._set_sidebar_content_fade(None)
-                self._flush_paned_geometry()
-                self._refresh_right_glass()
+                if ov is not None and ov.active:
+                    ov.hide()
+                self._commit_sidebar_real_layout(show_sidebar=False, target_w=target_w)
                 return
 
-            try:
-                start_w = max(24, self.sidebar_frame.winfo_width())
-            except Exception:
-                start_w = target_w
-            start_t = time.perf_counter()
-            duration = 0.24
-            try:
-                self.root._sidebar_animating = True  # type: ignore[attr-defined]
-            except Exception:
-                pass
-            if hasattr(self.sidebar_frame, "set_animating"):
-                self.sidebar_frame.set_animating(True)
-            self._set_right_sliding(True)
-            self._enter_place_glide_mode(start_w)
-
-            def _hide_step():
-                if getattr(self, "_sidebar_anim_gen", 0) != gen or not self.root.winfo_exists():
-                    return
-                self._sidebar_anim_id = None
-                t = min(1.0, (time.perf_counter() - start_t) / duration)
-                ease = 0.5 * (1.0 - math.cos(math.pi * t))
-                cur_w = max(16, int(round(start_w + (16 - start_w) * ease)))
-                if t >= 1.0 or (t >= 0.88 and cur_w <= 19):
-                    self._set_sidebar_content_fade(None, redraw=False)
-                    self._exit_place_glide_mode(show_sidebar=False)
-                    self.paned.forget(self.sidebar_frame)
-                    self._end_slide_modes(redraw=False)
-                    self._flush_paned_geometry()
-                    self._refresh_right_glass()
-                    if not os.environ.get("PYTEST_CURRENT_TEST"):
-                        try:
-                            for _ in range(64):
-                                if not self.root.tk.dooneevent(38):
-                                    break
-                        except Exception:
-                            pass
-                    return
-                self._set_sidebar_content_fade(max(0.0, 1.0 - (t / 0.45)), redraw=False)
-                self._apply_glide_width(cur_w)
-                self._sidebar_anim_id = self.root.after(1, _hide_step)
-
-            _hide_step()
+            start_x = cur_x if cur_x is not None else 0
+            start_w = cur_w if cur_w is not None else target_w
+            if not self._run_overlay_transition(
+                mode="visibility",
+                duration=0.24,
+                start_sb_x=start_x,
+                start_sb_w=start_w,
+                start_fade=cur_fade,
+                start_compact=cur_compact,
+                target_sb_x=-(target_w + 8),
+                target_sb_w=target_w,
+                target_compact=self.sidebar_compact,
+                target_visible=False,
+                gen=gen,
+            ):
+                self._commit_sidebar_real_layout(show_sidebar=False, target_w=target_w)
         else:
             self.sidebar_visible = True
-            panes = self.paned.panes()
-            right_pane = panes[1] if len(panes) > 1 else None
             if immediate:
-                if right_pane is not None:
-                    self.paned.add(self.sidebar_frame, before=right_pane, minsize=target_w)
-                else:
-                    self.paned.add(self.sidebar_frame, minsize=target_w)
-                self._apply_sidebar_layout(initial_fade=None)
+                if ov is not None and ov.active:
+                    ov.hide()
+                self.sidebar_frame.configure(width=target_w)
+                self._commit_sidebar_real_layout(show_sidebar=True, target_w=target_w)
                 return
 
-            try:
-                cur_vis_w = self.sidebar_frame.winfo_width() if self.sidebar_frame.winfo_manager() else 16
-                start_w = max(16, min(target_w, cur_vis_w if cur_vis_w >= 16 else 16))
-            except Exception:
-                start_w = 16
-            start_t = time.perf_counter()
-            duration = 0.24
-            try:
-                self.root._sidebar_animating = True  # type: ignore[attr-defined]
-            except Exception:
-                pass
-            if hasattr(self.sidebar_frame, "set_animating"):
-                self.sidebar_frame.set_animating(True)
-            self._set_right_sliding(True)
-            self._enter_place_glide_mode(start_w)
-            self._switch_sidebar_inner_mode(compact=self.sidebar_compact, width=start_w)
-            self._set_sidebar_content_fade(0.0, redraw=False)
-
-            def _show_step():
-                if getattr(self, "_sidebar_anim_gen", 0) != gen or not self.root.winfo_exists():
-                    return
-                self._sidebar_anim_id = None
-                t = min(1.0, (time.perf_counter() - start_t) / duration)
-                ease = 0.5 * (1.0 - math.cos(math.pi * t))
-                cur_w = max(16, int(round(start_w + (target_w - start_w) * ease)))
-                if t >= 1.0 or (t >= 0.88 and abs(cur_w - target_w) <= 3):
-                    self._finish_sidebar_animation()
-                    return
-                self._set_sidebar_content_fade(max(0.0, min(1.0, (t - 0.30) / 0.70)), redraw=False)
-                self._apply_glide_width(cur_w)
-                self._sidebar_anim_id = self.root.after(1, _show_step)
-
-            _show_step()
+            start_x = cur_x if cur_x is not None else -(target_w + 8)
+            start_w = cur_w if cur_w is not None else target_w
+            if not self._run_overlay_transition(
+                mode="visibility",
+                duration=0.24,
+                start_sb_x=start_x,
+                start_sb_w=start_w,
+                start_fade=cur_fade,
+                start_compact=cur_compact,
+                target_sb_x=0,
+                target_sb_w=target_w,
+                target_compact=self.sidebar_compact,
+                target_visible=True,
+                gen=gen,
+            ):
+                self._commit_sidebar_real_layout(show_sidebar=True, target_w=target_w)
 
     def set_language(self, lang: str):
         """Sets the application language ('id' or 'en') and dynamically updates UI strings."""

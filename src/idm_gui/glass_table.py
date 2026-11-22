@@ -511,9 +511,9 @@ class GlassTableView(tk.Frame):
     # =========================================================================
 
     def _redraw_header(self, event=None):
-        self.header_canvas.delete("all")
         hw = self.header_canvas.winfo_width()
         hh = 32
+        old_items = self.header_canvas.find_all()
 
         # Header background: coordinate-aligned glass backdrop matching TactileTableContainer
         drew_glass = False
@@ -578,6 +578,8 @@ class GlassTableView(tk.Frame):
             if cur_x + cw < hw:
                 self.header_canvas.create_line(cur_x + cw, 6, cur_x + cw, hh - 6, fill=THEME["border"], width=1)
             cur_x += cw
+        if old_items:
+            self.header_canvas.delete(*old_items)
 
     def _schedule_coalesced_render(self):
         """Coalesce bursts of insert()/item() calls into a single viewport render.
@@ -648,8 +650,11 @@ class GlassTableView(tk.Frame):
                     tint_rgba=(8, 12, 20, 165),
                 )
                 self._viewport_glass_key = key
-                self.viewport.delete("bg_mesh")
+                old_bg = self.viewport.find_withtag("bg_mesh")
                 self.viewport.create_image(-rx if sliding else 0, 0, image=self._viewport_glass_photo, anchor=tk.NW, tags="bg_mesh")
+                self.viewport.tag_lower("bg_mesh")
+                if old_bg:
+                    self.viewport.delete(*old_bg)
             else:
                 self.viewport.coords("bg_mesh", -rx if sliding else 0, 0)
             self.viewport.tag_lower("bg_mesh")

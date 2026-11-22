@@ -1138,9 +1138,11 @@ class GlassThinScrollbar(tk.Canvas):
                             tint_rgba=self.tint_rgba,
                         )
                         self._bg_cache_key = key
-                        self.delete("bg_mesh")
+                        old_bg = self.find_withtag("bg_mesh")
                         self.create_image(0, 0, image=self._bg_photo, anchor=tk.NW, tags="bg_mesh")
                         self.tag_lower("bg_mesh")
+                        if old_bg:
+                            self.delete(*old_bg)
             except Exception:
                 pass
         self.delete("thumb")
@@ -1309,6 +1311,7 @@ class AmbientMeshEngine:
         self.enabled: bool = True
         self._corner_mask_cache: dict[tuple[int, int], Any] = {}
         self._panel_template_cache: dict[tuple[Any, ...], Any] = {}
+        self._corner_cutout_cache: dict[tuple[Any, ...], Any] = {}
         self._tinted_mesh_cache: dict[tuple[int, int, int, int], Any] = {}
         self._panel_img_cache: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
         self._backdrop_img_cache: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
@@ -1425,6 +1428,56 @@ class AmbientMeshEngine:
         res = (tl_m, tr_m, bl_m, br_m, tl_o, tr_o, bl_o, br_o, top_px, bot_px)
         self._panel_template_cache[tkey] = res
         return res
+
+    def get_corner_cutout_overlays(
+        self,
+        r: int,
+        outer_hex: str = "#07090e",
+        border_rgba: tuple[int, int, int, int] = (60, 95, 150, 180),
+        specular: bool = True,
+        caustic: bool = True,
+        master: Optional[tk.Misc] = None,
+    ) -> tuple[Any, Any, Any, Any, str, str, str, int]:
+        """Returns 4 tiny 3x-SSAA corner cutout PhotoImages (opaque outer_hex outside the
+        rounded curve, transparent inside) plus blended straight-edge hex colors so any
+        stationary Canvas can composite crisp rounded glass cards at 60+ FPS.
+        """
+        from PIL import Image, ImageChops, ImageTk
+
+        r = max(2, int(r))
+        ckey = (r, outer_hex, border_rgba, specular, caustic)
+        cached = self._corner_cutout_cache.get(ckey)
+        if cached is None:
+            h_clean = outer_hex.lstrip("#")
+            orgb = (int(h_clean[0:2], 16), int(h_clean[2:4], 16), int(h_clean[4:6], 16))
+            tmpl = self._get_ssaa_panel_template(r, border_rgba, specular, caustic)
+            tl_m, tr_m, bl_m, br_m, tl_o, tr_o, bl_o, br_o, top_px, bot_px = tmpl
+            cutouts = []
+            for m_corner, o_corner in ((tl_m, tl_o), (tr_m, tr_o), (bl_m, bl_o), (br_m, br_o)):
+                cut = Image.new("RGBA", m_corner.size, (*orgb, 255))
+                cut.putalpha(ImageChops.invert(m_corner))
+                cut = Image.alpha_composite(cut, o_corner)
+                cutouts.append(cut)
+
+            def _rgba_over_glass(px: tuple[int, ...], base=(10, 18, 34)) -> str:
+                a = (px[3] if len(px) > 3 else 255) / 255.0
+                rr = int(round(base[0] * (1.0 - a) + px[0] * a))
+                gg = int(round(base[1] * (1.0 - a) + px[1] * a))
+                bb = int(round(base[2] * (1.0 - a) + px[2] * a))
+                return f"#{rr:02x}{gg:02x}{bb:02x}"
+
+            cached = (
+                tuple(cutouts),
+                _rgba_over_glass(top_px),
+                _rgba_over_glass(bot_px),
+                _rgba_over_glass(border_rgba),
+                r + 2,
+            )
+            self._corner_cutout_cache[ckey] = cached
+
+        pil_corners, top_hex, bot_hex, border_hex, pad = cached
+        photos = [ImageTk.PhotoImage(im, master=master) for im in pil_corners]
+        return photos[0], photos[1], photos[2], photos[3], top_hex, bot_hex, border_hex, pad
 
     def create_glass_panel(
         self,
